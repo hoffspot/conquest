@@ -912,9 +912,9 @@ later, in another hand, a guild scout's note.
 ### The bestiary (core/bestiary.js, app/bestiary.js)
 
 A page in the journal for each kind of creature the player has met, filling in as they find out
-more of it, as a hunter's research does in Monster Hunter. Every creature has a page (all 97 in
+more of it, as a hunter's research does in Monster Hunter. Every creature has a page (all 136 in
 core/creatures.js `CREATURES`): the wilds', each people's own, the camps' and lairs', the ants'
-nests', the hells' and the Rift's.
+nests', the hells', the Rift's and the crafters' quarry (docs/CRAFTING.md *New beasts*).
 
 - **Research** (core/bestiary.js `Bestiary`, `RESEARCH`): each kind earns points, and its page goes
   up a level as they add up:
@@ -945,7 +945,7 @@ nests', the hells' and the Rift's.
   bestiary: Wolf. (J for your journal.)" and a quill heard writing; "Your bestiary: Wolf, known
   now."; "Wolf: mastered. You know where to strike it now, 10% harder. The adventurers' guild
   pays you 24 gold for your notes, and 3 merit on your card." with the cue for a rank and coins.
-- **In the journal** (app/journal.js, its *Bestiary* tab; app/bestiary.js): how many of the 97
+- **In the journal** (app/journal.js, its *Bestiary* tab; app/bestiary.js): how many of the 136
   kinds have been met, then each met, by where (the wilds, each people's wilds, lairs and
   strongholds, the ants' nests, the hells), the best known first, its level beside it as four
   pips (gold-edged once it's mastered). Each opens its page: its portrait, its name, its level

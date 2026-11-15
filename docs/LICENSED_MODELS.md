@@ -243,6 +243,17 @@ No CI job is added or renamed, so the ruleset's required checks don't change.
    `test/scramble.test.js` checks every model so marked is scrambled, and no other;
    `test/licensed.test.js`, that git ignores it.
 
+### A model of its own for one of the crafters' quarry
+
+The nine creatures put in the wilds for crafting (docs/CRAFTING.md *New beasts*: the mythril golem,
+the gilded scarab, the moon moth...) are drawn from other kinds' models, recoloured, till models
+of their own are bought; each has its own id and a catalog key waiting for it (core/materials.js
+`NEW_BEASTS` `model`: `beast-mythril-golem`...). One bought for one of them comes in as above under
+that key (its skins, if any, under `<key>-skins`), then its `MODELS` entry is written in
+`client/js/beasts/model.js` `OWN_MODELS`, by the creature's id: from then on it's drawn from its own
+(`quarryModel`), and nothing in the rules changes. The steps in full: docs/CRAFTING.md *Its own
+model, later*.
+
 ## Remaking a licensed model
 
 A remade model (new clips, say) goes into the private repository **under a new name**

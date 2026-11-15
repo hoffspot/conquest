@@ -25,7 +25,9 @@ import { GUILD_REACH, offerContract, WANTED_PARTS } from "../client/js/core/stan
 import { War } from "../client/js/core/war/war.js";
 import { armsOf, chooseAttack, NATURAL, weaponOf, WEAPONS } from "../client/js/core/weapons.js";
 import { decode, encode } from "../client/js/core/wire.js";
-import { FACTIONS, landAt } from "../client/js/core/worldplan/plan.js";
+import { cellAt, FACTIONS, landAt, planWorld, startFor } from "../client/js/core/worldplan/plan.js";
+import { RACES } from "../client/js/core/worldplan/races.js";
+import { NEW_BEASTS } from "../client/js/core/materials.js";
 import { parseGrid } from "./helpers.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -198,11 +200,52 @@ describe("the wild's creatures (creatures.js)", () => {
                     const creature = CREATURES[id];
 
                     assert.ok(!creature.people || creature.people === land.race, `${id} in ${land.race}'s lands`);
-                    assert.ok(!creature.perilous || id === "frostTroll", `${id} out in the open`);
+                    assert.ok(!creature.perilous || creature.abroad, `${id} out in the open`);
                     assert.ok(tier >= creature.tiers[0] && tier <= creature.tiers[1], `${id} at tier ${tier}`);
                 }
             }
         }
+
+        // (The perilous out in the open: the frost trolls of the high snows, and the crafters'
+        // quarry that's perilous, docs/CRAFTING.md *New beasts*; each only perilous)
+        assert.deepEqual(Object.keys(CREATURES).filter((id) => CREATURES[id].abroad), ["frostTroll", "orichalcumColossus", "sylvanAncient", "gloomweaver", "moonMoth"]);
+        assert.ok(Object.values(CREATURES).every((creature) => !creature.abroad || creature.perilous));
+    });
+
+    it("meets each of the crafters' quarry out in the wilds of its lands, at its tiers, in a world as it's planned (docs/CRAFTING.md *New beasts*)", () => {
+        // (Seed 2's world, every 200 m of it, for a player of each people: where each could be put
+        // out, by night for the night's own)
+        const plan = planWorld(2);
+        const homes = RACES.map(({ id }) => startFor(plan, id).at);
+        const met = new Map();
+
+        for (let x = 100; cellAt(x, 0); x += 200) {
+            for (let y = 100; cellAt(x, y); y += 200) {
+                const land = landAt(plan, x, y);
+
+                for (const home of homes) {
+                    const tier = tierAt([x, y], [home], land.biome);
+
+                    for (const { id } of candidatesAt(land, tier, true)) {
+                        if (NEW_BEASTS[id]) {
+                            met.set(id, [...(met.get(id) ?? []), tier]);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (const id of Object.keys(NEW_BEASTS)) {
+            const tiers = met.get(id) ?? [];
+
+            assert.ok(tiers.length, `${id} met somewhere`);
+            assert.ok(tiers.every((tier) => tier >= CREATURES[id].tiers[0] && tier <= CREATURES[id].tiers[1]), id);
+        }
+
+        // (The highest tiers the elves' and the dark elves' lands, and the elves' woods and the
+        // meadows, come to: the eighth, so that's where their perilous are met from)
+        assert.deepEqual(["sylvanAncient", "gloomweaver", "moonMoth"].map((id) => Math.max(...met.get(id))), [8, 8, 8]);
+        assert.equal(Math.max(...met.get("orichalcumColossus")), TIERS);
     });
 
     it("calls to a caster's side one of what lives where they are, as strong as they are, whatever the land's tier (Summon)", () => {
@@ -218,7 +261,7 @@ describe("the wild's creatures (creatures.js)", () => {
 
                     assert.equal(called.tier, tier, "as strong as the caster, whatever the land's");
                     assert.ok(livesOn(called.creature, land), `${called.creature} lives on ${land.biome}`);
-                    assert.ok(!creature.perilous || called.creature === "frostTroll", `${called.creature} out in the open`);
+                    assert.ok(!creature.perilous || creature.abroad, `${called.creature} out in the open`);
 
                     if (here.length) {
                         assert.ok(here.some(({ id }) => id === called.creature), `${called.creature} one of those at tier ${tier}`);
@@ -229,7 +272,7 @@ describe("the wild's creatures (creatures.js)", () => {
 
         // (Where nothing that lives there is met at the caster's tier, the nearest: a mighty caster
         // in their home's meadows by day calls the strongest of the meadows' own out by day)
-        const top = Math.max(...Object.entries(CREATURES).filter(([id, one]) => livesOn(id, meadow) && (!one.perilous || id === "frostTroll") && outByDay(id)).map(([, one]) => one.tiers[1]));
+        const top = Math.max(...Object.entries(CREATURES).filter(([id, one]) => livesOn(id, meadow) && (!one.perilous || one.abroad) && outByDay(id)).map(([, one]) => one.tiers[1]));
 
         if (top < TIERS) {
             const strongest = calledAt(meadow, TIERS, random);

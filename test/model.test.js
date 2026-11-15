@@ -6,9 +6,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
-import { AnimationClip, BoxGeometry, CompressedTexture, Group, Mesh, MeshStandardMaterial, PropertyBinding, QuaternionKeyframeTrack, RGB_ETC2_Format, Texture } from "three";
+import { AnimationClip, Bone, BoxGeometry, Color, CompressedTexture, Float32BufferAttribute, Group, Matrix4, Mesh, MeshStandardMaterial, PropertyBinding, QuaternionKeyframeTrack, RGB_ETC2_Format, ShaderLib, Skeleton, SkinnedMesh, SphereGeometry, Texture, Uint16BufferAttribute } from "three";
 
-const { AREA_LINGER, MODELS, breathing, fallOf, fetchModelsWith, forgetModels, hasModel, holdModel, keptModels, modelOf, modelsAhead, modelsHeld, modelsInside, modelsMet, modelsNear, poseOf, readyModels, releaseModel, strideOn, useModel } = await import("../client/js/beasts/model.js");
+const { AREA_LINGER, MODELS, OWN_MODELS, TINT, breathing, fallOf, fetchModelsWith, forgetModels, hasModel, holdModel, keptModels, modelBody, modelOf, modelsAhead, modelsHeld, modelsInside, modelsMet, modelsNear, poseOf, quarryModel, readyModels, releaseModel, strideOn, useModel } = await import("../client/js/beasts/model.js");
+const { NEW_BEASTS } = await import("../client/js/core/materials.js");
 const { heldOnPage, releaseCompressed } = await import("../client/js/world/release.js");
 const { THEMES } = await import("../client/js/core/dungeons/themes.js");
 const { landAt, planWorld, startFor } = await import("../client/js/core/worldplan/plan.js");
@@ -67,7 +68,7 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
             // (core/mounts.js; world/mounts3d.js), its model wanted as it's called)
             const ridden = id === HORSE_MODEL && !CREATURES[id];
 
-            assert.ok(ridden || Object.values(LAIRS).some(({ master }) => master[0] === id) || guarding || CREATURES[id].biomes?.length || inDungeons || id === BEHEMOTH.creature || carded || rallied || patrolling, `${id} keeps a lair, guards one, is met in the wilds, in a kind of dungeon, comes against a town, is a rare card's world boss or one it calls, rides a scene's patrols, or is a player's horse`);
+            assert.ok(ridden || Object.values(LAIRS).some(({ master }) => master[0] === id) || guarding || CREATURES[id].biomes?.length !== 0 || inDungeons || id === BEHEMOTH.creature || carded || rallied || patrolling, `${id} keeps a lair, guards one, is met in the wilds, in a kind of dungeon, comes against a town, is a rare card's world boss or one it calls, rides a scene's patrols, or is a player's horse`);
 
             // (Each of its skins but its own one of the catalog's "<asset>-skins")
             const files = (ASSETS.models[`${asset}-skins`]?.files ?? []).map(({ path }) => path);
@@ -144,6 +145,114 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
                 assert.equal(worn.meshes, undefined, `${asset}'s ${skin}: only its textures`);
             }
         }
+    });
+
+    it("draws each of the crafters' quarry from the model of the creature it's like, in its own skin, colour and size, and names its own model to come; drawn from that once it's bought and in the catalog (quarryModel)", () => {
+        const kebab = (id) => id.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+
+        assert.equal(Object.keys(NEW_BEASTS).length, 9);
+
+        for (const [id, { like, skin, tint, size, model: own }] of Object.entries(NEW_BEASTS)) {
+            // (Its own model to come, by a key of its own: not in the catalog yet, none bought)
+            assert.equal(own, `beast-${kebab(id)}`);
+            assert.ok(!ASSETS.models[own] && !ASSETS.models[`${own}-skins`] && !OWN_MODELS[id], `${own}: none bought yet`);
+            assert.ok(LOOKS[id] && CREATURES[id], `${id}'s stand-in`);
+
+            const lent = MODELS[like];
+
+            // (Like a kind with no model, a treant: its stand-in, till its own model's bought)
+            if (!lent) {
+                assert.equal(MODELS[id], undefined, id);
+                assert.equal(hasModel(id), false, id);
+                assert.equal(quarryModel(id), null, id);
+                continue;
+            }
+
+            const model = MODELS[id];
+
+            assert.ok(hasModel(id), id);
+            assert.deepEqual([model.asset, model.own, model.tint, model.skins ?? [""]], [lent.asset, own, tint, skin ? [skin] : (lent.skins ?? [""])], id);
+            assert.deepEqual([model.clips, model.attacks, model.specials, model.rests, model.joints, model.made, model.chains, model.carry], [lent.clips, lent.attacks, lent.specials, lent.rests, lent.joints, lent.made, lent.chains, lent.carry], `${id} moves as ${like} does`);
+            assert.ok(Math.abs(model.length - lent.length * size) < 0.001 && Math.abs(model.pace - lent.pace * size) < 0.01, `${id} drawn ${size} times as long, and going as much faster`);
+            assert.equal(model.runPace === undefined, lent.runPace === undefined, id);
+        }
+
+        // (A model bought for one: its entry written (OWN_MODELS, as any of MODELS' is, its asset its
+        // own key) and the catalog given it. Then it's drawn from that, as it's made, in no tint;
+        // till both are there, from what it borrows, or its stand-in)
+        const file = (name) => ({ tier: "demand", licensed: true, files: [{ path: `models/beasts/${name}.bin`, hash: "0123456789", bytes: 1 }] });
+        const catalog = { ...ASSETS.models, "beast-mythril-golem": file("mythril-golem"), "beast-ironbark-treant": file("ironbark-treant") };
+        const entry = (asset) => ({ asset, length: 1.6, made: { long: 0.8, tall: 1.6 }, clips: { idle: "Idle", walk: "Walk" }, attacks: { smash: "Smash" }, specials: {}, rests: {}, fire: {}, joints: { torso: "chest", body: "hips", head: "head", mouth: "head", left: "hand_l" }, mouth: null, pace: 1.1, flinch: 0.5 });
+        const bought = { mythrilGolem: entry("beast-mythril-golem"), ironbarkTreant: entry("beast-ironbark-treant") };
+
+        assert.deepEqual(quarryModel("mythrilGolem", { catalog, bought }), { ...bought.mythrilGolem, own: "beast-mythril-golem" });
+        assert.deepEqual(quarryModel("ironbarkTreant", { catalog, bought }), { ...bought.ironbarkTreant, own: "beast-ironbark-treant" });
+        assert.equal(quarryModel("mythrilGolem", { catalog }).asset, "beast-golem", "in the catalog, but its entry not written: the Stone Golem's");
+        assert.equal(quarryModel("mythrilGolem", { bought }).asset, "beast-golem", "its entry written, but not in the catalog: the Stone Golem's");
+        assert.equal(quarryModel("mythrilGolem", { bought }).tint, NEW_BEASTS.mythrilGolem.tint);
+        assert.equal(quarryModel("ironbarkTreant", { bought }), null, "its stand-in");
+        assert.deepEqual(quarryModel("mythrilGolem"), MODELS.mythrilGolem);
+    });
+
+    it("draws one of the crafters' quarry from another's model in its own colour (TINT): each of its materials its own, its picture's light and shade mixed toward the tint; the one it's like as ever", () => {
+        // (A small model in code: a ball on two bones, as the giant cockroach's are named, of one
+        // material with a picture, its idle a clip)
+        const made = () => {
+            const [root, torso] = [new Bone(), new Bone()];
+            const geometry = new SphereGeometry(0.5, 6, 4);
+            const count = geometry.attributes.position.count;
+            const material = Object.assign(new MeshStandardMaterial({ map: new Texture() }), { name: "Shell" });
+
+            root.name = "COG";
+            torso.name = "Torso";
+            torso.position.set(0, 0.5, 0);
+            root.add(torso);
+            geometry.setAttribute("skinIndex", new Uint16BufferAttribute(new Array(count * 4).fill(0), 4));
+            geometry.setAttribute("skinWeight", new Float32BufferAttribute(Array.from({ length: count * 4 }, (_, k) => (k % 4 === 0 ? 1 : 0)), 4));
+
+            const scene = new Group();
+            const mesh = new SkinnedMesh(geometry, material);
+
+            scene.add(root, mesh);
+            scene.updateMatrixWorld(true);
+            mesh.bind(new Skeleton([root, torso]), new Matrix4());
+
+            return { scene, animations: [new AnimationClip("Idle", 1, [])], material };
+        };
+        const materialsOf = (plan) => {
+            const found = new Set();
+
+            plan.object.traverse((node) => node.isSkinnedMesh && node.material.isMeshStandardMaterial && found.add(node.material));
+
+            return [...found];
+        };
+        const gltf = made();
+        const [scarab] = materialsOf(modelBody("gildedScarab", gltf));
+        const [roach] = materialsOf(modelBody("giantCockroach", gltf));
+
+        // (Each its own copy: the model as read untouched)
+        assert.ok(scarab !== gltf.material && roach !== gltf.material && scarab !== roach);
+        assert.equal(gltf.material.customProgramCacheKey(), new MeshStandardMaterial().customProgramCacheKey());
+
+        // (Its shader given the tint, as three.js compiles it; the cockroach's as ever)
+        const compiled = (material) => {
+            const shader = { uniforms: {}, vertexShader: ShaderLib.standard.vertexShader, fragmentShader: ShaderLib.standard.fragmentShader };
+
+            material.onBeforeCompile(shader, null);
+
+            return shader;
+        };
+        const tinted = compiled(scarab);
+        const plain = compiled(roach);
+
+        assert.equal(scarab.customProgramCacheKey(), "beast-tinted");
+        assert.ok(tinted.uniforms.tint.value.equals(new Color(NEW_BEASTS.gildedScarab.tint)));
+        assert.match(tinted.fragmentShader, /uniform vec3 tint;\s*void main\(\) \{/);
+        assert.ok(tinted.fragmentShader.includes(`#include <map_fragment>\n            diffuseColor.rgb = mix(diffuseColor.rgb, tint * (${TINT.least.toFixed(2)} + ${TINT.more.toFixed(2)} * sqrt(`));
+        assert.ok(tinted.fragmentShader.includes(`, ${TINT.share.toFixed(2)});`));
+        assert.equal(plain.uniforms.tint, undefined);
+        assert.ok(!plain.fragmentShader.includes("tint"));
+        assert.notEqual(roach.customProgramCacheKey(), "beast-tinted");
     });
 
     it("asks for a kind's model near one of its lairs, slain or not, once each, and none for a kind without one", () => {
@@ -324,8 +433,9 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
         try {
             assert.deepEqual(modelsInside({ kind: "dungeon", theme: "denTest" }).sort(), ["moonfang", "werewolf"]);
             assert.deepEqual(modelsInside({ kind: "dungeon", theme: "denTest", dungeon: { levels: [{ packs: [{ foes: [{ creature: "direWolf" }, { creature: "werewolf" }] }] }, { packs: [] }] } }), ["werewolf"]);
-            // (Today's caves and outlaws' hideouts: only the orc that may be on their throne)
-            assert.deepEqual(modelsInside({ kind: "dungeon", theme: "caves" }), ["orcWarlord"], "the caves' Orc Warlord");
+            // (Today's caves and outlaws' hideouts: only the orc that may be on their throne, and
+            // the caves' golems, the crafters' quarry's, drawn from the Stone Golem's model)
+            assert.deepEqual(modelsInside({ kind: "dungeon", theme: "caves" }), ["mythrilGolem", "adamantiteGolem", "orcWarlord"], "the caves' golems and Orc Warlord");
             assert.deepEqual(modelsInside({ kind: "dungeon", theme: "hideout" }), ["orcReaver"], "the hideouts' Orc Reaver");
             assert.deepEqual(modelsInside({ kind: "tavern" }), []);
             assert.deepEqual(modelsInside(null), []);

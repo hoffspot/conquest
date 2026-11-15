@@ -2,7 +2,7 @@
 // gear has a recipe at a crafter's, its main material setting its make (no more than a make above
 // the poorest of what goes with it), every ingredient a power by its family, rolled within the
 // range the recipe shows and as strong as its make and the piece's level; every ingredient comes
-// from somewhere (a shop, a creature, a creature to come, or gear broken down), the rarest from
+// from somewhere (a shop, a creature, or gear broken down), the rarest from
 // the hardest foes; the fee grows with the make and the piece's price; and gear broken down gives
 // back an ingredient of its main material's kind and make. Pure rules, with the world's dice.
 import assert from "node:assert/strict";
@@ -16,7 +16,7 @@ import { THEMES } from "../client/js/core/dungeons/themes.js";
 import { GEAR, levelOf, STATS, UNIFORM_PEOPLES } from "../client/js/core/gear.js";
 import { REFUSALS } from "../client/js/core/host.js";
 import { BLOW_EFFECTS } from "../client/js/core/legendary.js";
-import { BLOW_CAP, FAMILIES, INGREDIENT_KINDS, INGREDIENTS, MAKE_STRENGTH, MATERIALS, MORE_SPOILS, NEW_BEASTS, ON_BLOW, RANGES, UNHOLY } from "../client/js/core/materials.js";
+import { BLOW_CAP, FAMILIES, INGREDIENT_KINDS, INGREDIENTS, MAKE_STRENGTH, MATERIALS, NEW_BEASTS, ON_BLOW, RANGES, UNHOLY } from "../client/js/core/materials.js";
 import { buys, ITEMS, priceOf, QUALITIES, SHOPS, thingOf } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
 import { CRAFT_FEE, CRAFTER_TOWNS, CRAFTERS, RECIPES, SALVAGE } from "../client/js/core/recipes.js";
@@ -148,11 +148,11 @@ describe("crafting's ingredients (materials.js)", () => {
 });
 
 describe("where the ingredients come from (crafting.js sourcesOf)", () => {
-    it("has every one come from somewhere: a crafter's shelves, a creature, a creature to come, or gear broken down", () => {
+    it("has every one come from somewhere: a crafter's shelves, a creature, or gear broken down", () => {
         for (const id of Object.keys(INGREDIENTS)) {
-            const { sold, dropped, planned, salvage } = sourcesOf(id);
+            const { sold, dropped, salvage } = sourcesOf(id);
 
-            assert.ok(sold.length || dropped.length || planned.length || salvage, `${id} comes from somewhere`);
+            assert.ok(sold.length || dropped.length || salvage, `${id} comes from somewhere`);
         }
 
         for (const id of Object.keys(MATERIALS)) {
@@ -160,26 +160,26 @@ describe("where the ingredients come from (crafting.js sourcesOf)", () => {
         }
 
         for (const id of NEW_PARTS) {
-            assert.ok(sourcesOf(id).planned.length || sourcesOf(id).dropped.length, `${id} comes off a creature, or will`);
+            assert.ok(sourcesOf(id).dropped.length, `${id} comes off a creature`);
         }
 
         assert.ok(["demonBoss", "ashkhar"].every((creature) => sourcesOf("demonHorn").dropped.includes(creature)));
 
         const mythril = sourcesOf("mythrilIngot");
 
-        assert.ok([...mythril.dropped, ...mythril.planned].includes("mythrilGolem") && mythril.salvage && !mythril.sold.length);
+        assert.ok(mythril.dropped.includes("mythrilGolem") && mythril.salvage && !mythril.sold.length);
+        assert.deepEqual(Object.keys(sourcesOf("mythrilIngot")).sort(), ["dropped", "salvage", "sold"], "what leaves it is what spoils.js SPOILS says, and nothing else");
     });
 
     it("has the rarest come from the hardest foes: the legendary only off the perilous, the very rare off those met at the ninth tier, the rare at the eighth", () => {
-        const foe = (id) => CREATURES[id] ?? NEW_BEASTS[id];
+        const foe = (id) => CREATURES[id];
 
         for (const [id, { make }] of Object.entries(INGREDIENTS)) {
             if (rank(make) < rank("rare") || MATERIALS[id]) {
                 continue;
             }
 
-            const { dropped, planned } = sourcesOf(id);
-            const from = [...dropped, ...planned];
+            const from = sourcesOf(id).dropped;
 
             assert.ok(from.length, `${id} comes off a creature`);
 
@@ -214,9 +214,59 @@ describe("where the ingredients come from (crafting.js sourcesOf)", () => {
             assert.ok(items.length && items.every(({ id: item, chance }) => PARTS[item] && chance > 0 && chance <= 1), id);
         }
 
-        for (const [id, items] of Object.entries(MORE_SPOILS)) {
+        // (What those there are leave besides, as it was planned: the black widow its silk, the
+        // orcs their black steel, the Goblin King, the bandits' chief and the drake their gold)
+        const more = {
+            blackWidow: [{ id: "widowSilk", chance: 0.4 }],
+            orcRaider: [{ id: "blackSteelIngot", chance: 0.08 }],
+            orcReaver: [{ id: "blackSteelIngot", chance: 0.25 }],
+            orcWarlord: [{ id: "blackSteelIngot", chance: 0.3 }],
+            orcIronjaw: [{ id: "blackSteelIngot", chance: 0.4 }],
+            orcBloodtusk: [{ id: "blackSteelIngot", chance: 0.4 }],
+            orcKing: [{ id: "blackSteelIngot", chance: 0.8, count: [1, 2] }],
+            goblinKing: [{ id: "goldIngot", chance: 0.3 }],
+            banditChief: [{ id: "goldIngot", chance: 0.15 }],
+            dragon: [{ id: "goldIngot", chance: 0.6, count: [1, 2] }],
+        };
+
+        for (const [id, items] of Object.entries(more)) {
             assert.ok(SPOILS[id], id);
-            assert.ok(items.length && items.every(({ id: item, chance }) => PARTS[item] && chance > 0 && chance <= 1), id);
+            assert.deepEqual(items.map((item) => SPOILS[id].items.find((each) => each.id === item.id)), items, id);
+        }
+
+        assert.deepEqual(
+            NEW_PARTS.filter((part) => !Object.values(NEW_BEASTS).some(({ items }) => items.some((item) => item.id === part))).sort(),
+            ["blackSteelIngot", "widowSilk"],
+            "every new part but the orcs' steel and the widow's silk comes off a new creature",
+        );
+    });
+
+    it("puts each new creature in the world as it was planned: a creature fighting as the one it's like, met where it was to be, leaving what it was to (creatures.js, spoils.js, dungeons/themes.js)", () => {
+        // (A theme's packs: a hell's, each of its realms')
+        const packs = (theme) => THEMES[theme].packs.flatMap(({ creatures }) => creatures);
+
+        for (const [id, { name, like, tiers, people = null, biomes = [], night, perilous = false, themes, items }] of Object.entries(NEW_BEASTS)) {
+            const creature = CREATURES[id];
+            const lent = CREATURES[like];
+
+            assert.ok(creature, `${id} is a creature`);
+            assert.equal(creature.name, name);
+            assert.deepEqual([creature.tiers, creature.people ?? null, creature.biomes ?? null, creature.night, Boolean(creature.perilous)], [tiers, people, people ? null : biomes, night, perilous], id);
+            assert.deepEqual(SPOILS[id].items, items, `${id} leaves what it was to`);
+            assert.ok(themes.every((theme) => packs(theme).includes(id)), `${id} in ${themes}`);
+            assert.deepEqual(Object.keys(THEMES).filter((theme) => packs(theme).includes(id)).sort(), [...themes].sort(), `${id} only in ${themes}`);
+
+            // (Fighting as the creature it's like: its weapon, its temper, its hit points at the
+            // first tier, its armour and its ways; never a world's boss, and the perilous met alone
+            // out in their lands' wilds all the same)
+            for (const key of ["weapon", "hp", "speed", "chase", "temper", "guard", "armor", "steady", "blood", "sight", "wards", "keep", "bomb", "moves", "stance", "rally", "call"]) {
+                assert.deepEqual(creature[key], lent[key], `${id}'s ${key}, as ${like}'s`);
+            }
+
+            assert.ok(!creature.worldBoss && !creature.hands && !creature.lurk, id);
+            assert.equal(Boolean(creature.abroad), perilous, `${id} met out in the wilds of its lands, if it's perilous`);
+            assert.deepEqual(creature.pack, perilous ? [1, 1] : lent.pack, `${id}'s pack`);
+            assert.ok(creature.night !== "only" || creature.darkSight, `${id} sees in the dark`);
         }
     });
 });

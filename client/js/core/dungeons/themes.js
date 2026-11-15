@@ -69,6 +69,10 @@ export const THEMES = {
             { id: "tuskers", creatures: ["rockTusker"], size: [1, 2], weight: 1 },
             { id: "trolls", creatures: ["troll"], size: [1, 2], weight: 1 },
             { id: "frost", creatures: ["frostTroll"], size: [1, 2], weight: 1 },
+            // (The golems the crafters want, deep in the rock: a mythril golem, or an adamantite
+            // golem further out: creatures.js, docs/CRAFTING.md *New beasts*)
+            { id: "mythril", creatures: ["mythrilGolem"], size: [1, 1], weight: 1 },
+            { id: "adamantite", creatures: ["adamantiteGolem"], size: [1, 1], weight: 1 },
         ],
         minis: [
             { id: "troll", creature: "troll", title: "Cave troll", weight: 2 },
@@ -191,6 +195,9 @@ export const THEMES = {
             { id: "rats", creatures: ["rat"], size: [3, 5], weight: 1 },
             { id: "wisps", creatures: ["wisp"], size: [2, 3], weight: 1 },
             { id: "wraiths", creatures: ["wraith"], size: [1, 2], weight: 1 },
+            // (A ghostwood treant, grown up through the temple's floor in the dark: creatures.js,
+            // docs/CRAFTING.md *New beasts*)
+            { id: "ghostwood", creatures: ["ghostwoodTreant"], size: [1, 1], weight: 1 },
         ],
         minis: [
             { id: "champion", creature: "skeleton", title: "Tomb champion", weight: 2 },
@@ -257,6 +264,9 @@ export const THEMES = {
             { id: "scorpions", creatures: ["dungeonScorpion"], size: [1, 2], weight: 1 },
             // (A black widow, hanging unseen under the roof of a gallery till someone passes beneath)
             { id: "widow", creatures: ["blackWidow"], size: [1, 1], weight: 2 },
+            // (A gloomweaver, a black widow grown great and violet-black, in the nests' deepest
+            // galleries: creatures.js, docs/CRAFTING.md *New beasts*)
+            { id: "gloomweaver", creatures: ["gloomweaver"], size: [1, 1], weight: 1 },
         ],
         minis: [
             { id: "warden", creature: "ant", title: "Brood warden", weight: 2 },
@@ -442,6 +452,9 @@ export const THEMES = {
                     { id: "glutton", creatures: ["chainedGlutton"], size: [1, 1], weight: 1 },
                     // (Its hellwalkers, at home here, met the most: creatures.js)
                     { id: "hellwalkers", creatures: ["hellwalker"], size: [2, 3], weight: 3 },
+                    // (An orichalcum colossus, at home in the fire: creatures.js, docs/CRAFTING.md
+                    // *New beasts*)
+                    { id: "colossus", creatures: ["orichalcumColossus"], size: [1, 1], weight: 1 },
                 ],
                 minis: [
                     { id: "moltenLord", creature: "magmaSlime", title: "Molten lord", weight: 1 },
