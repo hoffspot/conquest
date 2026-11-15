@@ -12,19 +12,22 @@
 // is (host.js #buy). A legendary weapon lets loose the effect of its essence's family (or, with
 // none, its main material's), not one by chance.
 //
+// In a capital every crafter works to the legendary (`capital`: recipes.js CAPITAL_BEST, the
+// owner's ruling), its blacksmith and specialists alike, for the masters are never there.
+//
 // Pure data and arithmetic, no DOM, no clock, no Math.random: the host makes what's crafted with
-// the world's dice (random.js random), the same in every game (core/host.js, stage 2), and the
-// pack shows it first by the same arithmetic.
+// the world's dice (random.js random), the same in every game (core/host.js #craft, #salvage,
+// #salvageJunk), and the pack shows it first by the same arithmetic.
 
 import { DESIGNS, GEAR, levelFactor, levelOf, rollBlock, STATS, UNIFORM_PEOPLES } from "./gear.js";
 import { FAMILIES, INGREDIENTS, MAKE_STRENGTH, MORE_SPOILS, NEW_BEASTS, ON_BLOW, RANGES } from "./materials.js";
 import { bound, isJunk, ITEMS, QUALITIES, rollBoost } from "./progress.js";
-import { CRAFT_FEE, CRAFTERS, RECIPES, SALVAGE } from "./recipes.js";
+import { CAPITAL_BEST, CRAFT_FEE, CRAFTERS, RECIPES, SALVAGE } from "./recipes.js";
 import { SPOILS } from "./spoils.js";
 
 /**
- * What the host says, refusing to make something or to break it down (core/host.js REFUSALS, as of
- * stage 2: docs/CRAFTING.md *Multiplayer*): the reasons craftRefusal gives, and the host's own for
+ * What the host says, refusing to make something or to break it down (core/host.js REFUSALS takes
+ * them: docs/CRAFTING.md *Multiplayer*): the reasons craftRefusal gives, and the host's own for
  * what the pack lacks, what's changed since the player was shown it, and what won't be broken
  * down. Each a reason never given before, for nothing else.
  */
@@ -48,6 +51,14 @@ export const MAKE_ABOVE = 1;
 
 // An ingredient by its id (materials.js INGREDIENTS), or null for anything else
 const ingredient = (id) => (typeof id === "string" && Object.hasOwn(INGREDIENTS, id) ? INGREDIENTS[id] : null);
+
+// A crafter by its shop's id (recipes.js CRAFTERS), working to the legendary in a capital
+// (`capital`: CAPITAL_BEST), or null for a shop that crafts nothing
+const crafterAt = (shop, capital = false) => {
+    const crafter = typeof shop === "string" && Object.hasOwn(CRAFTERS, shop) ? CRAFTERS[shop] : null;
+
+    return crafter && capital ? { ...crafter, best: CAPITAL_BEST } : crafter;
+};
 
 /** The ingredients of a kind (materials.js INGREDIENT_KINDS), the commonest first: ids. */
 export const ingredientsOf = (kind) => ORDER.flatMap((make) => Object.keys(INGREDIENTS).filter((id) => INGREDIENTS[id].kind === kind && INGREDIENTS[id].make === make));
@@ -99,12 +110,13 @@ export function powerOf(id, base, level = 1) {
 
 /**
  * Why a piece (RECIPES id) can't be made of these (`using`: an ingredient's id for each of its
- * slots, in order, null for the essence left out) at a shop (CRAFTERS id): "uncrafted", the shop
- * doesn't make it; "unfit", an ingredient left out that can't be, or not of its slot's kind;
- * "unworked", its main material's finer than the shop works (CRAFTERS `best`). Or null.
+ * slots, in order, null for the essence left out) at a shop (CRAFTERS id; in a capital,
+ * `capital`): "uncrafted", the shop doesn't make it; "unfit", an ingredient left out that can't
+ * be, or not of its slot's kind; "unworked", its main material's finer than the shop works
+ * (CRAFTERS `best`; in a capital, CAPITAL_BEST). Or null.
  */
-export function craftRefusal(shop, base, using) {
-    const crafter = Object.hasOwn(CRAFTERS, shop) ? CRAFTERS[shop] : null;
+export function craftRefusal(shop, base, using, { capital = false } = {}) {
+    const crafter = crafterAt(shop, capital);
     const slots = Object.hasOwn(RECIPES, base) ? RECIPES[base].slots : null;
 
     if (!crafter || !slots || !crafter.makes.includes(base)) {
@@ -177,6 +189,36 @@ export function lackingIn(pack, base, using) {
         .filter(({ need, have }) => have < need);
 }
 
+/**
+ * Where in a pack (its places: stacks or null) what a piece of these takes is taken from: [{
+ * index, count }], each ingredient off its stacks (of any make), those marked as junk first (the
+ * player's said they can go: docs/GAME.md *Junk*), then the smallest, then the first; or null if
+ * it hasn't all of it (lackingIn). Never the stash's. The host takes them so (core/host.js
+ * #craft), the same in every game.
+ */
+export function takesFrom(pack, base, using) {
+    if (lackingIn(pack, base, using).length) {
+        return null;
+    }
+
+    return needs(base, using).flatMap(({ id, count }) => {
+        const stacks = pack.flatMap((stack, index) => (stack?.id === id ? [{ index, stack }] : [])).sort((a, b) => Number(isJunk(b.stack)) - Number(isJunk(a.stack)) || a.stack.count - b.stack.count || a.index - b.index);
+        const taken = [];
+        let left = count;
+
+        for (const { index, stack } of stacks) {
+            if (left <= 0) {
+                break;
+            }
+
+            taken.push({ index, count: Math.min(left, stack.count) });
+            left -= stack.count;
+        }
+
+        return taken;
+    });
+}
+
 /** What the ingredients of a piece of these are worth (gold: progress.js ITEMS price, a creature's part what the guild pays for it). */
 export const worthOf = (base, using) => needs(base, using).reduce((sum, { id, count }) => sum + (ITEMS[id]?.price ?? 0) * count, 0);
 
@@ -208,14 +250,14 @@ export function powersOf(base, using, level = 1) {
 }
 
 /**
- * What a piece (RECIPES id) of these (`using`) would be, made at a shop (CRAFTERS id) for a maker of
- * a `level` (their might's: gear.js levelOf) and their haggling: { reason (craftRefusal's, and
- * nothing else then), make, name, level, powers (powersOf), effect (a legendary weapon's), fee
- * (feeOf), worth (what its ingredients are worth: worthOf), needs }. What the pack shows before
- * it's made, and what the host makes it by.
+ * What a piece (RECIPES id) of these (`using`) would be, made at a shop (CRAFTERS id; in a capital,
+ * `capital`) for a maker of a `level` (their might's: gear.js levelOf) and their haggling: {
+ * reason (craftRefusal's, and nothing else then), make, name, level, powers (powersOf), effect (a
+ * legendary weapon's), fee (feeOf), worth (what its ingredients are worth: worthOf), needs }. What
+ * the pack shows before it's made, and what the host makes it by.
  */
-export function previewOf(shop, base, using, { level = 1, haggle = 0 } = {}) {
-    const reason = craftRefusal(shop, base, using);
+export function previewOf(shop, base, using, { level = 1, haggle = 0, capital = false } = {}) {
+    const reason = craftRefusal(shop, base, using, { capital });
 
     if (reason) {
         return { reason };
@@ -305,12 +347,13 @@ export function craftItem(base, using, random, { level = 1, people = null } = {}
 }
 
 /**
- * The recipes a crafter (CRAFTERS id) makes, as its list shows them: each piece in each main
- * material it works ([{ base, main (an ingredient id), make (the main material's) }]), its pieces
- * in their order, the commoner materials first.
+ * The recipes a crafter (CRAFTERS id; in a capital, `capital`, working to the legendary) makes,
+ * as its list shows them: each piece in each main material it works ([{ base, main (an
+ * ingredient id), make (the main material's) }]), its pieces in their order, the commoner
+ * materials first.
  */
-export function recipesAt(shop) {
-    const crafter = Object.hasOwn(CRAFTERS, shop) ? CRAFTERS[shop] : null;
+export function recipesAt(shop, { capital = false } = {}) {
+    const crafter = crafterAt(shop, capital);
 
     if (!crafter) {
         return [];
@@ -336,9 +379,12 @@ export function salvageOf(item) {
     return [{ id: SALVAGE[kind][QUALITIES[item.quality] ? item.quality : "common"], count: Math.ceil(count / 2) }];
 }
 
-/** Whether a crafter (CRAFTERS id) breaks a thing down: gear it makes, no finer than it works, not bound to its hero (progress.js bound). */
-export function salvagesAt(shop, item) {
-    const crafter = Object.hasOwn(CRAFTERS, shop) ? CRAFTERS[shop] : null;
+/**
+ * Whether a crafter (CRAFTERS id; in a capital, `capital`, working to the legendary) breaks a
+ * thing down: gear it makes, no finer than it works, not bound to its hero (progress.js bound).
+ */
+export function salvagesAt(shop, item, { capital = false } = {}) {
+    const crafter = crafterAt(shop, capital);
 
     return Boolean(crafter && item && crafter.makes.includes(item.id) && rank(QUALITIES[item.quality] ? item.quality : "common") <= rank(crafter.best) && !bound(item));
 }
@@ -355,14 +401,14 @@ const together = (yields) => {
 };
 
 /**
- * What breaking down all the junk carried at a crafter (CRAFTERS id) comes to, as progress.js
- * junkSale does for selling it: each stack of gear in the pack marked as junk that it breaks down
- * (salvagesAt), each piece giving back what salvageOf says; and the junk gear it won't, still
- * junk for one that will. Never the stash's. { salvaged: [{ index, stack, yields }], count (pieces
- * broken down), yields (all they give back, alike together), kept: [{ index, stack }], left
- * (pieces kept) }
+ * What breaking down all the junk carried at a crafter (CRAFTERS id; in a capital, `capital`)
+ * comes to, as progress.js junkSale does for selling it: each stack of gear in the pack marked as
+ * junk that it breaks down (salvagesAt), each piece giving back what salvageOf says; and the junk
+ * gear it won't, still junk for one that will. Never the stash's. { salvaged: [{ index, stack,
+ * yields }], count (pieces broken down), yields (all they give back, alike together), kept: [{
+ * index, stack }], left (pieces kept) }
  */
-export function junkSalvage(pack, shop) {
+export function junkSalvage(pack, shop, { capital = false } = {}) {
     const salvaged = [];
     const kept = [];
 
@@ -371,7 +417,7 @@ export function junkSalvage(pack, shop) {
             return;
         }
 
-        if (salvagesAt(shop, stack)) {
+        if (salvagesAt(shop, stack, { capital })) {
             salvaged.push({ index, stack, yields: salvageOf(stack).map(({ id, count }) => ({ id, count: count * stack.count })) });
         } else {
             kept.push({ index, stack });

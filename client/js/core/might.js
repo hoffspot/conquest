@@ -25,9 +25,10 @@ import { TIERS } from "./creatures.js";
 import { exp, log, pow, sqrt } from "./exact.js";
 import { effectOf, levelOf, SLOT_IDS } from "./gear.js";
 import { chargeOf, EFFECTS, effectAt, WARD_CHARGE } from "./legendary.js";
+import { ON_BLOW } from "./materials.js";
 import { ABILITIES, ARMOR_CAP, weaponOf } from "./progress.js";
 import { SPELL_COOLDOWN, SPELLS } from "./spells.js";
-import { spellHarm, toughness, weaponHarm } from "./strength.js";
+import { onBlow, spellHarm, toughness, weaponHarm } from "./strength.js";
 import { armsOf, blowEvery } from "./weapons.js";
 
 /**
@@ -67,7 +68,9 @@ export const FIGHT = Object.freeze({ seconds: 30, healing: 0.2, stun: 0.25, stun
  * weapon's, or a unique's worn anywhere: { effect, level, charge, grade? (a graded piece's) }, or
  * null: core/legendary.js), and the ward the blows they take let loose (`ward`: a unique's, { effect,
  * level, charge, grade? }, or null). One of each at most: the weapon's first, then each piece's as they're worn (gear.js
- * SLOT_IDS), at its own level.
+ * SLOT_IDS), at its own level. And the new blows their crafted gear strikes (`blows`: { fireBlow:
+ * share, ... }, those they have, each no more than progress.js bonuses has it; or null for none:
+ * core/materials.js ON_BLOW).
  */
 export function fighterOf(progress, bonus = progress.bonuses()) {
     const weapon = weaponOf(progress);
@@ -88,7 +91,16 @@ export function fighterOf(progress, bonus = progress.bonuses()) {
         bleed: bonus.bleed,
         legendary: blows && WEAPONS_HELD(weapon) ? { effect: effectOf(blows), level: levelOf(blows.level), charge: chargeOf(weapon), ...(Number.isFinite(blows.grade) ? { grade: blows.grade } : {}) } : null,
         ward: warding ? { effect: effectOf(warding), level: levelOf(warding.level), charge: WARD_CHARGE.blows, ...(Number.isFinite(warding.grade) ? { grade: warding.grade } : {}) } : null,
+        blows: blowsOf(bonus),
     };
+}
+
+// The new blows a hero's gear strikes (core/materials.js ON_BLOW), as their bonuses total them:
+// { fireBlow: share, ... }, those they have; or null for none
+function blowsOf(bonus) {
+    const blows = Object.keys(ON_BLOW).filter((stat) => bonus[stat] > 0);
+
+    return blows.length ? Object.fromEntries(blows.map((stat) => [stat, bonus[stat]])) : null;
 }
 
 // (A legendary effect is a weapon's in hand: not spiked boots' alone)
@@ -102,7 +114,8 @@ const meanOf = ([least, most]) => (least + most) / 2;
 
 /**
  * How fast a hero's weapon harms with all that comes with it (hit points a second): its blows
- * (weaponHarm), an ability's doubled blow now and then (Power strike, Aimed shot), the bleeding
+ * (weaponHarm, a crafted weapon's fire, frost and the rest on top: core/materials.js ON_BLOW,
+ * holy fire at a quarter), an ability's doubled blow now and then (Power strike, Aimed shot), the bleeding
  * its blows leave (Vicious: at most one going at a time), and a legendary weapon's effect, let
  * loose once its charge is full.
  */
@@ -118,6 +131,9 @@ function blowsHarm(actor, abilities) {
     const power = actor.power[kind] ?? 1;
     const every = blowEvery(attack.either?.[0] ?? attack, actor.haste);
     const blows = weaponHarm(actor);
+    // (The blows' own harm, without the new blows a crafted weapon strikes on top: what a cleave
+    // strikes the others with, strength.js onBlow)
+    const plain = blows / (1 + onBlow(actor.blows));
     const ability = Object.entries(ABILITIES).find(([id, { blow, factor }]) => blow === kind && factor > 1 && abilities.includes(id))?.[1];
     const doubled = ability ? (blows * every * (ability.factor - 1)) / ability.cooldown : 0;
     const { damage, every: bleedEvery, ms } = AFFLICTIONS.bleed;
@@ -126,7 +142,7 @@ function blowsHarm(actor, abilities) {
     // (One let loose by its charge, its own harm now and then; or a cleave, every blow's own harm
     // again on the others before them, as many as CLEAVED has it; or witchfire, leaping on to the
     // others beside them, as many the same)
-    const effect = !numbers ? 0 : numbers.damage ? (meanOf(numbers.damage) * power * 1000) / (actor.legendary.charge * every) : kind === "melee" && numbers.share ? blows * numbers.share * CLEAVED : 0;
+    const effect = !numbers ? 0 : numbers.damage ? (meanOf(numbers.damage) * power * 1000) / (actor.legendary.charge * every) : kind === "melee" && numbers.share ? plain * numbers.share * CLEAVED : 0;
 
     return blows + doubled + bleeding + effect;
 }

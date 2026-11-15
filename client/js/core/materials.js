@@ -59,8 +59,10 @@ export const INGREDIENT_KINDS = Object.freeze(["metal", "wood", "cloth", "leathe
  *  - `only`: harming only those of UNHOLY (holy fire, the dead's and the demons' bane), or `not`:
  *    harming all but them (shadow, which is theirs already).
  *
- * The battle lets them loose as of stage 2 (gear.js STATS takes them then): until then they're
- * only kept on what's made.
+ * Each is one of gear.js STATS, kept on what's made (progress.js thingOf) and totalled with the
+ * rest of a hero's gear, no more than BLOW_CAP (progress.js bonuses); the battle lets them loose
+ * on every blow of a weapon's (battle.js #onBlow: the actor's `blows`, host.js #outfit), and a
+ * hero's fighting value counts them (strength.js weaponHarm).
  */
 export const ON_BLOW = Object.freeze({
     fireBlow: { label: "Fire on each blow", element: "fire", afflict: "burn", chance: 1 },

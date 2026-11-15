@@ -102,7 +102,8 @@ const JEWELS = Object.freeze(["amulet", "ring"]);
  *   leather, the tailor what's of cloth, the jeweller rings and amulets. All to the very rare.
  * - **The masters** (each people's one of each: worldplan/settle.js): the Master Swordsmith every
  *   weapon but the arcane, the Master Armorer everything worn but jewellery, the Mystic Emporium
- *   the arcane and jewellery. Only they work the legendary, as only they sell it.
+ *   the arcane and jewellery. They work the legendary, as only they sell it; and so does every
+ *   crafter in a capital, where the masters never are (CAPITAL_BEST).
  */
 export const CRAFTERS = Object.freeze({
     smith: { makes: [...METAL_ARMS, ...METAL_ARMOUR], best: "masterwork", sells: ["bronzeIngot", "ironIngot", "steelIngot", "oakWood", "tannedLeather"] },
@@ -117,6 +118,14 @@ export const CRAFTERS = Object.freeze({
     masterArmorer: { makes: [...METAL_ARMOUR, ...LEATHERS, ...TAILORS.filter((id) => id !== "wizardHat")], best: "legendary", sells: ["steelIngot", "silverIngot", "hardenedLeather", "silkBolt", "woolBolt", "oakWood"] },
     emporium: { makes: [...SCRIBES, "wizardHat", ...JEWELS], best: "legendary", sells: ["silkBolt", "silverIngot", "birchWood", "hardenedLeather", "amethyst", "garnet", "quartz"] },
 });
+
+/**
+ * The finest make every crafter in a capital works to, whatever its `best` elsewhere (crafting.js
+ * `capital`): the legendary. The owner's ruling (15 November 2026): every town needn't have every
+ * kind of shop, but the capital should; the masters never stand in one (worldplan/settle.js), so
+ * the capital's own crafters work to the legendary, its blacksmith and specialists alike.
+ */
+export const CAPITAL_BEST = "legendary";
 
 /**
  * Which of the four new crafters each kind of settlement keeps (setpieces/town.js SETTLEMENT_KINDS:

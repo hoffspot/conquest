@@ -76,10 +76,29 @@ export function toughness(actor) {
 }
 
 /**
+ * How much of a blow's harm each of the new blows a crafted weapon strikes (core/materials.js
+ * ON_BLOW: the actor's `blows`) counts for in a fighting value, of its share: all of it, but holy
+ * fire, which harms only the unholy, a quarter.
+ */
+export const BLOWS_COUNTED = Object.freeze({ holyBlow: 0.25 });
+
+/** How much more a blow harms with the new blows on it (`blows`: { fireBlow: share, ... }, as the actor has them): each share, as BLOWS_COUNTED counts it. 0 for none. */
+export function onBlow(blows) {
+    let more = 0;
+
+    for (const stat in blows ?? {}) {
+        more += (blows[stat] ?? 0) * (BLOWS_COUNTED[stat] ?? 1);
+    }
+
+    return more;
+}
+
+/**
  * How fast someone's weapon harms, in hit points a second: their best attack's blow on average
  * (as strong as their power for it), over the time from one to the next (sooner, as much as their
  * `haste` has it: battle.js #attack; never sooner than the blow takes). Kicks mixed in with a
- * weapon's blows (weapons.js armsOf `either`), the two on average.
+ * weapon's blows (weapons.js armsOf `either`), the two on average. And the new blows a crafted
+ * weapon strikes on top (`blows`: onBlow), so much of each blow's harm again.
  */
 export function weaponHarm(actor) {
     let best = 0;
@@ -92,7 +111,7 @@ export function weaponHarm(actor) {
         best = Math.max(best, rate);
     }
 
-    return best;
+    return actor.blows ? best * (1 + onBlow(actor.blows)) : best;
 }
 
 /**

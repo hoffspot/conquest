@@ -26,7 +26,7 @@ import { BREWS, CHARM_ROLLS, charmPower, CHARMS, charmStats, SCROLLS, STARTING_S
 import { blockMost, disguiseOf, effectOf, GEAR, GEAR_SLOTS, gearName, levelFactor, levelOf, offHandFits, rollGear, sameGear, setBonuses, SLOT_IDS, STATS, statsOf, UNIFORM, UNIFORM_PEOPLES } from "./gear.js";
 import { Bestiary } from "./bestiary.js";
 import { clockOf } from "./invasions.js";
-import { MATERIALS } from "./materials.js";
+import { BLOW_CAP, MATERIALS, ON_BLOW } from "./materials.js";
 import { ELEMENT_TOME_PRICE, ELEMENT_TOMES, growthAt, GUILD_TOMES, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tierAt, tomeOf } from "./spells.js";
 import { PARTS } from "./spoils.js";
 import { WEAPONS } from "./weapons.js";
@@ -903,6 +903,9 @@ export const HASTE_CAP = 0.3;
 export const LEECH_CAP = 0.25;
 export const BLEED_CAP = 0.5;
 
+// None of the new blows a crafted weapon strikes (core/materials.js ON_BLOW), as bonuses() starts
+const BLOWS_NONE = Object.freeze(Object.fromEntries(Object.keys(ON_BLOW).map((stat) => [stat, 0])));
+
 // The ring slots
 const RINGS = ["ring1", "ring2"];
 
@@ -1153,9 +1156,13 @@ export class Progress {
         return ups;
     }
 
-    /** Everything the trees and gear give: { melee, ranged, heal, stun, hp, stamina, armor, dodge, haste, leech, bleed, haggle, persuade, followers, ... }. */
+    /**
+     * Everything the trees and gear give: { melee, ranged, heal, stun, hp, stamina, armor, dodge,
+     * haste, leech, bleed, haggle, persuade, followers, ... }, and the new blows a crafted weapon
+     * strikes (core/materials.js ON_BLOW: fireBlow, frostBlow...), each no more than BLOW_CAP.
+     */
     bonuses() {
-        const totals = { melee: 0, ranged: 0, heal: 0, stun: 0, spell: 0, hp: 0, stamina: 0, armor: 0, dodge: 0, haste: 0, leech: 0, bleed: 0, block: 0, bash: 0, haggle: 0, persuade: 0, followers: 0, fortune: 0, endurance: 0, wardFire: 0, wardWater: 0, wardAir: 0, wardEarth: 0, wardMagic: 0 };
+        const totals = { melee: 0, ranged: 0, heal: 0, stun: 0, spell: 0, hp: 0, stamina: 0, armor: 0, dodge: 0, haste: 0, leech: 0, bleed: 0, block: 0, bash: 0, haggle: 0, persuade: 0, followers: 0, fortune: 0, endurance: 0, wardFire: 0, wardWater: 0, wardAir: 0, wardEarth: 0, wardMagic: 0, ...BLOWS_NONE };
 
         for (const [tree, { bonus }] of Object.entries(TREES)) {
             const rank = this.rank(tree);
@@ -1215,6 +1222,11 @@ export class Progress {
         totals.haste = Math.min(HASTE_CAP, totals.haste);
         totals.leech = Math.min(LEECH_CAP, totals.leech);
         totals.bleed = Math.min(BLEED_CAP, totals.bleed);
+
+        // (Each new blow, all the gear's together, no more than BLOW_CAP of a blow's harm)
+        for (const stat in BLOWS_NONE) {
+            totals[stat] = Math.min(BLOW_CAP, totals[stat]);
+        }
 
         return totals;
     }

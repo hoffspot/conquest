@@ -30,8 +30,19 @@ first of which is this page and the data and pure rules it describes:
   app/icons.js (two new kinds, a cut `gem` and a `bolt` of cloth).
 - `test/crafting.test.js`.
 
-Nothing of it is in the game yet: no shop sells a material, no creature leaves a new part, nothing
-is made and no blow does more. Stages 2 to 5 put it there.
+Stage 2 put its rules in the game, the host's to run the same on every copy of the world:
+
+- the seven new blows (*The new blows*) as bonuses there are (core/gear.js `STATS`), kept on what's
+  made (progress.js `thingOf`), totalled no more than `BLOW_CAP` each (progress.js `bonuses`), said
+  on a piece's card and among the totals (app/gearinfo.js), put on the hero in the battle (host.js
+  `#outfit`, the actor's `blows`), striking (battle.js `#onBlow`, *How they strike*) and counted in
+  a hero's might (strength.js `weaponHarm`, might.js);
+- making and breaking down at a crafter's (host.js `#craft`, `#salvage`, `#salvageJunk`:
+  *Multiplayer*), at every crafter there is, a capital's to the legendary (*The crafters*);
+- `NET_VERSION` 231; `test/crafting-host.test.js`.
+
+No shop sells a material yet, no creature leaves a new part, and the player has no way to ask for
+any of it: stages 3 to 5 put that there.
 
 ## How a piece is made
 
@@ -465,6 +476,16 @@ put on it by host.js `#outfit` from progress.js `bonuses()`, each no more than `
 4. **What it leaves**, if the foe still stands: `afflict` as often as `chance` times the share, as
    an oil's is (core/goods.js `BREWS`), as strong as the striker's power for the blow.
 
+Each in the order it's on the striker, each on a foe still standing: a foe the blow itself fells
+takes none, and one felled by the first takes none of the rest. Its reaction is fire's for fire
+(`"fire"`) and arcane light for the rest (`"arcane"`: the water's, the air's, the earth's and
+magic's others land so, frost and rot, lightning, acid, bolts); its `projectile` none, the blow's
+shot having landed already, so what it grows of a hero's skills is what a legendary weapon's effect
+grows; its enmity the harm it did, no seed on top (the blow's own `#provoke` has set the foe on the
+striker already); it staggers no one. A blow's harm before armour, for acid's, is its roll times
+the striker's power, then everything else the blow's harm went through as it is: the target's wards
+against the blow, the bestiary's edge, a boss's shield and a shield's block.
+
 A hero's fighting value (core/strength.js `weaponHarm`, might.js) counts them as harm: each share
 on top of their blows', holy fire at a quarter (it harms only some).
 
@@ -551,7 +572,8 @@ very rare sword bought from a swordsmith's shelves, rolled by chance, would be a
 
 Each crafter is a shop (core/progress.js `SHOPS` id; the four new ones stage 4 adds): what it
 makes, the finest make it works to (`best`: none of a finer main material, and nothing finer
-broken down), what it sells to make things with, and how many rows its list has.
+broken down; in a capital, the legendary, below), what it sells to make things with, and how many
+rows its list has.
 
 | Crafter | Makes | Works to | Sells | Recipes listed |
 | --- | --- | --- | --- | ---: |
@@ -575,11 +597,19 @@ broken down), what it sells to make things with, and how many rows its list has.
   a **tailor** (what's of cloth: cloaks, hats, gambesons, trousers) and a **jeweller** (rings and
   amulets). To the very rare, as the specialists. Wands, grimoires and spellwards at the occult
   scriptorium.
-- **The legendary only at a master's**: the Master Swordsmith every weapon but the arcane (a bow,
-  a staff and a quiver too), the Master Armorer everything worn but jewellery and the wizard's hat,
+- **The legendary at a master's**: the Master Swordsmith every weapon but the arcane (a bow, a
+  staff and a quiver too), the Master Armorer everything worn but jewellery and the wizard's hat,
   the Mystic Emporium the arcane and jewellery. Only they sell the legendary now, and a legendary
   piece is the hardest thing in the game to come by: it should be a master's work, and worth the
   journey to the one of each a people keeps. Every piece is made legendary at one of them.
+- **And at every crafter in a capital** (recipes.js `CAPITAL_BEST`; crafting.js `capital`, which
+  `recipesAt`, `craftRefusal`, `previewOf`, `salvagesAt` and `junkSalvage` take): the owner's
+  ruling, 15 November 2026, that every town needn't have every kind of shop but the capital should.
+  The masters never stand in one (worldplan/settle.js `masterShops`), so a capital's own crafters,
+  its blacksmiths, its specialists and stage 4's four, work to the legendary, and break it down: a
+  capital's blacksmith makes an orichalcum sword. The host knows a capital's crafter by their
+  building's settlement (host.js `#inCapital`: the start's, for a building at home; never a site's,
+  a castle's or a pedlar's out in the world). A master's list is the same anywhere.
 
 ### Which settlements keep which
 
@@ -593,11 +623,12 @@ there's money:
 | A village | one of the leatherworker, the bowyer and the tailor, by its seed | its blacksmith |
 | A town | two of them | its blacksmith and the four specialists |
 | A city | two of them, and the jeweller | its blacksmiths and the specialists |
-| A capital | all four | its blacksmiths and the specialists |
+| A capital | all four | its blacksmiths and the specialists; every one of them to the legendary |
 
-So the capital has every crafter but the masters. The masters stay where they are (worldplan/
-settle.js `masterShops`: each people's one of each in a village, town or city of theirs, never
-their capital).
+So the capital has every crafter but the masters, and wants none of theirs: every crafter there
+works to the legendary (*The crafters*, the owner's ruling). The masters stay where they are
+(worldplan/settle.js `masterShops`: each people's one of each in a village, town or city of theirs,
+never their capital), the legendary there too, away from a capital.
 
 ## Salvage
 
@@ -701,7 +732,7 @@ changed:
 | `command` | not as it should be: `base` not a string, `using` not a list of ids and nulls, `fee` or `count` not a whole number | |
 | `uncrafted` | that crafter doesn't make that (`craftRefusal`) | yes |
 | `unfit` | an ingredient left out that can't be, or not of its slot's kind (`craftRefusal`) | yes |
-| `unworked` | its main material's finer than that crafter works (`craftRefusal`) | yes |
+| `unworked` | its main material's finer than that crafter works (`craftRefusal`; in a capital, the legendary) | yes |
 | `lacking` | the pack hasn't all it takes (`lackingIn`: never the stash's) | yes |
 | `craftChanged` | the fee isn't what it comes to now (`previewOf`: the player's might or haggling has changed) | yes |
 | `gold` | not enough gold for the fee | |
@@ -712,12 +743,21 @@ changed:
 | `salvageNone` | breaking down all junk: nothing marked that crafter breaks down | yes |
 | `salvageChanged` | breaking down all junk: not the count the player was shown | yes |
 
+Breaking down one stack is checked `dead`, `far`, `command`, then `item`, `count`, `bound`,
+`unsalvaged` and `full`; all the junk, `dead`, `far`, `command`, `junkNone`, `salvageNone`,
+`salvageChanged` and `full`. An `index` that's no place of the pack is `item` (nothing there), as
+selling has it; a `count` of none, `count`.
+
 The new reasons' words are `CRAFT_REFUSALS` in crafting.js, for `REFUSALS` to take. All of it or
-nothing: the ingredients are taken (a junk stack of one before one that isn't), the piece made
-with the world's dice (`craftItem`, of the player's might's level, `mightFor`, and the crafter's
-people) and put in the pack; if it won't go, the pack and the gold are as they were. The fee grows
-the Trade skill, as buying does. Told: `crafted` (`{ id, item, fee, from, used }`) and
-`brokenDown` (`{ id, items, yields, from, junk? }`), each new.
+nothing: the ingredients are taken (`takesFrom`: a junk stack of one before one that isn't, then the
+smallest, then the first), the piece made with the world's dice (`craftItem`, of the player's
+might's level, `mightFor`, and the crafter's people) and put in the pack; if it won't go, the pack
+and the gold are as they were. The fee grows the Trade skill, as buying does; breaking down is free
+and grows nothing. Told: `crafted` (`{ id, item, fee, from, used }`: the piece as it's kept, the
+ingredients taken, `needs`) and `brokenDown` (`{ id, items, yields, from, junk? }`), each new. Each
+answers with what came of it (`{ ok, item, fee }`; `{ ok, count, yields }`; and with all the junk,
+`left`, the junk gear kept). Each is trade with whoever's at the counter, as buying and selling are,
+so it ends the player's Invisibility (host.js `SEEN`), refused or not.
 
 **Every name new, never used before.** The commands, refusals, events, the shops' ids (`bowyer`,
 `leatherworker`, `tailor`, `jeweller`), the new things' and creatures' ids and the seven new
@@ -742,7 +782,7 @@ server has a field of that name already.
 
 1. **The design and the data** (this). This page; materials.js, recipes.js, crafting.js; the new
    parts, materials and pictures; the unit tests.
-2. **The rules, the host and the blows.** The seven blows into gear.js `STATS` (labels as
+2. **The rules, the host and the blows** (done). The seven blows into gear.js `STATS` (labels as
    `ON_BLOW`, `share`), progress.js `bonuses()` (their totals and `BLOW_CAP`), app/gearinfo.js's
    words for them; the battle's (*How they strike*), host.js `#outfit` putting them on the actor;
    might.js and strength.js counting them; host.js `#craft`, `#salvage`, `#salvageJunk`, their
@@ -782,10 +822,11 @@ server has a field of that name already.
   example has one, and a piece is named for it when it has one.
 - **Counts**: a sword takes one ingot (the owner's example), a greatsword two, plate three, a
   gambeson three bolts.
-- **Legendary only at a master's**, and the masters not in the capitals: each people's one of each
-  is in a village, town or city of theirs, never the capital (worldplan/settle.js), so the capital
-  has every crafter but those. Were the capital to work the legendary too, stage 4 would put the
-  masters there, or let a capital's own crafters work to the legendary.
+- **Legendary at a master's, and in a capital** (the owner's ruling, 15 November 2026: every town
+  needn't have every kind of shop, but the capital should). The masters stay out of the capitals
+  (worldplan/settle.js), and a capital's own crafters work to the legendary instead
+  (`CAPITAL_BEST`), so the capital lacks nothing and nothing about the towns moves. The other way
+  would put the masters in the capitals too, moving a building in every world laid out before.
 - **The fee**: half a shop's price for that make and level, the same at every crafter, no markup
   at a master's.
 - **What's sold**: common and fine only; masterwork and finer only off creatures or back from
