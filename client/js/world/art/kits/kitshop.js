@@ -1,5 +1,5 @@
-// The specialists' and the masters' shops (shopfront.js SHOPFRONTS) built of the house kit
-// (kithouse.js: Meshsmith Foundry's half-timbered building kit, the licensed model
+// The specialists', the crafters' and the masters' shops (shopfront.js SHOPFRONTS) built of the
+// house kit (kithouse.js: Meshsmith Foundry's half-timbered building kit, the licensed model
 // `scenery-meshsmith-houses`), each in a look of its own (SHOP_LOOKS), the same in every town of
 // its people's, so a shop's known by its building wherever it stands: walls of a colour and an
 // awning of stripes no house has (art/engine/painters.js TINTS, world/cloth.js SHOP_AWNINGS), its
@@ -161,6 +161,86 @@ export const SHOP_LOOKS = Object.freeze({
             chimney: null,
             finial: "Roof_Peak_Ornament_04",
             awning: "awning-violet",
+        }),
+        // (The crafters': a bowyer's yew-orange plaster under shingles, braced timbers; a
+        // leatherworker's umber, half-hipped in red tiles; a tailor's madder rose, tall and
+        // jettied, its gable to the street; a jeweller's lapis over a stone ground floor, hipped in
+        // slate, close studded, leaded glass)
+        bowyer: Object.freeze({
+            style: "timber",
+            walls: "plaster-yew",
+            stone: "stone",
+            roof: "shingles",
+            kind: "gable",
+            ridge: "x",
+            storeys: 2,
+            jetty: 0.2,
+            figure: "braced",
+            braces: Object.freeze({ ends: "A", between: "X", one: "Plus", gable: "TX", door: "Door_03", ground: "2x3", upper: "2x2", doubled: false, sills: true }),
+            glazing: "glass",
+            frame: "timber",
+            dormers: false,
+            cross: false,
+            chimney: "stack",
+            finial: null,
+            awning: "awning-yew",
+        }),
+        leatherworker: Object.freeze({
+            style: "timber",
+            walls: "plaster-umber",
+            stone: "stone",
+            roof: "clay",
+            kind: "half-hip",
+            ridge: "x",
+            storeys: 2,
+            jetty: 0,
+            figure: "square",
+            braces: Object.freeze({ ends: "Plus", between: "H", one: "T", gable: "Box", door: "Door_01", ground: "2x3", upper: "2x3", doubled: false, sills: false }),
+            glazing: "glass",
+            frame: "timber",
+            dormers: false,
+            cross: false,
+            chimney: "stack",
+            finial: null,
+            awning: "awning-tan",
+        }),
+        tailor: Object.freeze({
+            style: "timber",
+            walls: "plaster-madder",
+            stone: null,
+            roof: "slate-grey",
+            kind: "gable",
+            ridge: "z",
+            storeys: 3,
+            jetty: 0.4,
+            figure: "close",
+            braces: Object.freeze({ ends: "M", between: "MPlus", one: "XT", gable: "T", door: "Door_02", ground: "2x4", upper: "2x3", doubled: false, sills: true }),
+            glazing: "leaded",
+            frame: "timber",
+            dormers: false,
+            cross: false,
+            chimney: null,
+            finial: "Roof_Peak_Ornament_05",
+            awning: "awning-madder",
+        }),
+        jeweller: Object.freeze({
+            style: "stone",
+            walls: "plaster-lapis",
+            stone: "stone",
+            roof: "slate",
+            kind: "hip",
+            ridge: "x",
+            storeys: 2,
+            jetty: 0,
+            figure: "close",
+            braces: Object.freeze({ ends: "W", between: "OSPlus", one: "V", gable: "TX", door: "Door_05", ground: "2x3", upper: "2x3", doubled: true, sills: true }),
+            glazing: "leaded",
+            frame: "timber",
+            dormers: true,
+            cross: false,
+            chimney: null,
+            finial: null,
+            awning: "awning-lapis",
         }),
     }),
 });
@@ -510,5 +590,5 @@ export function kitShop(piece) {
 export const AWNING = Object.freeze({ back: 0.36, depth: 0.9, fall: 0.35, skirt: 0.2 });
 
 // The shops with long names (a wider board), and the masters' (banners)
-const SHOPNAMES_LONG = Object.freeze(["scriptorium", "masterSwordsmith", "masterArmorer", "emporium"]);
+const SHOPNAMES_LONG = Object.freeze(["scriptorium", "masterSwordsmith", "masterArmorer", "emporium", "leatherworker"]);
 const SHOPFRONT_MASTERS = Object.freeze(["masterSwordsmith", "masterArmorer", "emporium"]);

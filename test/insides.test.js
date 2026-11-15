@@ -28,8 +28,9 @@ const { PLACE_BANDS } = await import("../client/js/core/places.js");
 const PLACE_GUARD = PLACE_BANDS.guard;
 const { CHUNK, buildWorld } = await import("../client/js/core/overworld.js");
 const { ROLES } = await import("../client/js/core/roles.js");
-const { PLOT, SHOP_LANDMARKS } = await import("../client/js/core/setpieces/pieces.js");
+const { CRAFTER_SHOPS, PLOT, SHOP_LANDMARKS } = await import("../client/js/core/setpieces/pieces.js");
 const { squareOf } = await import("../client/js/core/settlements.js");
+const { craftersOf } = await import("../client/js/core/setpieces/town.js");
 const { buildInterior, buildingInterior, doorways } = await import("../client/js/world/interiors3d.js");
 const { standsAt } = await import("../client/js/world/town3d.js");
 
@@ -434,10 +435,10 @@ describe("the buildings (insides.js Interiors)", () => {
         assert.equal(home.folk, world.folk);
     });
 
-    it("puts every settlement's taverns', smithies', temples', guilds' and barracks' doors among the world's links as it's laid out, their insides still to make", () => {
+    it("puts every settlement's taverns', smithies', temples', guilds', barracks' and crafters' doors among the world's links as it's laid out, their insides still to make", () => {
         const entered = settlement.town.pieces.filter((piece) => piece.kind === "landmark" && ENTERABLE.includes(piece.name));
 
-        assert.deepEqual(new Set(entered.map(({ name }) => name)), new Set(["tavern", "blacksmith", "church", "guild", "barracks"]));
+        assert.deepEqual(new Set(entered.map(({ name }) => name)), new Set(["tavern", "blacksmith", "church", "guild", "barracks", ...craftersOf("village", settlement.town.seed)]));
 
         for (const piece of entered) {
             const building = interiors.buildings.get(`${settlement.place.id}:${piece.id}`);
@@ -447,7 +448,7 @@ describe("the buildings (insides.js Interiors)", () => {
 
             // (Where it stands, for its icon on the maps: its middle, a few steps from its door)
             assert.ok(Math.hypot(building.at[0] - outside.squares[0][0], building.at[1] - outside.squares[0][1]) < 12, `${building.key}: at ${building.at}`);
-            assert.equal(building.name, piece.tavern?.name ?? (piece.patron ? `the Temple of ${GODS[piece.patron].name}` : { blacksmith: "the smithy", guild: "the Adventurers' Guild", barracks: piece.grade === "guardhouse" ? "the guardhouse" : "the barracks" }[piece.name]));
+            assert.equal(building.name, piece.tavern?.name ?? (piece.patron ? `the Temple of ${GODS[piece.patron].name}` : { blacksmith: "the smithy", guild: "the Adventurers' Guild", barracks: piece.grade === "guardhouse" ? "the guardhouse" : "the barracks", ...Object.fromEntries(CRAFTER_SHOPS.map((name) => [name, `the ${name}'s`])) }[piece.name]));
             assert.equal(outside.map, "town");
             assert.ok(outside.door && outside.squares.length === 2);
             assert.ok(inside.pending);

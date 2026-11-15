@@ -5166,8 +5166,8 @@ export class Host {
     /**
      * What a shop with a daily stock (progress.js SHOPS `daily`) kept by one of the folk (`keeper`:
      * their id) has in today, as it is now: { key (its stockKey), day, wares: [{ id, quality,
-     * count, left, people? }], special (the thing it is, made), specialLeft (whether it's still
-     * to be had) }; or null, for anyone else.
+     * count, left, people? }] (its shelves, then a crafter's materials), special (the thing it is,
+     * made), specialLeft (whether it's still to be had) }; or null, for anyone else.
      */
     stockOf(keeper) {
         const folk = this.folk.get(keeper);
@@ -5179,7 +5179,8 @@ export class Host {
 
         const key = stockKey(keeper);
         const day = dayOf(elapsedOf(this.war));
-        const { wares: daily, special } = dailyStock(shop, { seed: this.world.seed ?? 1, key, day, people: folk?.people ?? "human" });
+        const { wares: shelved, special, materials } = dailyStock(shop, { seed: this.world.seed ?? 1, key, day, people: folk?.people ?? "human" });
+        const daily = [...shelved, ...materials];
         const kept = this.stocks.get(key);
         const today = kept?.day === day ? kept : { sold: {}, special: false };
         // (And what a thread's put on its shelves: core/rare.js CHANGES `stock`)

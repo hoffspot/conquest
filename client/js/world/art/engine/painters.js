@@ -1285,6 +1285,12 @@ export const TINTS = {
     "plaster-oxblood": { from: "plaster-white", tint: [0.42, 0.13, 0.12] },
     "plaster-sage": { from: "plaster-white", tint: [0.46, 0.62, 0.38] },
     "plaster-violet": { from: "plaster-white", tint: [0.44, 0.3, 0.6] },
+    // (And the crafters': a bowyer's yew orange, a leatherworker's umber, a tailor's madder rose, a
+    // jeweller's lapis)
+    "plaster-yew": { from: "plaster-white", tint: [0.74, 0.44, 0.24] },
+    "plaster-umber": { from: "plaster-white", tint: [0.46, 0.33, 0.22] },
+    "plaster-madder": { from: "plaster-white", tint: [0.8, 0.46, 0.52] },
+    "plaster-lapis": { from: "plaster-white", tint: [0.24, 0.32, 0.62] },
     "leafscale-sage": { from: "leafscale", tint: [1.1, 1.02, 1.3] },
     "leafscale-silver": { from: "leafscale", tint: [1.15, 0.98, 1.6] },
     "leafscale-gold": { from: "leafscale", tint: [1.5, 1.05, 0.6] },

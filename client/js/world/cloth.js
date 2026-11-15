@@ -203,7 +203,8 @@ export const AWNINGS = Object.freeze({
 /**
  * The shops' own awnings' stripes, no house's or stall's (kits/kitshop.js SHOP_LOOKS): a
  * swordsmith's red and black, an armorer's steel blue and white, a scriptorium's purple and black,
- * an alchemist's green and cream, the Mystic Emporium's violet and gold.
+ * an alchemist's green and cream, the Mystic Emporium's violet and gold; a bowyer's olive and
+ * buff, a leatherworker's brown and tan, a tailor's rose and white, a jeweller's lapis and gold.
  */
 export const SHOP_AWNINGS = Object.freeze({
     "awning-forge": ["#8e2a22", "#1f1b1a"],
@@ -211,6 +212,10 @@ export const SHOP_AWNINGS = Object.freeze({
     "awning-ink": ["#4b2457", "#16121a"],
     "awning-herb": ["#2f6b3c", "#ece2c2"],
     "awning-violet": ["#5b3a8c", "#d4a73c"],
+    "awning-yew": ["#56622a", "#d8c08a"],
+    "awning-tan": ["#6a4024", "#d6ae6e"],
+    "awning-madder": ["#b04a62", "#f0e6dc"],
+    "awning-lapis": ["#24407a", "#e0c060"],
 });
 
 // Every awning's stripes, the houses' and the shops'

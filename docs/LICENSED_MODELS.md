@@ -402,8 +402,8 @@ in one: below), and something more rustic is to come for them.
   plaster, the dark inside and the soffits cast the house's). Its lower detail in the world, its
   windows only near. The humans' insides' floorboards are laid with its wood floor.
 - **The shops** (`client/js/world/art/kits/kitshop.js`, pure; drawn by kithouses3d.js
-  `kitShopObject`): the humans' specialists' and masters' shops, in every settlement of theirs
-  (a village's master's too), are built of the kit as a house is, each in a look of its own the
+  `kitShopObject`): the humans' specialists', crafters' and masters' shops, in every settlement
+  of theirs (a village's master's and crafter's too), are built of the kit as a house is, each in a look of its own the
   same on every lot (`SHOP_LOOKS`: walls and awning stripes no house has, fill, roof, storeys,
   jetties, timbers' figure, chimney, finial), their front laid out about the kit's door in the
   middle (`centredRun`), its leaf where the game has the shop's door (core/insides.js

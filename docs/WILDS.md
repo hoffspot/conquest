@@ -2409,7 +2409,9 @@ items rarity under it"). With
 sack, a convoy's or a supply wagon's gold: not a chest's share, nor anything a player dropped) are
 picked up as soon as they're within reach of them (`PICK_REACH`), each sack once (what there's no
 room for is left to tap); and under its switch, **What auto-snag takes** (its own page) chooses
-how rare and what kind, both ticked for it to take a thing: Legendary and Weapons alone, say, and
+how rare and what kind (gold, and the kinds a shop shows its wares under, progress.js
+`WARE_KINDS`: the materials for crafting among them, docs/CRAFTING.md), both ticked for it to take
+a thing: Legendary and Weapons alone, say, and
 it takes legendary weapons and leaves the rest in the sack, gold too unless that's ticked
 (host.js `snaggable`, `snagChoice`, `SNAG_GRADES`, `SNAG_KINDS`; app/save.js `autoSnag`,
 `snagGrades`, `snagKinds`: null, everything; the user, "Create a setting called auto-snag ... if

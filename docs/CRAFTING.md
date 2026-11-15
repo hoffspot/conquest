@@ -30,8 +30,9 @@ first of which is this page and the data and pure rules it describes:
   app/icons.js (two new kinds, a cut `gem` and a `bolt` of cloth).
 - `test/crafting.test.js`.
 
-Nothing of it is in the game yet: no shop sells a material, no creature leaves a new part, nothing
-is made and no blow does more. Stages 2 to 5 put it there.
+Stage 4 has put the crafters in the world: the four new crafters' shops in the settlements that keep
+them, their keepers, and the materials on every crafter's shelves (*The crafters*). No creature
+leaves a new part yet, nothing is made and no blow does more: stages 2, 3 and 5 put those there.
 
 ## How a piece is made
 
@@ -540,8 +541,9 @@ crafter: what's dearer at a master's is what they sell, not their work.
 | Plate armour (180 gold), level 1 | 90 | 270 | 720 | 1260 | 1890 | 2700 |
 | Gloves (6 gold), level 1 | 3 | 9 | 24 | 42 | 63 | 90 |
 
-**The ingredients' own.** A sold material's price is what a crafter asks for it (stage 4 puts it on
-the shelves, a shop's markup on top as for anything); a creature's part's is what the guild pays,
+**The ingredients' own.** A sold material's price is what a crafter asks for it (on its shelves:
+progress.js `SHOPS` `materials`, a master's markup on top as for anything, twice); a creature's
+part's is what the guild pays,
 as it always was. The new parts are priced by their make, as the old ones were by their creature:
 masterwork 22 to 45 gold, rare 70 to 80, very rare 150 to 170, legendary 300 to 360. So the
 Adamantite Demon Sword's ingredients are worth 230 gold and its fee, at the 60th level, 503; a
@@ -549,7 +551,7 @@ very rare sword bought from a swordsmith's shelves, rolled by chance, would be a
 
 ## The crafters
 
-Each crafter is a shop (core/progress.js `SHOPS` id; the four new ones stage 4 adds): what it
+Each crafter is a shop (core/progress.js `SHOPS` id; the four new ones stage 4 added): what it
 makes, the finest make it works to (`best`: none of a finer main material, and nothing finer
 broken down), what it sells to make things with, and how many rows its list has.
 
@@ -581,6 +583,64 @@ broken down), what it sells to make things with, and how many rows its list has.
   piece is the hardest thing in the game to come by: it should be a master's work, and worth the
   journey to the one of each a people keeps. Every piece is made legendary at one of them.
 
+### The shops
+
+The four new crafters are shops as the specialists are (stage 4):
+
+- **What they sell** (progress.js `SHOPS`): what each makes (`CRAFTERS` `makes`), a new
+  assortment each day as a specialist's, fine to very rare (`grades`, as a swordsmith's), and a
+  daily special, very rare or legendary (core/stock.js `dailyStock`): a bowyer 5 things a day
+  (always a bow among them), a leatherworker 8, a tailor 6, a jeweller 4, 1 to 3 of each.
+- **The materials on every crafter's shelves** (`SHOPS` `materials`: `CRAFTERS` `sells`), the
+  smith's, the specialists' who make (not the alchemist's), the masters' and the four new: each
+  common, under "Materials for crafting" (`WARE_KINDS` `material`). A blacksmith's as many as are
+  asked for, as all its wares are; a shop with a daily stock 10 to 20 of each every day
+  (`MATERIAL_COUNT`), for everyone who plays together, worked out after its other wares and its
+  special, so they're as they'd be without them (`dailyStock`'s `materials`; host.js `stockOf`
+  puts them on its shelves after the rest).
+- **What they buy** (`LINES`, `buys`): what they make (`bows`, `leathers`, `clothes`, a jeweller's
+  `jewels`), and every crafter the materials it sells.
+- **Inside** (core/insides.js `SHOP_INSIDES`, world/interiors3d.js `shop`, `shopWares`): a room 18
+  by 12 metres as every shop's, its counter and keeper, and its trade's own. A bowyer's bows hung
+  strung on racks along the walls, staves leant below, shelves of quivers, two tables of bows,
+  staves, a quiver, a hatchet and a basket of fletchings, shaving benches with saws and mallets. A leatherworker's hides stretched
+  on frames along the walls, shelves of leathers, belts and boots, cutting tables with sheepskins,
+  boards and mallets, a jerkin on its stand, benches with knives and dye, a tub of tan. A tailor's
+  shelves of bolts of every colour, two dummies in gowns or cloaks, cutting tables with a bolt
+  unrolled, cloth folded, shears and baskets of thread. A jeweller's shelves of caskets, cups and
+  plate, two cases of rings and stones on velvet under a propped lid of glass, benches with a
+  candle and a bowl of stones. What there's a model of in the catalog is one (a hatchet, a saw, a
+  mallet, a sheepskin, a board, a knife, baskets, cups, a ewer, candleholders); the rest (bows,
+  staves, quivers, hides, bolts, dummies, rings) the game's own art.
+- **Their keepers**: a Bowyer (dressed as an apprentice, in a leather apron), a Leatherworker (as
+  a smith), a Tailor and a Jeweller (as an innkeeper, in good plain cloth), each shop named by its
+  keeper ("Rowe's Bows", "Rowe's Leathers", "Rowe's Tailoring", "Rowe's Jewels"), "the bowyer's"
+  and the rest before they're met. Each talks as the specialists do (core/dialogue.js
+  `keeperTree`: of their trade, and of today's special).
+- **"What can you make?"**: every crafter's keeper is asked it, the smith's (and a castle's
+  smith, who makes as a smith) and the specialists' and masters' who make too, not the
+  alchemist's (`commissionOf`: the talk ends on it, as on buying). Its effect is `{ commission:
+  <the crafter: a CRAFTERS id> }`, handed to the game; app/game.js keeps it on what's wanted of
+  the keeper (`shopWanted.commission`, then `shopping.commission`), for the crafting to open at
+  (stage 5). Till there's a crafting to open, the shop opens, its materials on its shelves. The
+  host keeps it as it keeps any effect of talk, and does nothing with it.
+- **Their buildings** (setpieces/pieces.js `CRAFTER_SHOPS`, `SHOP_LANDMARKS`): a house made over
+  (*Which settlements keep which*), gone into by its door as the specialists' are. Outside
+  (art/kits/shopfront.js `SHOPFRONTS`), their names on their boards ("Bowyer", "Leatherworker",
+  "Tailor", "Jeweller"), their signs (new emblems, kits/emblems.js: a longbow and arrow, a
+  stretched hide, a tailor's shears, a ring and its stone) and what's set out by the door: a rack
+  of bows and a straw butt with two arrows in it; a hide laced on its frame and hides piled on a
+  trestle by a pair of boots; bolts of cloth in a rack and a dummy in a cloak; a jeweller's case
+  under its propped lid and its scales. The humans' built of the licensed house kit each in a
+  look of its own (art/kits/kitshop.js `SHOP_LOOKS`): the bowyer's yew-orange plaster under
+  shingles, olive and buff stripes; the leatherworker's umber, half-hipped in red tiles, brown and
+  tan; the tailor's madder rose, three jettied storeys, its gable to the street, rose and white;
+  the jeweller's lapis blue over stone, hipped in slate, lapis and gold (new tints, painters.js
+  `TINTS`; new stripes, cloth.js `SHOP_AWNINGS`); without the licensed models, the game's own in
+  those walls, roofs and storeys. Every other people's built as their specialists' are, by their
+  own kits.
+- **On the maps** (app/mapicons.js): a bow and arrow, a stretched hide, shears, a ring.
+
 ### Which settlements keep which
 
 `CRAFTER_TOWNS`: the four new crafters, each a house near the market made over as the specialists'
@@ -595,9 +655,29 @@ there's money:
 | A city | two of them, and the jeweller | its blacksmiths and the specialists |
 | A capital | all four | its blacksmiths and the specialists |
 
-So the capital has every crafter but the masters. The masters stay where they are (worldplan/
-settle.js `masterShops`: each people's one of each in a village, town or city of theirs, never
-their capital).
+So the capital has every crafter but the masters: every kind of shop there is (the owner's rule:
+not every town has every kind of shop, but the capital must), but the masters'. The masters stay
+where they are (worldplan/settle.js `masterShops`: each people's one of each in a village, town or
+city of theirs, never their capital).
+
+How they're placed (setpieces/town.js `craftersOf`, stage 4):
+
+- **Which**, by the settlement's kind and its seed (`layoutTown`'s), from a random of their own
+  (`createRandom(seed * 29 + 3)`), so nothing else of the layout changes: `always`, and `count`
+  of `some` shuffled. The same place always keeps the same ones.
+- **Where**: each the house nearest the market whose door opens onto a street, on dry land if
+  one can be (failing that, over a lagoon with its doorstep on a walk; failing that, a building
+  behind the street's houses), as the specialists' are; made over in place, its style and storeys
+  kept. They're made over last, after the specialists', a master's and the stable, so every
+  building those chose is chosen as it was, and the ids and seeds of every landmark are as they
+  were. **A world laid out before keeps every building it had**, each where it stood: only a few
+  of its houses near the market are shops now (`test/shops.test.js` lays places out with and
+  without them, `crafters: []`, and finds nothing else changed).
+- **A place too small**: none where it would leave the place `CRAFTER_SPARE` houses (3) or fewer,
+  along its streets and behind them (some lizard folk's and dark elves' villages of two or three
+  houses), and the place is never laid out again for one: it does without. Every village, town
+  and city of the humans', and every capital of every people's, has room.
+
 
 ## Salvage
 
@@ -728,8 +808,12 @@ server has a field of that name already.
 **The versions** (contribution.md, section 3):
 
 - `NET_VERSION` 230 → 231, once, in stage 2: new commands in lockstep, and the battle's rules
-  change (the new blows), and with stages 3 and 4 the world's creatures and its towns. One bump
-  for the one pull request.
+  change (the new blows), and with stages 3 and 4 the world's creatures and its towns (stage 4:
+  its crafters' shops made over from houses, their doorsteps opened, the materials on the shelves,
+  and a body of a battle that was gone coming back once it's reinforced, core/engagement.js). One
+  bump for the one pull request. Nothing else guards a town's layout: there's no version of the
+  world plan's or a town's, `TERRAIN_VERSION` is the ground's (a town's ground, its streets and
+  what stands where are as they were) and `DUNGEON_VERSION` a dungeon's.
 - `SNAPSHOT_VERSION` stays 54 and `SAVE_VERSION` 2: what's made is gear as it's kept now (its
   `name`, its `bonuses`, its `effect`), only with bonuses that are new; kept only where they're
   set, and absent they mean nothing, so there's nothing for a step to fill in; an older game
@@ -753,16 +837,19 @@ server has a field of that name already.
    (then taken out of materials.js, `sourcesOf` reading `SPOILS` alone); the bestiary's count
    (97 → 106) where docs/GAME.md says it; tests (model.test.js, creatures.test.js, the balance
    runner for their tiers: `npm run balance`).
-4. **The shops and the towns.** The four new crafters in `SHOPS` (their wares: what they sell,
-   `CRAFTERS` `sells`, and what they make, as the specialists sell theirs; the lines they buy:
-   materials, and what they make), the materials on the crafters' shelves; their buildings
-   (setpieces/pieces.js, as `SPECIALISTS` are, by `CRAFTER_TOWNS`, made over from houses near the
-   market and nothing else moved, so a world laid out before keeps every building it had), their
-   insides and keepers (core/insides.js `SHOP_INSIDES`, `NAMES`), their keepers' talk
-   (core/dialogue.js `keeperTree`, with a "What can you make?" that opens the crafting), their signs
-   and awnings; every crafter's keeper able to make (the specialists' and the masters' too); tests
-   (shops, insides, town, dialogue).
-5. **What the player sees.** The pack's crafting (a crafter's list by piece and material, missing
+4. **The shops and the towns** (done: *The shops*, *Which settlements keep which*). The four new
+   crafters in `SHOPS` (their wares: what they sell, `CRAFTERS` `sells`, and what they make, as
+   the specialists sell theirs; the lines they buy: materials, and what they make), the materials
+   on the crafters' shelves; their buildings (setpieces/pieces.js `CRAFTER_SHOPS`, by
+   `CRAFTER_TOWNS`: town.js `craftersOf`, made over from houses near the market and nothing else
+   moved, so a world laid out before keeps every building it had), their insides and keepers
+   (core/insides.js `SHOP_INSIDES`, `NAMES`), their keepers' talk (core/dialogue.js `keeperTree`,
+   with a "What can you make?", `commissionOf`, for the crafting to open at), their signs, awnings
+   and map icons; every crafter's keeper asked it (the smith's, the specialists' and the masters'
+   too); tests (test/shops.test.js, test/stock.test.js, and the expectations of the others that
+   counted the shops, in its commit).
+5. **What the player sees.** The pack's crafting, opened by "What can you make?" (app/game.js
+   `shopping.commission`: the crafter's id; till then the shop opens) (a crafter's list by piece and material, missing
    ingredients greyed, a slot's choices from what's carried, the piece shown first: make, name,
    powers and their ranges, effect, fee, worth; Craft), breaking down one piece and all junk;
    ingredients' cards and colours; the bestiary (*The bestiary*); sounds for making and breaking

@@ -2413,7 +2413,7 @@ async function keyOf() {
 
     list.replaceChildren();
 
-    for (const kind of ["tavern", "blacksmith", "church", "guild", "hall", "keep", "barracks", "swordsmith", "armorer", "scriptorium", "alchemist", "masterSwordsmith", "masterArmorer", "emporium"]) {
+    for (const kind of ["tavern", "blacksmith", "church", "guild", "hall", "keep", "barracks", "swordsmith", "armorer", "scriptorium", "alchemist", "bowyer", "leatherworker", "tailor", "jeweller", "masterSwordsmith", "masterArmorer", "emporium"]) {
         const label = ICON_NAMES[kind];
         const item = document.createElement("li");
         const icon = Object.assign(document.createElement("canvas"), { width: 44, height: 44 });

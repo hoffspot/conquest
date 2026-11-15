@@ -1532,7 +1532,10 @@ export class Game {
         this.markers = markersOf(markers);
         this.onMarkers = onMarkers;
 
-        /** Trading with a shopkeeper (from their talk): { shop, keeper (their id), name }, or null. */
+        /**
+         * Trading with a shopkeeper (from their talk): { shop, keeper (their id), name, commission
+         * (a crafter asked what they can make: core/dialogue.js commissionOf) }, or null.
+         */
         this.shopping = null;
         this.shopWanted = null;
 
@@ -10072,11 +10075,13 @@ export class Game {
                 });
 
                 // (Their wares, once the talk's over: their own shop, or their part's, as the host
-                // has it)
+                // has it; or, asked what a crafter can make, their crafting, `commission`: the
+                // crafter it's asked of, core/dialogue.js commissionOf. Till the pack has a crafting
+                // to open, their shop, its materials on its shelves: docs/CRAFTING.md stage 5)
                 const keeps = folk.find(({ id }) => id === npc.id)?.shop ?? out?.shop ?? SHOPKEEPERS[npc.role];
 
-                if (effect.shop && keeps) {
-                    this.shopWanted = { shop: keeps, keeper: npc.id, name: npc.name };
+                if ((effect.shop || effect.commission) && keeps) {
+                    this.shopWanted = { shop: keeps, keeper: npc.id, name: npc.name, ...(effect.commission ? { commission: effect.commission } : {}) };
                 }
             },
         });
@@ -14201,11 +14206,12 @@ export class Game {
         }
     }
 
-    // Trade with a shopkeeper: the pack open, their wares in it
-    #openShop({ shop, keeper, name }) {
+    // Trade with a shopkeeper: the pack open, their wares in it (a crafter asked what they can
+    // make, `commission`: kept with it, for the crafting to open at)
+    #openShop({ shop, keeper, name, commission = null }) {
         this.closeJournal();
         this.strongroom = null;
-        this.shopping = { shop, keeper, name, people: this.host.folk.get(keeper)?.people ?? "human" };
+        this.shopping = { shop, keeper, name, people: this.host.folk.get(keeper)?.people ?? "human", ...(commission ? { commission } : {}) };
         this.#showPack();
     }
 

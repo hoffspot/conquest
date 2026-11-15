@@ -476,7 +476,7 @@ export const MUSIC = Object.freeze({
     temple: { label: "In a temple", about: "The land's music hushed, far off through thick walls.", plays: "In a temple." },
     guild: { label: "In an adventurers' guild", about: "The tavern's jig, a little quieter: the guild's as lively.", plays: "In an adventurers' guild." },
     hall: { label: "In a town hall", about: "The land's music through the hall's windows.", plays: "In a town hall." },
-    shop: { label: "In a shop", about: "The land's music through the shop's windows, a little nearer than a hall's.", plays: "In a swordsmith's, an armorer's, an occult scriptorium, an alchemist's, and the masters' shops." },
+    shop: { label: "In a shop", about: "The land's music through the shop's windows, a little nearer than a hall's.", plays: "In a swordsmith's, an armorer's, an occult scriptorium, an alchemist's, a bowyer's, a leatherworker's, a tailor's, a jeweller's, and the masters' shops." },
     keep: { label: "In a keep", about: "The land's music far off through stone.", plays: "In a keep, a castle's or a citadel's." },
     undercroft: { label: "In an undercroft", about: "The land's music further off yet, under the keep's great hall.", plays: "In a castle keep's undercroft, with its smith, quartermaster and arcanist." },
     cave: { label: "In a cave", about: "A cave's own music, dark, echoing and alone, a little over two minutes in A minor at 56, with no beat to speak of: cellos holding a low chord, a bowed vibraphone's cold notes, a kalimba and a marimba dropping notes like water from the roof, never in time, and a slit drum far off.", plays: "In a cave and a bandits' hideout." },

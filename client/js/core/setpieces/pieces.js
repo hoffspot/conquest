@@ -66,8 +66,16 @@ export const SPECIALISTS = Object.freeze(["swordsmith", "armorer", "scriptorium"
  */
 export const MASTER_SHOPS = Object.freeze(["masterSwordsmith", "masterArmorer", "emporium"]);
 
+/**
+ * The crafters' shops new with crafting (docs/CRAFTING.md *The crafters*: core/recipes.js CRAFTERS,
+ * CRAFTER_TOWNS): a bowyer's, a leatherworker's, a tailor's and a jeweller's, a village one of the
+ * first three, a town two, a city two and the jeweller, a capital all four (setpieces/town.js
+ * craftersOf).
+ */
+export const CRAFTER_SHOPS = Object.freeze(["bowyer", "leatherworker", "tailor", "jeweller"]);
+
 /** Every shop made over from a house (setpieces/town.js), by its landmark's name. */
-export const SHOP_LANDMARKS = Object.freeze([...SPECIALISTS, ...MASTER_SHOPS]);
+export const SHOP_LANDMARKS = Object.freeze([...SPECIALISTS, ...MASTER_SHOPS, ...CRAFTER_SHOPS]);
 
 export const LANDMARKS = Object.freeze({
     tavern: [3, 3],
@@ -87,6 +95,11 @@ export const LANDMARKS = Object.freeze({
     masterSwordsmith: [2.5, 2.5],
     masterArmorer: [2.5, 2.5],
     emporium: [2.5, 2.5],
+    // (The crafters' shops: houses made over too, near the market, after the rest)
+    bowyer: [2.5, 2.25],
+    leatherworker: [2.5, 2.25],
+    tailor: [2.5, 2.25],
+    jeweller: [2.5, 2.25],
 });
 
 /**

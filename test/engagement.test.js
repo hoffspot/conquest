@@ -368,6 +368,36 @@ describe("a battle fought (core/engagement.js stepEngagement)", () => {
         assert.deepEqual(step(1000), [1]);
         assert.deepEqual(engagement.beaten, [1]);
     });
+
+    it("brings a body that was gone back once newcomers are put into it (an invasion's, its line all down while its fallen are made good): it rallies and comes on again, and its side's no longer beaten", () => {
+        const { battle, engagement, told, step } = drawnUp({ size: 20 });
+
+        engagement.phase = "melee";
+        step(500);
+
+        for (const actor of battle.actors.filter(({ side }) => side === 1)) {
+            actor.dead = true;
+        }
+
+        assert.deepEqual(step(1000), [1]);
+
+        const centre = engagement.sides[1].bodies.find(({ part }) => part === "centre");
+
+        assert.equal(centre.state, "gone");
+
+        // (Two put into its formation, as host.js #reinforceInvasion puts them with none of its
+        // side's line standing to take them)
+        for (const n of [0, 1]) {
+            battle.actors.push({ id: `1/newcomer-${n}`, x: 0, y: 60, dead: false, target: null, power: { melee: 1 }, formation: { id: centre.formation, slot: [n, 0], role: "front" }, side: 1 });
+        }
+
+        assert.deepEqual(step(1500), []);
+        assert.equal(centre.alive, 2);
+        assert.equal(centre.state, "charging");
+        assert.ok(centre.morale >= MORALE.falter.to);
+        assert.equal(centre.brokeAt, null);
+        assert.ok(told.some(({ change, side, part }) => change === "rally" && side === "b" && part === "centre"));
+    });
 });
 
 describe("holding the line (core/engagement.js FIELD charge, holdOf)", () => {

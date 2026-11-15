@@ -12,8 +12,9 @@ import { levelOf } from "../client/js/core/gear.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { mightTier } from "../client/js/core/might.js";
 import { buildWorld } from "../client/js/core/overworld.js";
-import { buys, gradeOf, HAGGLE_CAP, ITEMS, priceOf, Progress, QUALITIES, SELL_SHARE, SHOPS, SMITH_MAKES, wares } from "../client/js/core/progress.js";
-import { dailyStock, SPECIAL_MARKUP, shopPrice, stockKey, wareAt } from "../client/js/core/stock.js";
+import { buys, gradeOf, HAGGLE_CAP, ITEMS, priceOf, Progress, QUALITIES, SELL_SHARE, SHOPS, SMITH_MAKES, WARE_KINDS, wareKind, wares } from "../client/js/core/progress.js";
+import { CRAFTERS } from "../client/js/core/recipes.js";
+import { dailyStock, MATERIAL_COUNT, SPECIAL_MARKUP, shopPrice, stockKey, wareAt } from "../client/js/core/stock.js";
 import { decode, encode } from "../client/js/core/wire.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -39,8 +40,8 @@ function atShop(shop, progress = {}) {
 }
 
 describe("a shop's daily stock (stock.js)", () => {
-    it("has the specialists, the masters and a pedlar keep a daily stock, a blacksmith not", () => {
-        assert.deepEqual(DAILY, ["swordsmith", "armorer", "scriptorium", "alchemist", "masterSwordsmith", "masterArmorer", "emporium", "pedlar"]);
+    it("has the specialists, the crafters, the masters and a pedlar keep a daily stock, a blacksmith not", () => {
+        assert.deepEqual(DAILY, ["swordsmith", "armorer", "scriptorium", "alchemist", "bowyer", "leatherworker", "tailor", "jeweller", "masterSwordsmith", "masterArmorer", "emporium", "pedlar"]);
         assert.equal(dailyStock("smith"), null);
         assert.equal(dailyStock("guild"), null);
     });
@@ -164,6 +165,103 @@ describe("a shop's daily stock (stock.js)", () => {
     });
 });
 
+describe("the crafters' shops (progress.js SHOPS, core/recipes.js CRAFTERS: docs/CRAFTING.md)", () => {
+    const NEW = ["bowyer", "leatherworker", "tailor", "jeweller"];
+
+    it("has each new crafter sell what it makes as a specialist sells its line: a day's assortment, better made than a blacksmith's, and a special", () => {
+        for (const shop of NEW) {
+            const { items, best, daily } = SHOPS[shop];
+
+            assert.deepEqual(items, CRAFTERS[shop].makes, shop);
+            assert.equal(best, "veryRare", shop);
+            assert.deepEqual([daily.grades, daily.special], [SHOPS.swordsmith.daily.grades, SHOPS.swordsmith.daily.special], shop);
+
+            for (let day = 0; day < 20; day++) {
+                const { wares: shelves, special } = dailyStock(shop, { seed: 4, key: `town-1/${shop}-1`, day });
+
+                assert.equal(shelves.length, daily.picks, `${shop} day ${day}`);
+                assert.ok(shelves.every(({ id, quality }) => items.includes(id) && makes.indexOf(quality) >= makes.indexOf("fine")), `${shop} day ${day}`);
+                assert.ok(["veryRare", "legendary"].includes(gradeOf(special)) && items.includes(special.id), `${shop} day ${day}: ${special.id}`);
+            }
+        }
+
+        // (A bow always at a bowyer's)
+        for (let day = 0; day < 20; day++) {
+            assert.ok(dailyStock("bowyer", { seed: 7, key: "k", day }).wares.some(({ id }) => id === "bow"));
+        }
+    });
+
+    it("puts the materials each crafter works with on its shelves every day, so many of each, common; a blacksmith's all it's asked for; no other shop's", () => {
+        for (const [shop, { sells }] of Object.entries(CRAFTERS)) {
+            assert.deepEqual(SHOPS[shop].materials, sells, shop);
+
+            if (!SHOPS[shop].daily) {
+                const had = wares(shop, "human", { tier: 0 }).filter(({ id }) => ITEMS[id].material);
+
+                assert.deepEqual(had, sells.map((id) => ({ id, quality: "common" })), shop);
+
+                continue;
+            }
+
+            for (let day = 0; day < 10; day++) {
+                const { materials } = dailyStock(shop, { seed: 2, key: `town-1/${shop}-1`, day });
+
+                assert.deepEqual(materials.map(({ id }) => id), sells, `${shop} day ${day}`);
+                assert.ok(materials.every(({ quality, count }) => quality === "common" && count >= MATERIAL_COUNT[0] && count <= MATERIAL_COUNT[1]), `${shop} day ${day}`);
+            }
+        }
+
+        for (const shop of Object.keys(SHOPS).filter((one) => !CRAFTERS[one])) {
+            assert.ok(!wares(shop).some(({ id }) => ITEMS[id]?.material), shop);
+            assert.deepEqual(dailyStock(shop, { seed: 2, key: "x", day: 1 })?.materials ?? [], [], shop);
+        }
+
+        // (Shown under their own kind, in the shop and the pack)
+        assert.equal(wareKind("ironIngot"), "material");
+        assert.equal(WARE_KINDS.material, "Materials for crafting");
+    });
+
+    it("has each crafter buy back the materials it sells and what it makes, and no other new crafter's", () => {
+        const buyers = (id) => Object.keys(SHOPS).filter((shop) => buys(shop, id));
+
+        assert.deepEqual(buyers("bow"), ["smith", "swordsmith", "bowyer", "masterSwordsmith", "armoury", "watch", "guild"]);
+        assert.deepEqual(buyers("jerkin"), ["smith", "armorer", "leatherworker", "masterArmorer", "armoury", "watch", "guild"]);
+        assert.deepEqual(buyers("travelCloak"), ["smith", "armorer", "tailor", "masterArmorer", "armoury", "watch", "guild"]);
+        assert.deepEqual(buyers("wizardHat"), ["smith", "armorer", "scriptorium", "tailor", "masterArmorer", "emporium", "armoury", "arcane", "abbey", "watch", "guild"]);
+        assert.deepEqual(buyers("amulet"), ["jeweller", "emporium", "arcane", "abbey", "guild"]);
+        assert.deepEqual(buyers("pineWood"), ["bowyer", "guild"]);
+        assert.deepEqual(buyers("silkBolt"), ["tailor", "masterSwordsmith", "masterArmorer", "emporium", "guild"]);
+        assert.deepEqual(buyers("tannedLeather"), ["smith", "swordsmith", "armorer", "scriptorium", "bowyer", "leatherworker", "tailor", "guild"]);
+
+        for (const shop of ["alchemist", "tavern", "temple", "pedlar", "arcane"]) {
+            assert.ok(!Object.keys(ITEMS).some((id) => ITEMS[id].material && buys(shop, id)), shop);
+        }
+    });
+
+    it("sells a material over the counter while there's any left today, for everyone who plays together, and buys it back (host.js stockOf)", () => {
+        const { host, keeper } = atShop("bowyer");
+        const { progress } = host.players.get(HOST_PLAYER);
+        const yew = () => host.stockOf(keeper.id).wares.find(({ id }) => id === "yewWood");
+        const { left } = yew();
+
+        assert.ok(left >= MATERIAL_COUNT[0] && left <= MATERIAL_COUNT[1]);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "buy", item: { id: "yewWood", quality: "common" }, from: keeper.id }), { ok: true });
+        assert.equal(yew().left, left - 1);
+        assert.equal(progress.count("yewWood"), 1);
+
+        const gold = progress.gold;
+        const index = progress.pack.findIndex((stack) => stack?.id === "yewWood");
+
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "sell", index, to: keeper.id }), { ok: true });
+        assert.equal(progress.gold, gold + priceOf({ id: "yewWood" }, { haggle: progress.bonuses().haggle, selling: true }));
+
+        // (Not a shop that doesn't sell it: a tavern's)
+        const tavern = atShop("tavern");
+
+        assert.deepEqual(tavern.host.command(HOST_PLAYER, { type: "buy", item: { id: "yewWood", quality: "common" }, from: tavern.keeper.id }), { ok: false, reason: "shop" });
+    });
+});
+
 describe("haggling, as far as it goes (progress.js HAGGLE_CAP)", () => {
     it("takes no more than 35% off, however much is piled up: the Trade skill's best, the Fox on every piece that takes it, a legendary rabbit's foot", () => {
         const fox = (id) => ({ id, quality: "legendary", bonuses: { haggle: 0.06 }, affixes: ["fox"] });
@@ -208,7 +306,8 @@ describe("haggling, as far as it goes (progress.js HAGGLE_CAP)", () => {
 
 describe("a blacksmith, by the player's might (progress.js SMITH_MAKES)", () => {
     it("sells every weapon and piece of armour, common and fine to begin with, fine and masterwork later, masterwork for the mightiest (by their might's tier: core/might.js mightTier)", () => {
-        const of = (might) => [...new Set(wares("smith", "human", { tier: might === null ? null : mightTier(might) }).map(({ quality }) => quality))];
+        // (Its gear's makes: its materials are common, whoever's buying)
+        const of = (might) => [...new Set(wares("smith", "human", { tier: might === null ? null : mightTier(might) }).filter(({ id }) => ITEMS[id].slot).map(({ quality }) => quality))];
 
         assert.deepEqual(of(0), ["common", "fine"]);
         assert.deepEqual(of(45), ["fine", "masterwork"]);
@@ -233,7 +332,7 @@ describe("what each shop buys (progress.js buys)", () => {
 
         assert.deepEqual(buyers("sword"), ["smith", "swordsmith", "masterSwordsmith", "armoury", "watch", "guild"]);
         assert.deepEqual(buyers("mail"), ["smith", "armorer", "masterArmorer", "armoury", "watch", "guild"]);
-        assert.deepEqual(buyers("ring"), ["emporium", "arcane", "abbey", "guild"]);
+        assert.deepEqual(buyers("ring"), ["jeweller", "emporium", "arcane", "abbey", "guild"]);
         assert.deepEqual(buyers("scrollFireball"), ["scriptorium", "emporium", "arcane", "abbey", "guild"]);
         assert.deepEqual(buyers("luckyCoin"), ["scriptorium", "emporium", "arcane", "abbey", "guild"]);
         assert.deepEqual(buyers("elixirOfStrength"), ["alchemist", "arcane", "abbey", "temple", "pedlar", "guild"]);
