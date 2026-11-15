@@ -8904,7 +8904,7 @@ test("the bestiary: a creature seen and slain written in, its page in the journa
     await expect(journal).toBeVisible();
     await journal.getByRole("button", { name: "Bestiary" }).click();
     // (Every kind there is: what's set out in a boss's arena to be broken among them, creatures.js `object`)
-    await expect(journal).toContainText("1 of 127 kinds of creature met");
+    await expect(journal).toContainText("1 of 136 kinds of creature met");
     await expect(journal.getByRole("heading", { name: "The wilds" })).toBeVisible();
 
     // Its page: what it is, open; the rest shut, and how to open them

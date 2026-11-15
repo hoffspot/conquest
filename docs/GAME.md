@@ -2708,7 +2708,10 @@ itself, 2.25 times the pixels and four times the shadow map. The game aims at 60
 size each way on Low, a quarter of the pixels: view.js QUALITY `signs`, kits/signs.js
 `signDetail`. At every level a sign's painted so only while it's within 40 metres of the player
 (chunks3d.js `DETAIL_NEAR`, where a chunk's buildings change detail), and a quarter of its full
-size each way further off, from when it's built: *Signs painted as they're seen*, below.)
+size each way further off, from when it's built: *Signs painted as they're seen*, below. A name
+board's picture casts no shadow of its own, its frame casting the board's (kits/signs.js
+`signMaterial` `shadow`), so each is drawn once a frame, not twice: a village's crafter's shop, its
+board and sign more, kept the village in the building lab under its 120 draw calls.)
 
 | Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Motes | Chimney smoke | Far land | Far trees | Fields afar | Cliffs | Rocks | Signs |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
