@@ -25,20 +25,23 @@ open <http://localhost:8080/dungeon-map.html>). Try `?seed=7&theme=caves&levels=
 - **Its theme**: its look and feel, how its levels are dug, who's in it, and how each kind of room
   is dressed. Four, three of them each dug its own way:
   - **caves** (`caves`): caverns scattered about and wandering tunnels between them, with goblins,
-    cave spiders, bats, slimes, trolls and worse, and on the throne at the bottom a troll king, the
+    cave spiders, bats, slimes, trolls and worse (a mythril golem or an adamantite golem among
+    them: docs/WILDS.md *The crafters' quarry*), and on the throne at the bottom a troll king, the
     Broodmother, the Goblin King, the Frost Troll or the Orc Warlord (*The orcs on a dungeon's
     throne*, below);
   - **an outlaws' hideout** (`hideout`): rooms dug one off another down short tunnels, with
     bandits, their hounds, hired ogres and hedge priests, and at their head the Outlaw King, the
     Ogre Captain or the Orc Reaver;
   - **an ancient temple** (`ancient`): pillared halls up a straight middle way, rooms off them
-    either side, mirrored; the dead, cultists, wraiths, serpents and scorpions;
+    either side, mirrored; the dead, cultists, wraiths, serpents and scorpions, and now and then a
+    ghostwood treant grown up through its floor;
   - **an ants' nest** (`nest`): dug as ants dig, a gallery winding up through layered earth with
     chambers off it on short stalks, middens near the top and brood deep down; giant ants in their
     numbers, great centipedes in its deeper tunnels, packs of dungeon spiders each led by an elite
     dungeon spider, black widows hanging unseen under its galleries' roofs to drop on whoever passes
     beneath (a Widow matriarch among its mini-bosses), giant cockroaches at what the ants leave, dungeon wasps hovering in its
-    galleries, a dungeon scorpion or two, and the Ant Monster, their great queen, at the bottom,
+    galleries, a dungeon scorpion or two, now and then a gloomweaver, a black widow grown great and
+    violet-black, and the Ant Monster, their great queen, at the bottom,
     calling her flock to her
     (*Who's in it*, below). All of them are drawn from models
     of their own, got ready at its door (docs/WILDS.md, *A place's creatures, ready before they're
@@ -227,7 +230,7 @@ Greenflame*, whose quest ends going down through one).
   |---|---|---|---|---|---|---|
   | 1 | the Breach | caves | `hell-breach`: sooty caves crusted with sulphur, embers glowing in their cracks and drifting, pools of lava against the rock, the rift over the cult's altar | its drone ([The sound of hell](#the-sound-of-hell)); lava belching, hissing close by; drips | the cult's faithful, magma slimes, salamanders, black shucks, wraiths, bats, fiends; its own flaylings, cinder husks and pyre acolytes, and brimstone walkers; the Breach Priest, a cultist, among its mini-bosses | the Demon of the Breach, the Demon Boss |
   | 2 | the Halls of Bone | a hideout's rooms | `hell-bone`: walls of wet flesh, veins of blood beating in them, bone ribs arching over the halls, blood pooled on the floor, the heart in its last room | the drone a tone lower; a crypt's still air; the heart, louder nearer it; the dead groaning and wailing far off | skeletons, draugr, wraiths, ghosts, shadow stalkers, fiends; its own ossuary priests, dirge wardens and flayed hierarchs, and ash walkers; the Bone Lord, a wight lord, among its mini-bosses | the Hound of the Halls, a cerberus |
-  | 3 | the River of Fire | caves, flooded | `hell-fire`: black basalt, its caverns lakes of lava, causeways across them, embers in its rock and thick in its hot air, the Hellforge in its last room | the drone two tones lower; lava belching and roaring, hissing close by; the Hellforge's hammer | magma slimes, salamanders, black shucks, chimeras, wyverns, fiends; its own slag gorgers, forge brutes and chained gluttons, and hellwalkers, met the most here | the Forge Demon, the Greater Demon |
+  | 3 | the River of Fire | caves, flooded | `hell-fire`: black basalt, its caverns lakes of lava, causeways across them, embers in its rock and thick in its hot air, the Hellforge in its last room | the drone two tones lower; lava belching and roaring, hissing close by; the Hellforge's hammer | magma slimes, salamanders, black shucks, chimeras, wyverns, fiends; its own slag gorgers, forge brutes and chained gluttons, and hellwalkers, met the most here; now and then an orichalcum colossus (docs/WILDS.md *The crafters' quarry*) | the Forge Demon, the Greater Demon |
   | 4 | the Pit | an ancient temple's halls | `hell-pit`: polished black stone, sigils inlaid in its floor glowing violet, the lord's own colour, his horned throne, its lava only a rim along the throne hall's walls | the drone a fifth lower; a crypt's air, lower; wails far off | the legion (wraiths and skeletons), the faithful, draugr, shadow stalkers, hounds, slimes and salamanders, fiends; its own bloat gorgers, pit ravagers and gorger warlords, the lord's henchmen and bile walkers | the Gatekeeper, an ogre; then the Lord of the Pit, its henchmen about it |
 
   Each realm's rooms are dressed its own way: the cult's altars and candles and pools of lava in
@@ -1246,7 +1249,8 @@ times over as they had been, so a player saved deep in a dungeon is back where t
   (`pickStable`): each candidate is scored by its own hash of (seed, slot, its id), weighted, and
   the best taken. Adding a creature or a look to a theme then changes only the choices it wins,
   so the dungeons already found stay as they were.
-- `DUNGEON_VERSION` is bumped whenever what a seed makes changes.
+- `DUNGEON_VERSION` is bumped whenever what a seed makes changes (19 since the crafters' quarry
+  came into the caves', the ancient temples', the ants' nests' and the River of Fire's packs).
 - A dungeon cleared and made again is the next `generation`: the same name and way in, new levels.
 
 ## Adding a theme

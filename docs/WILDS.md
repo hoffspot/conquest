@@ -103,6 +103,15 @@ two tiers above it, up to their most.
 | Wight lord | 70 | aggressive | 1 | 9–10 | the ruined castles |
 | High priest of the cult | 80 | aggressive | 1, with six of the faithful | 10 | a hell's way in, by night (docs/DUNGEONS.md *Hells*) |
 | Frost troll | 75 | aggressive | 1 | 9–10 | the high snows |
+| Mythril golem | 130 | aggressive | 1 | 6–9 | mountain, snow, tundra; and the caves (*The crafters' quarry*, below) |
+| Adamantite golem | 130 | aggressive | 1 | 8–10 | volcanic, badlands, mountain; and the caves |
+| Orichalcum colossus | 130 | aggressive | 1 | 10 | the burning lands far out, perilous; and a hell's River of Fire |
+| Gilded scarab | 22 | aggressive | 2–4 | 3–7 | the cat folk's wilds only |
+| Ironbark treant | 80 | territorial | 1 | 6–9 | the orcs' wilds only |
+| Ghostwood treant | 80 | territorial | 1 | 8–10 | darkwood, marsh, only by night; and the ancient temples |
+| Sylvan ancient | 80 | territorial | 1 | 8–10 | the elves' wilds only, perilous |
+| Gloomweaver | 80 | aggressive | 1 | 8–10 | the dark elves' wilds only, perilous; and the ants' nests |
+| Moon moth | 70 | aggressive | 1 | 8–10 | elfwood, meadow, only by night, perilous |
 
 A few do something besides biting and clawing: the adder, bog frog, magma slime, salamander,
 death worm and knucker spit (venom, venom, lava, fire, acid, venom), a spitting cobra spits venom
@@ -207,6 +216,42 @@ throws (an underarm lob, an overarm one or a sidearm hurl), it does 14–24 at i
 and throws their enemies, never the player or their friends and allies. Refused, and kept, with
 no one in reach, out of sight, or in the middle of a blow or a spell.
 
+### The crafters' quarry
+
+Nine creatures put in the wilds for what the crafters make things of (docs/CRAFTING.md *New
+beasts*: what each leaves, and how each would be given a model of its own), each the kind of one
+there is, fighting as it does (its weapon, its ways, its temper, its hit points at the first tier),
+drawn from its model, or its stand-in, in a colour and size of its own (beasts/model.js
+`quarryModel`), till a model's bought for it:
+
+- **The golems**, the Stone Golem's kind: its hammer smashed, swept and pounded, its boulders
+  heaved at whoever keeps off; earth harms them little, they see through the ground by night as by
+  day, and no blast moves them. A **mythril golem**, silver-blue, four fifths as big (the Stone
+  Golem's model in its frost skin), in the mountains, snows and tundra far out; an **adamantite
+  golem**, dark green (its moss skin), in the burning lands, the badlands and the mountains
+  further out still; and the **orichalcum colossus**, red-gold, half as big again (its ember skin,
+  its cracks glowing), perilous, alone in the burning lands at their furthest. The first two are
+  met in the caves too, the colossus in a hell's River of Fire.
+- A **gilded scarab**, a giant cockroach as big again and a half and gold, in twos to fours in the
+  cat folk's wilds: its bite carries a sickness, and it rears up to strike down.
+- **The treants**, the blighted treant's kind, unblighted, keeping their ground, slamming and
+  calling up roots: an **ironbark treant**, grey as iron, in the orcs' wilds far out; a
+  **ghostwood treant**, pale, in the dark woods and marshes only by night, and in the ancient
+  temples; and the **sylvan ancient**, silver-barked and half as big again, perilous, alone at
+  the edges of the elves' wilds.
+- The **gloomweaver**, a black widow half as big again and violet-black, perilous, alone in the
+  dark elves' wilds at their furthest, and in the ants' nests: its bite and its pounce envenom.
+  Met in the open, it doesn't hang from a roof as a black widow does.
+- The **moon moth**, a dungeon wasp more than twice as big and white, perilous, alone, out only by
+  night over the elves' woods and the meadows far out: its sting and its dive poison. It flies, so
+  no fresh tracks lead to it (core/director.js `TRACKLESS`).
+
+The perilous among them are met out in their lands' wilds all the same (creatures.js `abroad`, as
+the frost trolls of the high snows are), never as an elite. The tenth tier's only ever reached in
+the mountains, snows and burning lands far out, and the elves' and dark elves' lands, the elves'
+woods and the meadows never go past the eighth: so the sylvan ancient, the gloomweaver and the moon
+moth are met from the eighth tier.
+
 ## How strong, and where
 
 The tier of a place goes up the further it is from home: `tierAt` counts from the player's own
@@ -226,7 +271,8 @@ The perilous places hold the mightiest, each a master and its guards (`LAIRS`): 
 drake's lair, with two wyverns; a Dreadthorn at each of its own lairs, with three wyverns; the
 Moonfang at each werewolves' den, with two werewolves and three dire wolves; a wight
 lord and its dead in each ruined castle (three skeletons, two ghosts and a wraith); the frost troll
-in the snows. And by night at each hell's way in, its cult at their rite (`RITES`: kept as a lair
+in the snows, and the crafters' quarry's perilous out in their lands (`abroad`: *The crafters'
+quarry*). And by night at each hell's way in, its cult at their rite (`RITES`: kept as a lair
 is, but only after dark): a high priest of the cult, robed and a head taller than its faithful,
 swinging its staff and calling hellfire down from nine metres, with six of the faithful round its
 ring (docs/DUNGEONS.md *Hells*). The Dreadthorn is the mightiest of all, a fight for a party: its hide turns a third of
@@ -2926,6 +2972,17 @@ atomic breath (`beasts/beam.js`, `BEAMS`), as a kaiju's should be:
   each a recorded sound the game knows how loud to play and the sound studio describes, at a
   moment inside a clip its model has. `e2e/model-viewer.spec.js`: heard as its clips play, at
   those moments, none paused, and the Sound option turning them off and on.
+- **Drawn from another kind's, in a colour of its own** (`quarryModel`, `TINT`): the crafters'
+  quarry (*The crafters' quarry*, above) has entries of its own in `MODELS`, by its own ids, made
+  from the entry of the creature each is like: its model (the Stone Golem's in its frost, moss or
+  ember skin, the giant cockroach's, the black widow's, the dungeon wasp's), its clips and bones,
+  drawn as much bigger as it is and going as much faster at its walk's own pace; and its `tint`,
+  put on its own copy of each of the model's materials as it's drawn (`modelBody`): the model's
+  pictures' light and shade kept, gentler, in the tint's colour, most of the way from its own, so
+  even a black widow's or a cockroach's dark model's coloured. Its glow, an ember skin's, as it is.
+  A treant's kind has no model to borrow: its stand-in's drawn. Each names its own model to come
+  (`own`: `beast-mythril-golem`...), and is drawn from that once one's bought, its entry written in
+  `OWN_MODELS` and the catalog given it (docs/CRAFTING.md *Its own model, later*).
 
 ### The Behemoth of the Rift (creatures.js `kaiju`, `COLOSSUS`; battle.js `#colossus`)
 
@@ -3149,7 +3206,8 @@ and the White Castle whole, its crag, chasm, bridge and castle (`scenery-bellhav
 across: the ground made as big, the camera let in as near as its parts), and as it's seen from
 afar (`scenery-bellhaven-far`), each linked to the castle lab, where it's walked as the game
 draws it. Those to come (no kind drawn from them yet) are under *Coming to the wilds*
-instead. Drag to
+instead. The crafters' quarry (*The crafters' quarry*) is under its own heading, each drawn as the
+game draws it: its stand-in, then the model it borrows in its own skin, colour and size. Drag to
 go round it and pinch or scroll to come nearer. The bar at its foot has it stand, walk, run,
 attack, be struck, rest, die or be knocked down, and fly, land or hover if it can; over it,
 **playback** (below). Its panel (**Inspect**) is beside it on a screen wider than it's tall, and

@@ -503,6 +503,20 @@ export const CREATURE_VOICES = Object.freeze({
     ashWalker: { family: "wight", rate: 0.92, fall: "deathThudMid" },
     hellwalker: { family: "wight", rate: 0.92, fall: "deathThudMid" },
     bileWalker: { family: "wight", rate: 0.92, fall: "deathThudMid" },
+    // (The crafters' quarry: each the voice of the creature it's like, lower as it's bigger. The
+    // golems the Stone Golem's grinding rumble, a mythril golem's a little higher, the colossus's
+    // as low as it goes; a gilded scarab a giant cockroach's chitter, lower; the treants a blighted
+    // treant's creaking, an ancient's lowest; a gloomweaver a black widow's, lower; a moon moth a
+    // dungeon wasp's, lower; each falling as big as it is)
+    mythrilGolem: { family: "troll", rate: 0.8, fall: "deathThudBig" },
+    adamantiteGolem: { family: "troll", rate: 0.72, fall: "deathThudBig" },
+    orichalcumColossus: { family: "troll", rate: 0.71, fall: "deathThudBig" },
+    gildedScarab: { family: "spider", rate: 1, fall: "deathThudMid" },
+    ironbarkTreant: { family: "treant", rate: 0.92, fall: null },
+    ghostwoodTreant: { family: "treant", rate: 0.9, fall: null },
+    sylvanAncient: { family: "treant", rate: 0.74, fall: null },
+    gloomweaver: { family: "spider", rate: 0.76, fall: "deathThudMid" },
+    moonMoth: { family: "spider", rate: 0.9, fall: "deathThudMid" },
 });
 
 // What a creature's voice is heard doing, and how loud (as synth.js's `volume`): calling (heard

@@ -50,7 +50,7 @@ export const FRESH = Object.freeze({ reach: [30, 85], ahead: [60, 85], spread: 0
  * them. (As world/tracks3d.js draws prints, from their looks: test/director.test.js holds the two
  * to each other.)
  */
-export const TRACKLESS = Object.freeze(new Set(["bats", "rookFlock", "vultureFlock", "wisp", "pixies", "mare", "locustSwarm", "bloodflies", "dungeonWasp", "ghost", "wraith"]));
+export const TRACKLESS = Object.freeze(new Set(["bats", "rookFlock", "vultureFlock", "wisp", "pixies", "mare", "locustSwarm", "bloodflies", "dungeonWasp", "ghost", "wraith", "moonMoth"]));
 
 /**
  * A fresh trail from one place to another ([x, y] metres; random.js random): its points, from

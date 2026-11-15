@@ -337,10 +337,12 @@ export const INGREDIENTS = Object.freeze({
 
 /**
  * The new creatures, each so that a rarer ingredient has one to come off (docs/CRAFTING.md *New
- * beasts*), for stage 3 to put in the world (creatures.js CREATURES, spoils.js SPOILS, beasts/
- * model.js MODELS and beasts/looks.js LOOKS): each one's name; the creature whose body and fight
- * it borrows (`like`), drawn `size` times as big in its own colour (`tint`), or the borrowed
- * model's skin (`skin`); the catalog entry its own model will be, once one's bought (`model`); its
+ * beasts*), in the world as creatures.js CREATURES, spoils.js SPOILS, the dungeons' packs
+ * (dungeons/themes.js), beasts/model.js MODELS and beasts/looks.js LOOKS have them (the tests hold
+ * them to this): each one's name; the creature whose body and fight it borrows (`like`), drawn
+ * `size` times as big in its own colour (`tint`), or the borrowed model's skin (`skin`); its hit
+ * points at the first tier where they're not the borrowed creature's (`hp`: the perilous whose kind
+ * is small, as many as the other perilous foes met in the wilds have); the catalog entry its own model will be, once one's bought (`model`: beasts/model.js OWN_MODELS); its
  * tiers, where it's met (its `people`'s lands' wilds, or `biomes`; and the dungeons' `themes`),
  * when (`night`), whether it's `perilous`; and what it leaves (as spoils.js SPOILS `items`).
  */
@@ -348,28 +350,10 @@ export const NEW_BEASTS = Object.freeze({
     mythrilGolem: { name: "Mythril golem", like: "stoneGolem", skin: "frost", tint: "#8ac8f0", size: 0.8, model: "beast-mythril-golem", tiers: [6, 9], biomes: ["mountain", "snow", "tundra"], themes: ["caves"], items: [{ id: "mythrilIngot", chance: 0.6, count: [1, 2] }, { id: "sapphire", chance: 0.15 }] },
     adamantiteGolem: { name: "Adamantite golem", like: "stoneGolem", skin: "moss", tint: "#2e5a48", size: 1, model: "beast-adamantite-golem", tiers: [8, 10], biomes: ["volcanic", "badlands", "mountain"], themes: ["caves"], items: [{ id: "adamantiteIngot", chance: 0.55, count: [1, 2] }, { id: "diamond", chance: 0.12 }] },
     orichalcumColossus: { name: "Orichalcum colossus", like: "stoneGolem", skin: "ember", tint: "#e07a30", size: 1.6, model: "beast-orichalcum-colossus", tiers: [10, 10], perilous: true, biomes: ["volcanic"], themes: ["hell"], items: [{ id: "orichalcumIngot", chance: 0.6, count: [1, 2] }, { id: "starRuby", chance: 0.15 }] },
-    gildedScarab: { name: "Gilded scarab", like: "giantCockroach", tint: "#e8b830", size: 1.4, model: "beast-gilded-scarab", tiers: [3, 7], people: "cat", themes: [], items: [{ id: "goldIngot", chance: 0.35 }, { id: "carapace", chance: 0.4 }] },
+    gildedScarab: { name: "Gilded scarab", like: "giantCockroach", tint: "#e8b830", size: 1.4, model: "beast-gilded-scarab", tiers: [3, 7], people: "cat", themes: [], items: [{ id: "goldIngot", chance: 0.12 }, { id: "carapace", chance: 0.4 }] },
     ironbarkTreant: { name: "Ironbark treant", like: "treant", tint: "#4a4a4e", size: 1.1, model: "beast-ironbark-treant", tiers: [6, 9], people: "orc", themes: [], items: [{ id: "ironwood", chance: 0.5, count: [1, 2] }] },
     ghostwoodTreant: { name: "Ghostwood treant", like: "treant", tint: "#c8dce8", size: 1.15, model: "beast-ghostwood-treant", tiers: [8, 10], night: "only", biomes: ["darkwood", "marsh"], themes: ["ancient"], items: [{ id: "ghostwood", chance: 0.5 }, { id: "ectoplasm", chance: 0.35 }] },
-    sylvanAncient: { name: "Sylvan ancient", like: "treant", tint: "#c8d8b0", size: 1.6, model: "beast-sylvan-ancient", tiers: [10, 10], perilous: true, people: "elf", themes: [], items: [{ id: "sylvanwood", chance: 0.6, count: [1, 2] }, { id: "ancientSap", chance: 0.3 }] },
-    gloomweaver: { name: "Gloomweaver", like: "blackWidow", tint: "#3a2a5a", size: 1.5, model: "beast-gloomweaver", tiers: [8, 10], perilous: true, people: "darkElf", themes: ["nest"], items: [{ id: "gloomsilk", chance: 0.6, count: [1, 2] }, { id: "widowGland", chance: 0.5 }] },
-    moonMoth: { name: "Moon moth", like: "dungeonWasp", tint: "#e8f0ff", size: 2.2, model: "beast-moon-moth", tiers: [10, 10], perilous: true, night: "only", biomes: ["elfwood", "meadow"], themes: [], items: [{ id: "moonsilk", chance: 0.5 }, { id: "pixieDust", chance: 0.5, count: [1, 2] }] },
-});
-
-/**
- * What creatures there already are leave besides, for stage 3 to add to spoils.js SPOILS (each as
- * SPOILS `items`): the black widow its silk, the orcs their black steel, the Goblin King, the
- * bandits' chief and the drake their gold.
- */
-export const MORE_SPOILS = Object.freeze({
-    blackWidow: [{ id: "widowSilk", chance: 0.4 }],
-    orcRaider: [{ id: "blackSteelIngot", chance: 0.08 }],
-    orcReaver: [{ id: "blackSteelIngot", chance: 0.25 }],
-    orcWarlord: [{ id: "blackSteelIngot", chance: 0.3 }],
-    orcIronjaw: [{ id: "blackSteelIngot", chance: 0.4 }],
-    orcBloodtusk: [{ id: "blackSteelIngot", chance: 0.4 }],
-    orcKing: [{ id: "blackSteelIngot", chance: 0.8, count: [1, 2] }],
-    goblinKing: [{ id: "goldIngot", chance: 0.3 }],
-    banditChief: [{ id: "goldIngot", chance: 0.15 }],
-    dragon: [{ id: "goldIngot", chance: 0.6, count: [1, 2] }],
+    sylvanAncient: { name: "Sylvan ancient", like: "treant", tint: "#c8d8b0", size: 1.6, model: "beast-sylvan-ancient", tiers: [8, 10], perilous: true, people: "elf", themes: [], items: [{ id: "sylvanwood", chance: 0.6, count: [1, 2] }, { id: "ancientSap", chance: 0.3 }] },
+    gloomweaver: { name: "Gloomweaver", like: "blackWidow", hp: 80, tint: "#3a2a5a", size: 1.5, model: "beast-gloomweaver", tiers: [8, 10], perilous: true, people: "darkElf", themes: ["nest"], items: [{ id: "gloomsilk", chance: 0.6, count: [1, 2] }, { id: "widowGland", chance: 0.5 }] },
+    moonMoth: { name: "Moon moth", like: "dungeonWasp", hp: 70, tint: "#e8f0ff", size: 2.2, model: "beast-moon-moth", tiers: [8, 10], perilous: true, night: "only", biomes: ["elfwood", "meadow"], themes: [], items: [{ id: "moonsilk", chance: 0.5 }, { id: "pixieDust", chance: 0.5, count: [1, 2] }] },
 });
