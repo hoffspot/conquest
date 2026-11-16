@@ -4033,8 +4033,12 @@ hired, for gold by their calling (`HIRES`: a fresh one's; one of a higher level 
 
 A player leads one follower, and more as their **Command** grows (1 more at rank 1, up to 6 more at
 rank 5: `progress.js`). Command grows by leading: a share of every blow their followers land.
-Hired, an adventurer's gone from the guild for good (`host.hired`). Asked without the gold, they
-say what they'd want and stay where they are.
+Hired, an adventurer's gone from the guild for good (`host.hired`), even in a world made afresh
+each time it's played: those a character's kept with them (following, mending, or on their roll,
+by who they were among the folk, `from`) are taken out of the folk as they come in, and never
+added again (host.js `#takeOn`). Asked without the gold, they say what they'd want and stay where
+they are. With a full company, they say so, those mending counted (dialogue.js `adventurer`'s
+`full`).
 
 **Following** (`battle.js`, ai `"follow"`, `FOLLOW`; companions by magic too: docs/MAGIC.md):
 - a follower keeps within 3 steps of their leader while they stand, 2 while they're on the move
@@ -4179,7 +4183,7 @@ a trait (tireless, deadly, lucky or quick), and says so.
   magic and left behind too): still the player's, counted in their company, and kept with the
   character (`away`); sent for at any guild's receptionist for a quarter of their price
   (`recallPrice`, `recallOffer`, `#sendFor`: back at their side, mended), or let go there, asked
-  first (`#letMendingGo`);
+  first (`#letMendingGo`): any of them, by name (*Never lost*, below);
 - where the world's rule has it (`RULES` `mortal`: off to begin with; set by the world's host's
   player or an owner, Game options *Mercenaries can die*, a `rule` command, told to everyone as a
   `rules` event), the third fall is their last (`#fallForGood`).
@@ -4226,14 +4230,54 @@ in a guild hall.
   knocked down, up again, a level gained, a byname earned, trust grown, and striking their
   nemesis's kind again;
 - the **roll** (`ROLL_MOST`: 20, the latest first): those who've fallen for good or gone their
-  own way, with their level, byname and the foes they brought down, in the journal.
+  own way, with their level, byname and the foes they brought down, in the journal; and who they
+  were among the folk (`from`), so they're never at their guild for hire again.
 
 **Kept** with the character in the world they were hired in (`characterOf`'s `followers`: who
 they are and what they've grown into, those mending too, and the `roll`; `save.js`
 `saveFollowers`, a saved game's; a server's world keeps a visitor's with its memory of them,
 server/storage/visitors.js `REMEMBERED`), brought in safe (netplay.js `followerFrom`, `rollFrom`:
 no more than one could be); and in the host's snapshot. The journal shows the player's company:
-each follower, their level, how they are, those mending, how many they can lead, and the roll.
+each follower, their level, how they are, those mending (and what it costs to send for each),
+how many they can lead, and the roll.
+
+**Never lost** (the user: "make sure there are no gaps in the ability for a player to find a
+mercenary they previously hired and get them back in their party"; `NET_VERSION` 232). Every way a
+hired adventurer leaves their leader's side ends somewhere the player can find them and get them
+back: by them, waiting where they were told (Follow, from the party menu, brings them from
+anywhere), down and getting up, mending at the guilds, or kept with the character while they're
+away from the world. Nowhere else:
+- **A dungeon made again**, or a sealed room let go of, first brings anyone's followers and
+  creatures on its maps out to a free square behind their leader, following again (host.js
+  `#bringOut`); one knocked down there lies by them till they're up. With no room by them, a
+  follower goes home to mend and a creature's let go. (Before, one told to wait there, or left
+  down there as their leader fell and was up again at home, was taken out of the battle with
+  their record left: counted in the company, beyond every order, till the game was loaded again.)
+- **No body, never**: one of a player's company with no body in the battle is given one again by
+  them, following (`#keepUp`, `#embody`).
+- **Magic** (Teleport, Word of Recall, Wizard's Walk, a Scroll of Safety, answering a summons)
+  leaves the company behind, home to mend, only once it carries its leader off (`#carry`): with no
+  room where they'd go, the company stays as it was. The Scroll's words, and a summons' question
+  to one who leads anyone, say they'll be left behind.
+- **At a guild's desk**, any of those mending is asked about by name ("Not Tam: another of mine
+  with the healers", each with their price: dialogue.js `menders`, `MENDERS_LISTED`), and sent for
+  or let go by their id (the `recall` and `release` effects: the one named, or the first). One no
+  longer mending is refused (`recall`), never another let go in their place, and what's said is
+  as things stand after each (once, a list made as the talk began let the next one go).
+- **Told**: the party menu says those mending count among those the player can lead; the
+  `company` refusal says so too; one knocked down given an order is told they're down
+  (`downed`); one waiting elsewhere is shown "Not here: Follow calls them to you".
+- **Kept**: a world server keeping heroes keeps their roll and a beast they've tamed through every
+  login (character-file.js `salvageKept`, `exportOfKept`, `keptOfExport`), as character files and
+  Bring my world do (once, both were let go each time they came in). A world on a player's device
+  remembers those who've come in as they are whenever its host's place is kept (each of the war's
+  turns, paused, hidden or closed: netplay.js `present`, app/together.js `keepVisitors`), not
+  only as they leave, so its page closing doesn't lose a guest's company; and past
+  `MOST_VISITORS` it forgets one with nobody following them before one with. The pack's kept the
+  moment what a follower wears is given or taken back, or comes back as they part.
+- **By design**: those on the roll don't come back (dismissed, they go their own way; fallen where
+  the world's rule has it, they're gone), and followers belong to the world they were hired in
+  (deleting it, asked first, says it takes them).
 
 ### News and rumours, and the guild's board (M8)
 

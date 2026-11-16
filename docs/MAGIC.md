@@ -456,10 +456,13 @@ same for everyone playing (docs/GAME.md: hosting and joining):
   the caster: as wild as any other (to hunt, for its parts or a guild's contract).
 - **Summon** on a player (of a people not the caster's enemy) asks them to come: they have 30
   seconds to answer (`SUMMONING_MS`) ("Go to Aldric" or "Resist"; with **Resist all summons** on in Game options,
-  they say no at once), and coming, they're carried to the caster's side.
+  they say no at once), and coming, they're carried to the caster's side. One who leads hired
+  adventurers is told, as they're asked, that those will be left behind.
 - **Teleport** carries the caster anywhere at all in the world; **Word of Recall** to the door of
   the nearest temple; **Wizard's Walk** to the place they pick on the world map (the map opens to
-  pick on: anywhere they've uncovered). Whoever was with them is left behind.
+  pick on: anywhere they've uncovered). Whoever was with them is left behind, once they're carried
+  (hired adventurers home to mend, to be sent for at a guild's desk: docs/WAR.md *Never lost*);
+  with nowhere for them to go, nobody is.
 - **Polymorph** turns a creature into another of the world's creatures, any but the perilous
   places' own, each as likely. A true gamble: what it becomes is as a fresh one of that kind, at
   any of its tiers, each as likely (`CREATURES` `tiers`: a rat 1 to 3, a wolf 2 to 5, a Flayed

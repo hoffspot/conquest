@@ -2537,7 +2537,9 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   the chosen one pressed: a `pick` command), what they wear (Take back: an `unoutfit` command),
   what they've done, a veteran's gift and their mastery, their renown, and Rename (a `rename`
   command; empty, their own name again). Those mending at a guild are listed after the rest, with
-  what it costs to send for them. Dismissing's for good (a hired adventurer goes their
+  what it costs to send for them; with no one else, the menu says they still count among those
+  the player can lead. One waiting elsewhere shows "Not here: Follow calls them to you", and Follow
+  brings them from anywhere. Dismissing's for good (a hired adventurer goes their
   own way, a creature's gone), so it's asked first, from the menu or the wheel alike: "Dismiss
   Bryn?", Dismiss Bryn or Keep them (game.js `onAskDismiss`, main.js `askDismiss`: the
   `#dismissask` dialog), where the menu once asked twice ("Dismiss?" for three seconds); and in
