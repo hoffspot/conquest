@@ -143,6 +143,7 @@ import { Ailments3D } from "../world/ailments3d.js";
 import { Effects, LOOKS } from "../world/effects.js";
 import { missileTravel, SpellFx } from "../world/spellfx.js";
 import { HORSEBACK, Mounts } from "../world/mounts3d.js";
+import { HORSE_MODEL } from "../core/mounts.js";
 import { Squares } from "../world/squares.js";
 import { BIG_FOE, detectQuality, DISTANCE, DUNGEON_VIEW, dungeonPose, QUALITY, ROOM_VIEW, startDistance } from "../world/view.js";
 import { cutRock, DUNGEON_CUT, loadProp } from "../world/dungeons3d.js";
@@ -6400,6 +6401,19 @@ export class Game {
             for (const kind of this.#modelsInside()) {
                 wantModel(kind, "now");
             }
+
+            // (The horse the player's whistle calls: read and got ready to draw before it's
+            // called, and kept while the whistle's carried (#forgetting), so it rises as itself,
+            // not as its stand-in; short of memory, read but not made. Another player's, here:
+            // fetched and kept, read when it's called)
+            const horse = this.#whistled();
+
+            this.mounts.ahead(horse, { warm: this.memoryGuard.level === 0 });
+
+            if (!horse && this.#whistlesAbout() && !this.approached.has(HORSE_MODEL)) {
+                this.approached.add(HORSE_MODEL);
+                fetchModel(HORSE_MODEL, "soon").then((kept) => kept || setTimeout(() => this.approached.delete(HORSE_MODEL), APPROACH_RETRY));
+            }
         }
 
         for (const [id, avatar] of this.avatars) {
@@ -6415,6 +6429,17 @@ export class Game {
                 this.enlisting.push(id);
             }
         }
+    }
+
+    // The horse the player's whistle calls (core/mounts.js: { id, coat, mane, tint }), out or not,
+    // or null: they carry none
+    #whistled() {
+        return this.battle.actor(this.me)?.mount?.horse ?? this.self?.progress.pack.find((stack) => stack?.id === "mountWhistle")?.horse ?? null;
+    }
+
+    // Whether any player in the world carries a horse's whistle
+    #whistlesAbout() {
+        return [...(this.host?.players?.values() ?? [])].some((player) => player.progress?.pack.some((stack) => stack?.id === "mountWhistle"));
     }
 
     // Whether one of the wild's people-shaped creatures drawn as its stand-in (a character: a
@@ -6526,7 +6551,11 @@ export class Game {
         const sparing = this.memoryGuard.touch;
         const predicted = me ? (sparing ? [...modelsNear([me.x, me.z], this.#modelLairs(), SPARING_MODELS.keep), ...this.#modelsMet()] : [...modelsNear([me.x, me.z], this.#modelLairs(), KEEP_MODELS), ...this.#modelsHere()]) : [];
 
-        forgetModels(performance.now(), now ? 0 : MODEL_LINGER, me ? [...predicted, ...this.#modelsAbout(), ...this.#modelsOfRift()] : [], this.#modelsInside());
+        // (The player's horse kept while they carry its whistle, called or not: read again each
+        // time it was called, its stand-in was drawn till it was. Not short of memory)
+        const horse = !now && this.#whistled() ? [HORSE_MODEL] : [];
+
+        forgetModels(performance.now(), now ? 0 : MODEL_LINGER, me ? [...predicted, ...this.#modelsAbout(), ...this.#modelsOfRift(), ...horse] : horse, this.#modelsInside());
     }
 
     // How many bodies can be held in full at once: the quality's (QUALITY bodies), and, the memory

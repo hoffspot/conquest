@@ -132,6 +132,24 @@ test("buys a horse from the stablemaster, calls it up with its whistle, rides it
     expect(bought.gold).toBe(600);
     expect(bought.whistle.horse.id).toBe(bought.result.horse.id);
 
+    // Carrying its whistle, the horse is got ready before it's called (mounts3d.js `ahead`): its
+    // model and its rider's clips read, the horse itself made and its shaders compiled, hidden
+    if (licensedModelsHere()) {
+        const warmed = await page.evaluate(async () => {
+            const { game } = window.pellagos;
+            const start = performance.now();
+
+            while (!(game.mounts.warm?.ready && game.mounts.clips) && performance.now() - start < 120000) {
+                game.advance(1 / 30, { render: false, wait: true });
+                await new Promise((resolve) => setTimeout(resolve, 20));
+            }
+
+            return { ready: Boolean(game.mounts.warm?.ready), clips: Boolean(game.mounts.clips), hidden: game.mounts.warm?.beast.object.visible === false, out: game.mounts.horses.size };
+        });
+
+        expect(warmed).toEqual({ ready: true, clips: true, hidden: true, out: 0 });
+    }
+
     // Called, out in the street: rising out of the ground
     const called = await page.evaluate(() => {
         const { game } = window.pellagos;
@@ -150,6 +168,12 @@ test("buys a horse from the stablemaster, calls it up with its whistle, rides it
 
     expect(rising.phase).toBe("rising");
     expect(rising.drawn).toBe(true);
+
+    // (As itself from the first of it, not as its stand-in: it was ready)
+    if (licensedModelsHere()) {
+        expect(rising.model, JSON.stringify(rising)).toBe(true);
+        expect(rising.visible).toBe(true);
+    }
     expect(rising.under).toBeGreaterThan(0.3);
     expect(rising.bar).toBe(true);
 

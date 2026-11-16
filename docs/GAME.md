@@ -1803,7 +1803,13 @@ dismiss a specific purchased mount").
   and the rein's end coming out of the top of the fist under the thumb (characters/riding.js
   `REIN_HOLD`, `pinchOf`), as far as their feet are in the stirrups; else the reins hang on its
   neck as its clips have them (mounts3d.js `REINS`). The camera looks a little higher at them
-  (`HORSEBACK.camera`). Without the licensed models a bay built in code stands in (looks.js
+  (`HORSEBACK.camera`). The horse is got ready before it's called: while the player carries a
+  whistle, its model and its rider's clips are read ahead (fetched in the background, as what's
+  predicted is), the horse itself is made and its shaders compiled, hidden (mounts3d.js `ahead`),
+  and its model is kept, called or not, so it rises out of its ring as itself and not as its
+  stand-in; short of memory (the memory guard up a level) it's read but not made, and let go of
+  with the rest. Another player's, in the same world, is fetched and kept, and read when it's
+  called. Without the licensed models a bay built in code stands in (looks.js
   `horse`) and the rider's sat on it as on a bench. A horse is shown once it's ready to draw: made
   hidden, its shaders compiled in the background where the browser can and its pictures sent
   (view.js `prepare`, `upload`), the one it takes the place of drawn till then (the stand-in, once

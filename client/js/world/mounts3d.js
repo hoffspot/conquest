@@ -123,25 +123,32 @@ export class Mounts {
         this.clips = null;
         /** When the horse's model and its rider's clips were last asked for (performance.now()'s), and whether the clips are being read. */
         this.askedAt = -Infinity;
+        this.askedAs = null;
         this.clipping = false;
+        /** The player's horse made and got ready to draw before it's called (`ahead`), or null. */
+        this.warm = null;
     }
 
-    // The horse's model, and its rider's clips, asked for once anyone has a horse out, and again
-    // every ASK_AGAIN seconds while either isn't had
-    #want() {
+    // The horse's model, and its rider's clips, asked for once anyone has a horse out (as wanted
+    // as `priority`: "now"), or the player carries a whistle (`ahead`: "soon"), and again every
+    // ASK_AGAIN seconds while either isn't had; one asked for ahead and then called is asked for
+    // again at once, wanted now
+    #want(priority = "now") {
         const now = performance.now();
+        const sooner = priority === "now" && this.askedAs !== "now";
 
-        if ((modelOf(HORSE_MODEL) && this.clips) || now - this.askedAt < ASK_AGAIN * 1000) {
+        if ((modelOf(HORSE_MODEL) && this.clips) || (!sooner && now - this.askedAt < ASK_AGAIN * 1000)) {
             return;
         }
 
         this.askedAt = now;
+        this.askedAs = priority;
 
         if (!modelOf(HORSE_MODEL)) {
-            wantModel(HORSE_MODEL, "now");
+            wantModel(HORSE_MODEL, priority);
         }
 
-        const clips = this.clips || this.clipping ? null : wantClips(RIDER_CLIPS, "now");
+        const clips = this.clips || this.clipping ? null : wantClips(RIDER_CLIPS, priority);
 
         if (clips) {
             this.clipping = true;
@@ -152,6 +159,49 @@ export class Mounts {
                     }
                 })
                 .finally(() => (this.clipping = false));
+        }
+    }
+
+    /**
+     * A horse that may be called (`horse`: the player's whistle's, core/mounts.js; null, none) got
+     * ready before it is, so it rises out of its ring as itself and not as its stand-in: its
+     * model and its rider's clips read ahead (fetched in the background, as what's predicted
+     * is), and, unless not to `warm` it (short of memory), the horse itself made and got ready
+     * to draw (`prepare`: its shaders compiled, its pictures sent), kept hidden till it's called
+     * (#ready takes it). Asked every so often while the whistle's carried: one called and sent
+     * away is got ready again. Each call of a horse used to begin at the model's download, or,
+     * kept, at its reading and its shaders (seconds on a phone), with the stand-in drawn till
+     * then (the owner, 2026-11-16).
+     */
+    ahead(horse, { warm = true } = {}) {
+        if (this.warm && (!horse || !warm || this.warm.horse !== horse.id || !modelOf(HORSE_MODEL))) {
+            this.#remove(this.warm);
+            this.warm = null;
+        }
+
+        if (!horse) {
+            return;
+        }
+
+        this.#want("soon");
+
+        // (Not while it's out, or coming: that one's the one drawn)
+        const out = [...this.horses.values(), ...this.coming.values()].some((one) => one.horse === horse.id && one.model);
+
+        if (!warm || this.warm || out || !modelOf(HORSE_MODEL)) {
+            return;
+        }
+
+        const next = this.#make(horse, true);
+
+        next.beast.object.visible = false;
+        next.ready = !this.prepare;
+        this.warm = next;
+
+        if (this.prepare) {
+            const ready = () => (next.ready = true);
+
+            this.prepare(next.beast.object).then(ready, ready);
         }
     }
 
@@ -513,6 +563,13 @@ export class Mounts {
             next = null;
         }
 
+        // (Got ready ahead, as the player carried its whistle: `ahead`)
+        if (!next && this.warm && this.warm.horse === horse.id && this.warm.model === model) {
+            next = this.warm;
+            this.warm = null;
+            this.coming.set(id, next);
+        }
+
         if (!next) {
             next = this.#make(horse, model);
             next.beast.object.visible = false;
@@ -665,9 +722,11 @@ export class Mounts {
 
     /** Every horse let go of (the game's over, or the world's drawn afresh). */
     dispose() {
-        for (const one of [...this.horses.values(), ...this.coming.values()]) {
+        for (const one of [...this.horses.values(), ...this.coming.values(), ...(this.warm ? [this.warm] : [])]) {
             this.#remove(one);
         }
+
+        this.warm = null;
 
         this.horses.clear();
         this.coming.clear();
