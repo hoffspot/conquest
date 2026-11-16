@@ -801,7 +801,7 @@ function askForgetWorld(world) {
     dialog.dataset.id = world.id;
     dialog.dataset.why = "world";
     $("#forgettitle").textContent = `Delete ${world.name}?`;
-    $("#forgetnote").textContent = `${world.name} will be permanently deleted: its war, and what its folk remember of everyone who's been there. Your characters stay, with all they carry and have grown into. This can't be undone.`;
+    $("#forgetnote").textContent = `${world.name} will be permanently deleted: its war, what its folk remember of everyone who's been there, and the adventurers hired there, with what they wear. Your characters stay, with all they carry and have grown into. This can't be undone.`;
     $("#forgetgo").textContent = `Delete ${world.name}`;
     $("#forgetback").textContent = `Keep ${world.name}`;
     dialog.showModal();
@@ -1449,6 +1449,9 @@ function keepPlace() {
 
     if (state.game && !state.game.remote) {
         state.keepPlace?.();
+        // (And those who've come into it, as they are: their companies too, should the page close
+        // without their leaving, app/together.js keepVisitors)
+        state.together?.keepVisitors?.();
     }
 }
 

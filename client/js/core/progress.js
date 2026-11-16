@@ -129,7 +129,7 @@ export const ITEMS = Object.freeze({
     // adventurers' guild
     scrollOfSafety: {
         label: "Scroll of Safety",
-        about: "Read it to be carried to the market square of the town you started in, three seconds after you begin. Fall before then and it's lost.",
+        about: "Read it to be carried to the market square of the town you started in, three seconds after you begin. Fall before then and it's lost. Those you lead are left behind, to be sent for at a guild's desk.",
         scroll: true,
         use: { safety: true },
         price: 25,

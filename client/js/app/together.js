@@ -480,7 +480,8 @@ const peerOptions = ({ RTC, timing }) => ({ ...(RTC !== undefined ? { RTC } : {}
 /**
  * Open a game's world to others (its host being this game's): resolves with { code (for others
  * to join by), hosting (core/netplay.js), link (the RelayLink, or BrokerHost), close() (closed to
- * others again), reclaimed (whether it's under the code it had before) }. Through `broker` ({
+ * others again), reclaimed (whether it's under the code it had before), keepVisitors() (each in it
+ * remembered as they are now, as `visitors` leave() hears them) }. Through `broker` ({
  * address (app/peer.js brokerOf), listing: { name, people, most, net, listed }, reclaim: { id,
  * token } (the listing it had, before its page was started again: taken back if the broker's kept
  * it, those in it before sent to come in again; else a new code), and for the tests RTC, timing })
@@ -567,6 +568,14 @@ export async function openWorld(game, { address = null, broker = null, onChange 
             game.hosting = null;
             hosting.stop();
             link.close();
+        },
+        // (Everyone in it now remembered as they are, as if they'd gone: whenever the host's own
+        // place is kept, so what they've done here, their company with it, isn't lost should its
+        // page close without their leaving: save.js keepVisitor)
+        keepVisitors() {
+            for (const character of visitors ? hosting.present() : []) {
+                visitors.leave(character);
+            }
         },
     };
 }

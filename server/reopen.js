@@ -179,7 +179,7 @@ export async function importSolo(store, exported, { name = null, creator = null,
         throw new SoloError(error instanceof ExportError ? error.message : "That isn't a character and world the game saved.", { newer: Boolean(error.newer) });
     }
 
-    const character = imported && characterFrom({ hero: imported.hero, talks: imported.talks, progress: imported.progress, standing: imported.standing, followers: imported.followers });
+    const character = imported && characterFrom({ hero: imported.hero, talks: imported.talks, progress: imported.progress, standing: imported.standing, followers: imported.followers, roll: imported.roll });
 
     if (!character) {
         throw new SoloError("Its hero couldn't be brought in.");

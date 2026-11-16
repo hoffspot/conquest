@@ -45,6 +45,12 @@ const FAREWELL = { say: "Farewell.", next: null };
 export const commissionOf = (shop) => ({ say: "What can you make?", next: null, do: [{ commission: shop }] });
 
 /**
+ * How many of a player's hired adventurers mending at the guild a receptionist names, to choose
+ * which to send for or let go ({mender0} and on: the game's words). More than can be led.
+ */
+export const MENDERS_LISTED = 8;
+
+/**
  * A specialist's, a crafter's or a master's shopkeeper's talk (docs/WAR.md *Shops*): greeted
  * (`first`, the first time; `again`, after), their wares to buy (`shop`: their shop's kind), what
  * they'd make, a crafter's (commissionOf), today's special asked after ({special} and
@@ -856,15 +862,25 @@ export const TREES = Object.freeze({
                     { say: "What's that archway by the hearth?", next: "portal" },
                     { say: "What's the big chest by the hearth?", next: "chest" },
                     { if: { hell: true }, say: "Anything odd being reported out in the wilds?", next: "cult", do: [{ heard: "hell" }] },
-                    // (One of theirs gone home to mend, sent for: core/host.js #sendFor, any guild)
+                    // (One of theirs gone home to mend, sent for: core/host.js #sendFor, any guild;
+                    // the one they ask about, or the first)
                     { if: { mending: true, recallPurse: true }, say: "Send for {mending}, please. ({recallPrice} gold)", next: "sentFor", do: [{ recall: true }] },
                     { if: { mending: true, recallPurse: false }, say: "Could you send for {mending}? ({recallPrice} gold)", next: "sendShort" },
                     { if: { mending: true }, say: "I won't be needing {mending} any more.", next: "release" },
+                    { if: { menders: true }, say: "Not {mending}: another of mine with the healers.", next: "menders" },
                     FAREWELL,
                 ],
             },
+            // (Which of theirs mending, by name: the game's words, MENDERS_LISTED of them)
+            menders: {
+                say: ["Let me see... {menders} of yours with the healers. Which one?", "{menders} of yours, mending. Who did you want?"],
+                choices: [
+                    ...Array.from({ length: MENDERS_LISTED }, (_, k) => ({ if: { mender: k }, say: `{mender${k}}`, next: "more", do: [{ mender: k }] })),
+                    { say: "Never mind.", next: "more" },
+                ],
+            },
             sentFor: {
-                say: ["Of course! A runner's gone for {mending}. Patched up and paid for, they'll be at your side before you're out the door.", "{mending}? Mended nicely, I hear. I'll send word; they'll be with you straight away!"],
+                say: ["Of course! A runner's gone for {sentFor}. Patched up and paid for, they'll be at your side before you're out the door.", "{sentFor}? Mended nicely, I hear. I'll send word; they'll be with you straight away!"],
                 choices: [{ say: "Thank you.", next: "more" }],
             },
             sendShort: {
@@ -1018,7 +1034,7 @@ export const TREES = Object.freeze({
             },
             waiting: { say: ["I'll be here.", "Right. I'll hold here till you're back."], choices: [{ say: "Good.", next: null }] },
             following: { say: ["About time. Lead on.", "With you."], choices: [{ say: "Good.", next: null }] },
-            parted: { say: ["Fair enough. It was good work while it lasted.", "Then I'll be off. Look me up if you need a blade again."], choices: [{ say: "Farewell.", next: null }] },
+            parted: { say: ["Fair enough. It was good work while it lasted.", "Then I'll be off. Good luck to you, out there."], choices: [{ say: "Farewell.", next: null }] },
         },
     },
     // The townsfolk out about their business in the streets (core/townsfolk.js): busy, but glad
@@ -1278,8 +1294,14 @@ export const TREES = Object.freeze({
                     // (As strong as the player's can be, and as dear: core/host.js hireOffer)
                     { if: { hire: true, purse: true }, say: "Would you ride with me? (level {hireLevel}, {hirePrice} gold)", next: "hired", do: [{ hire: true }] },
                     { if: { hire: true, purse: false }, say: "Would you ride with me? (level {hireLevel}, {hirePrice} gold)", next: "short" },
+                    // (For hire, but the player's company full: said why, those mending counted)
+                    { if: { full: true }, say: "Would you ride with me?", next: "full" },
                     { say: "Good hunting.", next: null },
                 ],
+            },
+            full: {
+                say: ["And follow who? You've as many at your back as you can lead. {fullWhy}", "You've a full company already. {fullWhy}"],
+                choices: [{ say: "Another time, then.", next: null }],
             },
             hired: {
                 say: ["Gold up front, and I'm yours. Lead on, {player}.", "Done. I've waited long enough for a job worth taking. Where to?", "{hirePrice} gold? You've a deal. Try not to get us both killed."],

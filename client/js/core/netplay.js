@@ -132,7 +132,7 @@ import { WARY } from "./wary.js";
  * Bumped whenever what's said changes: a game of another version can't join. (Not for what's
  * added and opted into: contribution.md, section 3.)
  */
-export const NET_VERSION = 231;
+export const NET_VERSION = 232;
 
 /**
  * The ways a world can be played with those who join it (its netcode): `lockstep`, each game
@@ -407,13 +407,14 @@ export function followerFrom(one) {
 
 /**
  * A character's roll of the hired adventurers who've parted from them (core/host.js #rollCall),
- * made safe to bring in: [{ name, calling, level, byname, gone, kills, day }], ROLL_MOST at most.
+ * made safe to bring in: [{ name, calling, level, byname, gone, kills, day, from }], ROLL_MOST at
+ * most (`from` who they were among the world's folk, or null).
  */
 export function rollFrom(roll) {
     return (Array.isArray(roll) ? roll : [])
         .filter((one) => isObject(one) && typeof one.name === "string" && HIRES[one.calling] && ["fallen", "dismissed"].includes(one.gone))
         .slice(0, ROLL_MOST)
-        .map((one) => ({ name: one.name.slice(0, 40), calling: one.calling, level: Number.isInteger(one.level) ? Math.max(1, Math.min(MERCENARY.most, one.level)) : 1, byname: typeof one.byname === "string" ? one.byname.slice(0, 40) : null, gone: one.gone, kills: whole(one.kills, 10_000_000), day: whole(one.day, 1_000_000) }));
+        .map((one) => ({ name: one.name.slice(0, 40), calling: one.calling, level: Number.isInteger(one.level) ? Math.max(1, Math.min(MERCENARY.most, one.level)) : 1, byname: typeof one.byname === "string" ? one.byname.slice(0, 40) : null, gone: one.gone, kills: whole(one.kills, 10_000_000), day: whole(one.day, 1_000_000), from: typeof one.from === "string" ? one.from.slice(0, 120) : null }));
 }
 
 /**
@@ -1279,6 +1280,19 @@ export class Session {
 
     // A player out of the world (`id`, and the link they were on, if any): whoever runs it told,
     // with their character as it's to be kept, where they were and as they were
+    /**
+     * Each who's joined and in the world now, as they'd be kept were they to leave now (as
+     * onLeave hears them: their character, where and how they are): to be remembered so, should
+     * the host's page close without their leaving (app/together.js keepVisitors).
+     */
+    present() {
+        return [...this.players.values()].flatMap((id) => {
+            const player = this.host.players.get(id);
+
+            return player ? [{ ...this.host.characterOf(player), place: this.host.placeOf(id), vitals: this.host.vitalsOf(id) }] : [];
+        });
+    }
+
     #left(id, peer) {
         this.said.delete(id);
 
@@ -1776,7 +1790,7 @@ for (const [part, keys] of [
 
 // And what each does that whoever runs the world asks of it
 for (const [part, names] of [
-    ["session", ["hear", "chat", "takeDms", "admit", "coming", "pause", "still", "kick", "gone", "slowest"]],
+    ["session", ["hear", "chat", "takeDms", "admit", "coming", "pause", "still", "kick", "gone", "slowest", "present"]],
     ["feed", ["turned", "resync"]],
 ]) {
     for (const name of names) {

@@ -574,7 +574,7 @@ export class JournalPanel {
 
         band.append(
             ...company.map(({ name, calling, level, hp, maxHp, waiting, down }) => follower(name, `Level ${level} ${calling}, ${down ? "down" : `${Math.max(0, Math.round((hp / maxHp) * 100))}%`}${waiting ? ", waiting" : ""}`)),
-            ...mending.map(({ name, calling, level }) => follower(name, `Level ${level} ${calling}, mending at the guild`, "mending")),
+            ...mending.map(({ name, calling, level, price }) => follower(name, `Level ${level} ${calling}, mending at the guild${Number.isInteger(price) ? `: send for them at any guild's desk (${price} gold)` : ""}`, "mending")),
             element("li", "journal-empty", company.length + mending.length ? `You can lead ${most} in all.` : `No one follows you. Adventurers at the guilds will, for gold: you can lead ${most}.`),
         );
         sections.push(this.#section("Your company", band));
