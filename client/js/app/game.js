@@ -2580,7 +2580,10 @@ export class Game {
         if (this.pin && world.plan) {
             crossingsOf(world.plan);
         }
-        this.drops = new Drops(view.scene, { picture: (id) => this.#itemPicture(id) });
+        // (What's dropped got ready to draw as the game starts, one of each kind, before any's
+        // seen: its shaders compiled in the background where the browser can, and its pictures
+        // sent: drops3d.js #warm)
+        this.drops = new Drops(view.scene, { picture: (id) => this.#itemPicture(id), prepare: (object) => view.prepare(object).then(() => view.upload([object], { hidden: true })) });
 
         // (Banners and camps only ever outside, on the world's ground)
         this.banners.setGround(this.groundOf("town"));

@@ -137,3 +137,64 @@ describe("loot lying on the ground: each thing floating over its rarity's glow (
         assert.deepEqual(drops.drawn.get("g1").things.map(({ icon }) => icon.name), ["gold:common", "wolfPelt:fine"]);
     });
 });
+
+describe("what's dropped got ready to draw before any's seen (drops3d.js #warm)", () => {
+    // (Each first drawn made its shaders in that frame and held it up: the chest 0.6 s and its
+    // gold 0.35 s on a Mac's Chrome, a player's debug log, 2026-11-16)
+    it("gets one of each kind ready as it's made: a chest locked, one thrown open on its gold, an icon and every rarity's glow", async () => {
+        const readied = [];
+        const drops = new Drops(new THREE.Scene(), { picture: () => new THREE.Texture(), prepare: (object) => Promise.resolve(readied.push(object)) });
+
+        await drops.warmed;
+
+        assert.equal(readied.length, 1);
+
+        const [ready] = readied;
+        const materials = new Set();
+
+        ready.traverse((node) => [node.material ?? []].flat().forEach((material) => materials.add(material)));
+
+        // (No page to read the chest's model from here: the chest as made here)
+        assert.deepEqual(ready.children.slice(0, 2).map(({ name }) => name), ["chest", "chest-open"]);
+        assert.ok(ready.getObjectByName("gold-heap") && ready.getObjectByName("coins") && ready.getObjectByName("gems") && ready.getObjectByName("glints"), "the gold, every part of it");
+
+        for (const material of [drops.wood, drops.iron, drops.inside, drops.gold.bed, drops.gold.gold, drops.gold.jewel, drops.gold.glints, ...Object.values(drops.glows), drops.keptIcon]) {
+            assert.ok(materials.has(material), `${material.type} ${material.name}`);
+        }
+
+        // (Not drawn: out of the scene)
+        assert.equal(ready.parent, null);
+        assert.equal(drops.group.children.length, 0);
+    });
+
+    it("keeps the icons' material once every icon's let go of, so their shader's kept (three.js lets a shader go once no material has it); let go of with the rest", async () => {
+        const drops = new Drops(new THREE.Scene(), { picture: () => new THREE.Texture(), prepare: async () => {} });
+        const wolf = { id: "g1", bundle: { gold: 5, items: [{ id: "wolfPelt", count: 2 }] }, for: "player", map: "town", square: [3, 4] };
+        const sync = (ground) => drops.sync(new Map(ground.map((dropped) => [dropped.id, dropped])), { map: "town", near: { x: 0, z: 0 }, reach: 50, originOf: () => [0, 0], mine: "player" });
+        let gone = 0;
+
+        await drops.warmed;
+        drops.keptIcon.addEventListener("dispose", () => gone++);
+        sync([wolf]);
+        sync([]);
+
+        assert.equal(drops.drawn.size, 0);
+        assert.equal(gone, 0);
+
+        drops.dispose();
+        assert.equal(gone, 1);
+    });
+
+    it("gets nothing ready with nothing to ready it with: each kind made as it's first drawn", async () => {
+        const drops = new Drops(new THREE.Scene(), { picture: () => new THREE.Texture() });
+
+        await drops.warmed;
+        assert.equal(drops.keptIcon, null);
+    });
+
+    it("is ready all the same if getting ready fails", async () => {
+        const drops = new Drops(new THREE.Scene(), { picture: () => new THREE.Texture(), prepare: () => Promise.reject(new Error("lost the graphics card")) });
+
+        assert.equal(await drops.warmed, undefined);
+    });
+});

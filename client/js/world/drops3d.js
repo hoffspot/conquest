@@ -7,7 +7,8 @@
 // wooden chest (the JMI 3D Toolkit's, client/models/jmi, read from the catalog once the game's
 // started; drawn here till it's read, or if it can't be), shut while its guardians hold the place;
 // once it's cleared, each player near has their share in it, its lid thrown open (the model's own
-// "Open") on a heap of gold coins (gold3d.js).
+// "Open") on a heap of gold coins (gold3d.js). One of each (a chest locked and one opened on its
+// gold, an icon, the glows) is got ready to draw as the game starts, before any's seen (#warm).
 //
 // The icons are painted by whoever makes this (`picture`: an item id to a texture), so the world
 // needn't know how they're drawn.
@@ -87,10 +88,12 @@ export class Drops {
      * @param {THREE.Scene} scene
      * @param {object} options
      * @param {(id: string) => THREE.Texture} options.picture - A thing's icon (by its item id).
+     * @param {Function} [options.prepare] - Gets something ready to draw before it's seen: its shaders compiled and its pictures sent, in the background where the browser can (world/view.js prepare, upload); a promise. None, each kind's made as it's first drawn.
      */
-    constructor(scene, { picture }) {
+    constructor(scene, { picture, prepare = null }) {
         this.scene = scene;
         this.picture = picture;
+        this.prepare = prepare;
         this.group = new THREE.Group();
         this.group.name = "drops";
         scene.add(this.group);
@@ -120,15 +123,25 @@ export class Drops {
         this.model = null;
         this.time = null;
 
+        /** The icons' material kept once they're got ready (#warm): their shader kept with it. */
+        this.keptIcon = null;
+
         // (Not in the catalog, or no page to read it from, or not to be had: the chest as made here)
         const file = ASSETS.models[CHEST_MODEL.asset]?.files[0];
         const page = globalThis.document?.baseURI ?? globalThis.location?.href;
 
+        /**
+         * Each kind of thing dropped got ready to draw (#warm: the chest as it'll be drawn, once
+         * its model's read or couldn't be): a promise, settled once they're ready, or couldn't be.
+         */
+        this.warmed = null;
+
         if (file && page) {
-            loadGltf(new URL(hashed(file.path, file.hash), page).href).then(
-                (gltf) => this.#modelRead(gltf),
-                () => {},
-            );
+            this.warmed = loadGltf(new URL(hashed(file.path, file.hash), page).href)
+                .then((gltf) => this.#modelRead(gltf), () => {})
+                .then(() => this.#warm());
+        } else {
+            this.warmed = this.#warm();
         }
     }
 
@@ -235,7 +248,9 @@ export class Drops {
     }
 
     dispose() {
+        this.disposed = true;
         this.scene.remove(this.group);
+        this.keptIcon?.dispose();
         this.ring.dispose();
         this.ringPicture.dispose();
         Object.values(this.glows).forEach((glow) => glow.dispose());
@@ -346,6 +361,28 @@ export class Drops {
                 this.#undraw(id);
             }
         }
+    }
+
+    // One of each kind of thing dropped got ready to draw (`prepare`), out of sight, before any's
+    // seen: a chest locked, one thrown open on its gold, an icon and the glows under loot. Each
+    // made its shaders as it was first drawn and held that frame up, the chest 0.6 s and its gold
+    // 0.35 s on a Mac's Chrome (a player's debug log, 2026-11-16). The icon's material's kept, and
+    // its shader with it: three.js lets a shader go once no material has it, so with the last icon
+    // let go of, the next made it again. Resolves once they're ready, or couldn't be.
+    #warm() {
+        if (!this.prepare || this.disposed) {
+            return Promise.resolve();
+        }
+
+        const ready = new THREE.Group();
+
+        this.keptIcon = new THREE.SpriteMaterial({ map: this.picture("gold"), transparent: true, depthWrite: false });
+        ready.add(this.#chest(false).chest, this.#chest(true).chest, new THREE.Sprite(this.keptIcon), ...Object.values(this.glows).map((glow) => new THREE.Mesh(this.ring, glow)));
+        ready.name = "drops-ready";
+
+        return Promise.resolve()
+            .then(() => this.prepare(ready))
+            .catch(() => {});
     }
 
     // A chest (its lid thrown back if it's `open`, opening as it's first drawn): { chest, mixer

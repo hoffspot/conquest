@@ -5701,6 +5701,14 @@ metres off (back as many as ever the next time, unless it's been cleared).
   the Last King", "Reliquary of the Hollow Saint"), and the player's told of it by name ("The
   chest's open, and in your share an old relic of theirs: the Torc of the Drowned Queen. Tap it to
   take it.").
+- **Ready before it's seen** (drops3d.js `#warm`): as the game starts, once the chest's model is
+  read (or can't be), one chest locked and one thrown open on its gold, an icon and every rarity's
+  glow are got ready to draw out of sight: their shaders compiled in the background where the
+  browser can and their pictures sent (view.js `prepare`, `upload`). Each made its shaders in the
+  frame it was first drawn, and held it up: the chest 0.6 s as a camp came into sight, and its
+  gold 0.35 s as a cache was opened, on a Mac's Chrome (a player's debug log, 2026-11-16). The
+  icons' material made then is kept, and its shader with it: three.js lets a shader go once no
+  material has it, so once the last icon was let go of, the next made it again.
 - **The guilds want them cleared:** an adventurers' guild offers a contract on a place within
   1.5 km of its town held by outlaws or the dead ("Put them to the sword", docs/WAR.md), done once
   it's cleared with the player there.
