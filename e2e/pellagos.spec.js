@@ -12189,6 +12189,88 @@ test("a place's outlaws or dead hold it round their leader by a locked chest, th
     expect(cleared.told).toContain(`The chest's open, and in your share an old relic of theirs: the ${cleared.relic.name}. Tap it to take it.`);
 });
 
+test("what's dropped makes no shader as it's first drawn: a chest locked, one thrown open on its heap of gold, and loot over its glow, got ready as the game starts; the icons' shader kept while nothing's dropped (drops3d.js #warm)", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // Got ready before any's dropped: the chest's model read, and the shaders of every material a
+    // chest, its gold and the glows under loot are drawn with made (each first drawn held a frame
+    // up 0.35 to 0.6 s on a Mac's Chrome: a player's debug log, 2026-11-16)
+    const ready = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { renderer } = game.view;
+
+        await game.drops.warmed;
+
+        const { model, gold, glows, keptIcon } = game.drops;
+        const materials = [gold.bed, gold.gold, gold.jewel, gold.glints, ...Object.values(glows), keptIcon];
+
+        model?.scene.traverse((node) => materials.push(...[node.material ?? []].flat()));
+
+        return { model: Boolean(model), unmade: materials.filter((material) => !material || !renderer.properties.get(material).currentProgram).map((material) => `${material?.type} ${material?.name}`) };
+    });
+
+    expect(ready).toEqual({ model: true, unmade: [] });
+
+    // A locked chest, the player's share in an opened one and a wolf's spoils at their feet, drawn
+    // in one frame; then all of them gone, and another wolf's spoils drawn alone: what each's drawn
+    // with whose shader was made in that frame (none)
+    const drawn = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { renderer } = game.view;
+        const me = game.battle.actor(game.me);
+        const until = game.battle.time + 600000;
+        const at = (dx, dy) => [me.square[0] + dx, me.square[1] + dy];
+        const ids = ["ready-chest", "ready-share", "ready-loot", "ready-again"];
+        const made = () => {
+            const before = new Set(renderer.info.programs);
+            const fresh = [];
+
+            game.advance(0.1);
+            game.drops.group.traverse((node) => {
+                for (const material of [node.material ?? []].flat()) {
+                    if (!before.has(renderer.properties.get(material).currentProgram)) {
+                        fresh.push(`${material.type} ${material.name} < ${node.name}`);
+                    }
+                }
+            });
+
+            return fresh;
+        };
+
+        game.stop();
+        game.host.ground.set(ids[0], { id: ids[0], chest: true, locked: true, for: null, map: me.map, square: at(2, 0), until: null });
+        game.host.ground.set(ids[1], { id: ids[1], bundle: { gold: 40, items: [] }, for: game.me, from: "chest", map: me.map, square: at(-2, 0), until });
+        game.host.ground.set(ids[2], { id: ids[2], bundle: { gold: 3, items: [{ id: "ring", count: 1, quality: "rare" }] }, for: game.me, from: "wolf", map: me.map, square: at(0, 2), until });
+
+        const first = made();
+        const shown = ids.slice(0, 3).map((id) => {
+            const { chest, object, things } = game.drops.drawn.get(id) ?? {};
+
+            return (chest ? object.children[0].name : things?.[0]?.icon.name) ?? null;
+        });
+
+        ids.slice(0, 3).forEach((id) => game.host.ground.delete(id));
+        game.advance(0.1);
+
+        // (No icon drawn now: none of theirs keeping the icons' shader)
+        const icons = [...game.drops.drawn.values()].filter(({ icon, things }) => icon || things.length).length;
+
+        game.host.ground.set(ids[3], { id: ids[3], bundle: { gold: 5, items: [{ id: "wolfPelt", count: 1 }] }, for: game.me, from: "wolf", map: me.map, square: at(0, -2), until });
+
+        const again = made();
+
+        game.host.ground.delete(ids[3]);
+        game.start();
+
+        return { first, shown, icons, again };
+    });
+
+    expect(drawn.shown).toEqual(["chest", "chest-open", expect.stringMatching(/^gold:/)]);
+    expect(drawn.icons).toBe(0);
+    expect(drawn.first).toEqual([]);
+    expect(drawn.again).toEqual([]);
+});
+
 test("an adventurer's cache turns up ahead of a player crossing the wilds, off the roads, its brigands walking their round; marked on the maps once seen; locked till they fall, then opened, the player's share in it; gone once they've left it far behind", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
