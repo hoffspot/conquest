@@ -60,7 +60,10 @@ export const MOST_CHARACTERS = 6;
 /** How many worlds are kept at most: making another means deleting one of them. */
 export const MOST_WORLDS = 8;
 
-/** How many visitors a world on this device remembers at most: past that, the one gone longest's forgotten. */
+/**
+ * How many visitors a world on this device remembers at most: past that, the one gone longest's
+ * forgotten, one with nobody following them before one with a company.
+ */
 export const MOST_VISITORS = 12;
 
 /**
@@ -735,8 +738,8 @@ export function enterWorld(save, id) {
 // A visitor's place in a world kept here (one of another player's characters, come in while it's
 // open to others), by their own id (core/guid.js): { id, created } (as a character's place),
 // `visitor` their name and `seen` when they last came or went. Made the first time they come, the
-// one gone longest forgotten past MOST_VISITORS. As stayOf's place ({ id, created, seed }), or
-// null if the world isn't kept or they've no id.
+// one gone longest forgotten past MOST_VISITORS (one with no company before one with). As stayOf's
+// place ({ id, created, seed }), or null if the world isn't kept or they've no id.
 function visitorPlace(id, hero) {
     const world = loadLocalWorld(id);
     const guid = hero?.guid;
@@ -748,9 +751,14 @@ function visitorPlace(id, hero) {
     const now = new Date().toISOString();
 
     if (!world.places[guid]) {
+        // (Those gone longest forgotten first: one with nobody following them, or mending for
+        // them at the guild, before any with a company, so a company's kept while there's another
+        // to forget)
+        const company = (place) => (own({ ...place, seed: world.seed }, "followers")?.followers?.length ?? 0) > 0;
         const visitors = Object.entries(world.places)
             .filter(([, place]) => typeof place?.visitor === "string")
-            .sort(([, a], [, b]) => String(a.seen).localeCompare(String(b.seen)));
+            .map(([key, place]) => [key, place, company(place)])
+            .sort(([, a, led], [, b, leads]) => Number(led) - Number(leads) || String(a.seen).localeCompare(String(b.seen)));
 
         for (const [key, place] of visitors.slice(0, Math.max(0, visitors.length + 1 - MOST_VISITORS))) {
             forgetPlace(place);
@@ -1182,7 +1190,7 @@ export function exportCharacter(save, { world: id } = {}) {
 /**
  * A character and their world from an export (exportCharacter's), read by the same code the game
  * reads what it keeps with (each kind brought forward as it is here): { save, hero, talks,
- * explored, progress, standing, followers, wheels, pin, place, vitals, messages, told, war, legends }; or
+ * explored, progress, standing, followers, roll, wheels, pin, place, vitals, messages, told, war, legends }; or
  * null if it isn't an export, or is one from a newer version of the game.
  */
 export function importCharacter(given) {
@@ -1217,6 +1225,7 @@ export function importCharacter(given) {
             progress: loadProgress(save),
             standing: loadStanding(save),
             followers: loadFollowers(save),
+            roll: loadRoll(save),
             wheels: loadWheels(save),
             pin: loadPin(save),
             markers: loadMarkers(save),

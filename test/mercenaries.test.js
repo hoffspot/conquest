@@ -217,7 +217,7 @@ describe("mercenaries that grow, in play (core/host.js)", () => {
         for (const one of adventurers) {
             const renowned = renownOf(one.seed);
 
-            assert.deepEqual(offer(one), { calling: one.look, level: 1, price: hirePrice(HIRES[one.look].price, 1, Boolean(renowned)), renowned });
+            assert.deepEqual(offer(one), { calling: one.look, level: 1, price: hirePrice(HIRES[one.look].price, 1, Boolean(renowned)), renowned, back: false });
         }
 
         assert.equal(offer(guild.folk.find(({ role }) => role === "receptionist")), null);
@@ -230,7 +230,7 @@ describe("mercenaries that grow, in play (core/host.js)", () => {
             const renowned = renownOf(one.seed);
             const level = renowned ? 3 : 2;
 
-            assert.deepEqual(offer(one), { calling: one.look, level, price: hirePrice(HIRES[one.look].price, level, Boolean(renowned)), renowned });
+            assert.deepEqual(offer(one), { calling: one.look, level, price: hirePrice(HIRES[one.look].price, level, Boolean(renowned)), renowned, back: false });
         }
 
         const asked = offer(adventurers[0]);

@@ -2546,11 +2546,13 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   the chosen one pressed: a `pick` command), what they wear (Take back: an `unoutfit` command),
   what they've done, a veteran's gift and their mastery, their renown, and Rename (a `rename`
   command; empty, their own name again). Those mending at a guild are listed after the rest, with
-  what it costs to send for them. Dismissing's for good (a hired adventurer goes their
-  own way, a creature's gone), so it's asked first, from the menu or the wheel alike: "Dismiss
+  what it costs to send for them; with no one else, the menu says they still count among those
+  the player can lead. One waiting elsewhere shows "Not here: Follow calls them to you", and Follow
+  brings them from anywhere. Dismissing's asked first (a hired adventurer goes back
+  to the guild where they were found, to be hired again there; a creature's gone for good), from the menu or the wheel alike: "Dismiss
   Bryn?", Dismiss Bryn or Keep them (game.js `onAskDismiss`, main.js `askDismiss`: the
   `#dismissask` dialog), where the menu once asked twice ("Dismiss?" for three seconds); and in
-  talk, "We part here" has them ask "For good?" first, "I'm sure" or "No. Stay with me" back to
+  talk, "We part here" has them ask whether you're sure first (they'll be back at their guild), "I'm sure" or "No. Stay with me" back to
   their orders (dialogue.js `follower`'s `parting`). On a narrow screen a panel open hides the column, which would cover its edge.
   **Playing together** (docs/WAR.md *Parties*), the other players in the player's party head the
   column, the longest in it first (`host.fellows`), before the player's own: gold-framed (`.member

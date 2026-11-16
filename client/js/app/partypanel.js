@@ -344,7 +344,9 @@ export class PartyPanel {
         this.count.textContent = members.length + Math.max(0, players.length - 1) ? `${members.length + Math.max(0, players.length - 1)} with you` : "";
         this.empty.textContent = members.length
             ? `You can lead ${most} adventurer${most === 1 ? "" : "s"} (${hired} now). Tap one's icon to help them; hold it for more.`
-            : `No one's with you. Adventurers at the guilds will follow you for gold (you can lead ${most}); Summon calls a creature to your side, and Zombify raises the fallen.`;
+            : mending.length
+              ? `No one's with you now. Those mending at the guild still count among the ${most} you can lead: send for them, or let them go, at any guild's desk.`
+              : `No one's with you. Adventurers at the guilds will follow you for gold (you can lead ${most}); Summon calls a creature to your side, and Zombify raises the fallen.`;
         this.panel.hidden = false;
     }
 
@@ -779,7 +781,7 @@ export class PartyPanel {
         row.name.textContent = name;
         row.kind.textContent = memberKind({ kind, calling, creature, left, level: merc?.level ?? null, renowned: merc?.renownedName ?? null });
         row.fill.style.width = `${Math.round(health * 100)}%`;
-        row.state.textContent = `${merc?.down ? "Down" : `${hp} / ${maxHp}`}${merc?.wounds ? ` · ${merc.wounds} wound${merc.wounds === 1 ? "" : "s"}` : ""}${waiting ? " · Waiting" : guarding ? " · Guarding you" : " · Following"}${holdFire ? " · Holding fire" : ""}${away ? " · Not here" : ""}${ally ? " · Chosen to help" : ""}${merc?.choose ? " · Trusts you more: choose how they grow (More)" : ""}`;
+        row.state.textContent = `${merc?.down ? "Down" : `${hp} / ${maxHp}`}${merc?.wounds ? ` · ${merc.wounds} wound${merc.wounds === 1 ? "" : "s"}` : ""}${waiting ? " · Waiting" : guarding ? " · Guarding you" : " · Following"}${holdFire ? " · Holding fire" : ""}${away ? (waiting ? " · Not here: Follow calls them to you" : " · Not here") : ""}${ally ? " · Chosen to help" : ""}${merc?.choose ? " · Trusts you more: choose how they grow (More)" : ""}`;
         row.moreButton.hidden = !merc;
 
         if (merc) {

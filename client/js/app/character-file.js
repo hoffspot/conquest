@@ -148,10 +148,12 @@ export function salvage(given) {
         exported.progress = progressOf(exported.progress, left);
     }
 
+    // (Their hired adventurers whose callings the game has, and a beast they've tamed: core/wary.js)
     if (isObject(exported.followers) && Array.isArray(exported.followers.followers)) {
-        const gone = exported.followers.followers.filter((one) => !HIRES[one?.calling]);
+        const kept = (one) => Boolean(HIRES[one?.calling]) || one?.tamed === true;
+        const gone = exported.followers.followers.filter((one) => !kept(one));
 
-        exported.followers.followers = exported.followers.followers.filter((one) => HIRES[one?.calling]);
+        exported.followers.followers = exported.followers.followers.filter(kept);
 
         if (gone.length) {
             left.push(`${listOf(gone.map((one) => `${typeof one?.name === "string" ? one.name : "A follower"} (${wordsOf(one?.calling ?? "nobody")})`))}, who ${gone.length > 1 ? "follow" : "follows"} no more: the game has no such callings now.`);
@@ -313,7 +315,8 @@ export function exportOfKept(character, { seed, created = new Date().toISOString
         explored: kind(character.explored),
         progress: isObject(character.progress) ? { ...of, format: PROGRESS_FORMAT, ...character.progress } : null,
         standing: kind(character.standing),
-        followers: Array.isArray(character.followers) ? kind(character.followers, "followers") : null,
+        // (Their followers and their roll kept together, as the game keeps them: save.js saveFollowers)
+        followers: Array.isArray(character.followers) ? { ...of, followers: character.followers, roll: Array.isArray(character.roll) ? character.roll : [] } : null,
         wheels: kind(character.wheels, "wheels"),
         pin: kind(character.pin, "pin"),
         markers: Array.isArray(character.markers) ? kind(character.markers, "markers") : null,
@@ -328,8 +331,8 @@ export function exportOfKept(character, { seed, created = new Date().toISOString
 /**
  * A character's export (brought forward and salvaged: readCharacterFile's) as a world server keeps
  * a hero, read as the game reads what it keeps: { hero, talks, explored, progress, standing,
- * followers, place, vitals }, and what their own game kept of them (core/host.js OWN: wheels, pin,
- * markers, messages, told) where it has any; their hero with their own id (core/guid.js: given
+ * followers, roll, place, vitals }, and what their own game kept of them (core/host.js OWN: wheels,
+ * pin, markers, messages, told) where it has any; their hero with their own id (core/guid.js: given
  * one, from a file kept before characters had ids). Throws ExportError for one that doesn't read.
  */
 export function keptOfExport(exported) {
@@ -339,10 +342,10 @@ export function keptOfExport(exported) {
         throw new ExportError("It couldn't be read.");
     }
 
-    const { hero, talks, explored, progress, standing, followers, place, vitals } = read;
+    const { hero, talks, explored, progress, standing, followers, roll, place, vitals } = read;
     const own = ["wheels", "pin", "markers", "messages", "told"].filter((key) => exported[key]).map((key) => [key, read[key]]);
 
-    return { hero: withGuid(hero), talks, explored, progress, standing, followers, ...(place ? { place } : {}), ...(vitals ? { vitals } : {}), ...Object.fromEntries(own) };
+    return { hero: withGuid(hero), talks, explored, progress, standing, followers, roll, ...(place ? { place } : {}), ...(vitals ? { vitals } : {}), ...Object.fromEntries(own) };
 }
 
 /**

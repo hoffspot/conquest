@@ -214,6 +214,32 @@ describe("a kept hero and a character's export, each as the other", () => {
         assert.deepEqual(salvageKept(character, { seed: 9 }).left, [], "nothing more, the next time");
     });
 
+    it("keep who follows them, those mending too, a beast they've tamed and the roll of those who've left them, through the world bringing them back (salvageKept) and through an export", () => {
+        const followers = [
+            { name: "Tam", calling: "warrior", sex: "m", seed: 4, people: "human", from: "home:guild-1/adventurer", level: 3, xp: 400, wounds: 1, owed: 0, gear: { mainHand: null, body: null }, record: {}, called: null, picks: [], renowned: null },
+            { name: "Pip", calling: "rogue", sex: "f", seed: 5, people: "human", from: null, level: 2, xp: 150, wounds: 0, owed: 0, gear: { mainHand: null, body: null }, record: {}, called: null, picks: [], renowned: null, away: true },
+            { tamed: true, creature: "wolf", tier: 2, name: "Wolf" },
+        ];
+        const roll = [{ name: "Bryn", calling: "mage", level: 5, byname: null, gone: "fallen", kills: 30, day: 2, from: "home:guild-1/patron-2" }];
+        const kept = { ...keptHero("Cara", 30), followers, roll };
+
+        // (Once, a world keeping heroes let go of their roll and their tamed beast each time they came in)
+        const { character, left } = salvageKept(kept, { seed: 9 });
+
+        assert.deepEqual(character.followers.map(({ name, away = false, tamed = false }) => ({ name, away, tamed })), [
+            { name: "Tam", away: false, tamed: false },
+            { name: "Pip", away: true, tamed: false },
+            { name: "Wolf", away: false, tamed: true },
+        ]);
+        assert.deepEqual(character.roll, roll);
+        assert.ok(!left.some((line) => /follows? no more/.test(line)), left.join(" "));
+
+        const back = keptOfExport(exportOfKept(kept, { seed: 9 }));
+
+        assert.deepEqual(back.followers.length, 3);
+        assert.deepEqual(back.roll, roll);
+    });
+
     it("keep what the hero's own game kept of them (core/host.js OWN): their wheels and Action Bar, pin, markers, messages, what they've been told once and their settings, through the world keeping them and bringing them back (salvageKept), as through an export", () => {
         const own = {
             wheels: { self: [{ 0: "heal" }, {}], enemy: [{}, {}], quick: ["heal", "potion", null, null, null, null] },

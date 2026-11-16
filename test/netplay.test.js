@@ -910,6 +910,28 @@ describe("playing together (netplay.js)", () => {
         assert.deepEqual(left[0].pin, [13, 31]);
     });
 
+    it("tells who's in the world now as they'd be kept were they to leave now: their character, with their company, where and how they are (app/together.js keepVisitors)", () => {
+        const { host, hosting, join } = opened();
+        const bryn = join(guest("Bryn"));
+        const id = hosting.players.get(bryn.peer);
+        const left = [];
+
+        host.players.get(id).roll = [{ name: "Odd", calling: "mage", level: 2, byname: null, gone: "dismissed", kills: 1, day: 1, from: null }];
+
+        const [present] = hosting.present();
+
+        assert.equal(hosting.present().length, 1);
+        assert.equal(present.hero.name, "Bryn");
+        assert.deepEqual(present.roll.map(({ name }) => name), ["Odd"]);
+        assert.ok(present.place && present.vitals);
+
+        // (The same as they're kept when they go)
+        hosting.onLeave = (_, __, character) => left.push(character);
+        hosting.gone(bryn.peer);
+        assert.deepEqual({ ...left[0], vitals: null }, { ...present, vitals: null });
+        assert.deepEqual(hosting.present(), []);
+    });
+
     it("takes out of the world anyone who left while the host's link was down (the relay's word of who's still here)", () => {
         const { host, hosting, join, deliver } = opened();
         const bryn = join(guest("Bryn"));
@@ -1010,7 +1032,7 @@ describe("playing together (netplay.js)", () => {
                 { name: "Tam", calling: "ranger", level: 99, xp: -5, wounds: 7, owed: 1e9, gear: { mainHand: { id: "sword" }, body: { id: "mail", level: 999, junk: "x".repeat(99) } }, picks: ["hardy", "flying", "hardy"], renowned: "immortal", called: "  Tammy  ", record: { kills: 3.5, slain: { Wolfsbane: 30, Dragonbane: 9 }, nemesis: "nobody" }, away: true },
                 { name: "Pip", calling: "warrior", gear: { mainHand: { id: "sword", quality: "rare" }, body: { id: "mail", level: 50 } } },
             ],
-            roll: [{ name: "Bryn", calling: "mage", level: 4, gone: "fallen", kills: 12, day: 3, byname: null }, { name: "Odd", calling: "mage", gone: "eaten" }, "x"],
+            roll: [{ name: "Bryn", calling: "mage", level: 4, gone: "fallen", kills: 12, day: 3, byname: null, from: "home:guild-1/adventurer" }, { name: "Odd", calling: "mage", gone: "eaten" }, "x"],
         });
         const [tam, pip] = grown.followers;
 
@@ -1025,7 +1047,7 @@ describe("playing together (netplay.js)", () => {
         assert.equal(tam.called, "Tammy");
         assert.deepEqual({ kills: tam.record.kills, slain: tam.record.slain, nemesis: tam.record.nemesis }, { kills: 0, slain: { Wolfsbane: 30 }, nemesis: null });
         assert.equal(tam.away, true, "(mending at the guild still)");
-        assert.deepEqual(grown.roll, [{ name: "Bryn", calling: "mage", level: 4, byname: null, gone: "fallen", kills: 12, day: 3 }]);
+        assert.deepEqual(grown.roll, [{ name: "Bryn", calling: "mage", level: 4, byname: null, gone: "fallen", kills: 12, day: 3, from: "home:guild-1/adventurer" }]);
         assert.equal(characterFrom({ hero: { name: "Ada", shape: {}, look: {}, weapon: "cleaver" } }), null, "(not a weapon a player starts with)");
         assert.equal(characterFrom(null), null);
     });
