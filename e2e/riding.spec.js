@@ -62,6 +62,9 @@ const ridden = (page) =>
             under: one ? +(ground - one.beast.object.position.y).toFixed(2) : null,
             visible: one?.beast.object.visible ?? null,
             hips: +(height("Hips") - ground).toFixed(2),
+            // (How far behind the middle of the horse's feet their hips are, in the horse's frame:
+            // where the saddle's seat is, riding.js SEAT.back)
+            back: one ? +-one.beast.object.worldToLocal(avatar.character.rig.bone("Hips").getWorldPosition(new THREE.Vector3())).z.toFixed(3) : null,
             stands: +avatar.character.rig.heads[avatar.character.rig.index.get("Hips")].y.toFixed(2),
             feet: +(Math.min(height("LeftFoot"), height("RightFoot")) - ground).toFixed(2),
             posed: one?.beast.plan.posed?.map(({ clip, weight }) => [clip, +weight.toFixed(2)]) ?? [],
@@ -182,6 +185,10 @@ test("buys a horse from the stablemaster, calls it up with its whistle, rides it
         expect(sat.stirrups, JSON.stringify(sat)).toBeLessThan(0.02);
         expect(sat.reins, JSON.stringify(sat)).toBeLessThan(0.02);
         expect(sat.closed, JSON.stringify(sat)).toBeLessThan(0.7);
+        // (Sat in the saddle's seat, between its pommel and its cantle, not up against the
+        // pommel: the seat's lowest is from 0.12 to 0.24 m behind the middle of the horse's feet)
+        expect(sat.back, JSON.stringify(sat)).toBeGreaterThan(0.12);
+        expect(sat.back, JSON.stringify(sat)).toBeLessThan(0.24);
     }
 
     // Off at a walk: carried at a trot, twice as fast and more as walking on foot, their feet in
