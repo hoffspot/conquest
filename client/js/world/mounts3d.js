@@ -402,9 +402,12 @@ export class Mounts {
             // (Their hands closed on the reins as far as they're in the saddle: REINS)
             const holding = this.#inSaddle(one, mount, since);
             const hands = holding > 0 ? this.#hands(avatar.character) : null;
+            // (Sat back in the saddle's seat as far as they're in it, as their feet go into the
+            // stirrups and come out of them: SEAT.back)
+            const back = SEAT.back * holding;
 
             actions.setRiding?.((rig) => {
-                const done = clips.pose(rig, posed?.length ? posed : [{ clip: "Idle", weight: 1, time: since }], lift);
+                const done = clips.pose(rig, posed?.length ? posed : [{ clip: "Idle", weight: 1, time: since }], lift, back);
 
                 if (done && hands) {
                     closeHand(rig, "Left", hands.Left, holding);
