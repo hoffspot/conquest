@@ -17,9 +17,12 @@ const ONCE = new Set(["Mount Left", "Mount Right", "Dismount Left", "Dismount Ri
 /**
  * Where the rider's clips have them (metres, in the horse's frame: its feet's middle, y up, facing
  * +z): getting up and down, from where the horse stands; riding, from its seat, `under` the
- * horse's CG bone (as it rises and falls with its gait), their pelvis 0.93 over that.
+ * horse's CG bone (as it rises and falls with its gait), their pelvis 0.93 over that. And how
+ * far `back` of where the clips have it their pelvis is sat: the clips have it over the horse's
+ * feet's middle, which on this saddle is against its pommel; the seat's lowest, between the
+ * pommel and the cantle, is from 0.12 to 0.24 behind that (measured on the saddle as drawn).
  */
-export const SEAT = Object.freeze({ under: 0.66 });
+export const SEAT = Object.freeze({ under: 0.66, back: 0.17 });
 
 /** Getting up into the saddle and down from it, by the side it's done from (battle.js mount's `side`). */
 export const MOUNTING = Object.freeze({ left: Object.freeze({ up: "Mount Left", down: "Dismount Left" }), right: Object.freeze({ up: "Mount Right", down: "Dismount Right" }) });
@@ -109,11 +112,12 @@ export class RiderClips {
 
     /**
      * Pose a body's rig as the clips are (`posed`: [{ clip, weight, time }], blended as the horse's
-     * own are), its pelvis `lift` metres higher than they have it (a riding clip's seat: SEAT): its
-     * joints set (rig.rotations) and its pelvis put (rig.offset) where theirs is in the horse's
-     * frame, which the body's drawn in. Whether it was (none of the clips had: not).
+     * own are), its pelvis `lift` metres higher than they have it (a riding clip's seat: SEAT) and
+     * `back` metres behind (in the saddle's seat: SEAT.back): its joints set (rig.rotations) and
+     * its pelvis put (rig.offset) where theirs is in the horse's frame, which the body's drawn in.
+     * Whether it was (none of the clips had: not).
      */
-    pose(rig, posed, lift = 0) {
+    pose(rig, posed, lift = 0, back = 0) {
         let total = 0;
 
         for (const { clip, weight, time } of posed) {
@@ -161,6 +165,7 @@ export class RiderClips {
         }
 
         _pelvis.y += lift;
+        _pelvis.z -= back;
         rig.offset.copy(_pelvis).sub(rig.heads[0]);
 
         return true;

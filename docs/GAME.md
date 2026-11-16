@@ -1791,7 +1791,10 @@ dismiss a specific purchased mount").
   rising and sinking through the ground, dying as it falls. Its rider's posed on it from the rider's
   clips (characters/riding.js, the catalog's beast-horse-rider: retargeted onto their own body,
   their pelvis where the clips have it over the horse, its seat under the horse's CG bone as it
-  bobs), getting up and down from the side they do it from. Their feet are in the stirrups at
+  bobs), getting up and down from the side they do it from. Riding, they sit in the saddle's
+  seat, between its pommel and its cantle: 0.17 m behind where the clips have their pelvis, which
+  on this saddle is against the pommel (riding.js `SEAT.back`; sat back as their feet go into the
+  stirrups, and forward again as they come out). Their feet are in the stirrups at
   every gait, whatever their legs' length: each leg's bent to put the ball of the foot on its
   stirrup's tread, as the saddle hangs from the horse as it goes (mounts3d.js `STIRRUPS`; from the
   shortest human's legs, 0.78 m, nearly straight, to the tallest elf's, 1.22 m). The horse wears
