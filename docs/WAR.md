@@ -4033,10 +4033,17 @@ hired, for gold by their calling (`HIRES`: a fresh one's; one of a higher level 
 
 A player leads one follower, and more as their **Command** grows (1 more at rank 1, up to 6 more at
 rank 5: `progress.js`). Command grows by leading: a share of every blow their followers land.
-Hired, an adventurer's gone from the guild for good (`host.hired`), even in a world made afresh
-each time it's played: those a character's kept with them (following, mending, or on their roll,
-by who they were among the folk, `from`) are taken out of the folk as they come in, and never
-added again (host.js `#takeOn`). Asked without the gold, they say what they'd want and stay where
+Hired, an adventurer's gone from the guild while they follow (`host.hired`), even in a world made
+afresh each time it's played: those a character's kept with them (following, mending, or fallen
+for good, by who they were among the folk, `from`) are taken out of the folk as they come in, and
+never added again (host.js `#takeOn`). **Let go, they go back where they were found** (the owner:
+"Mercenaries that are dismissed should be hire-able again from where they were originally found"):
+dismissed, or let go at a guild's desk while mending, they're no longer held hired, and they're
+back at their place in their guild, for hire by anyone: at once if its hall has its folk in it
+(told as `peopled`, so they're drawn: host.js `#backToTheGuild`), else the next time it has. To the one who let them go
+they come back as they were (their roll entry's `kept`: what they'd done, their name for them,
+their trust's ways, at their own level if it's higher than what's offered, mended, wearing
+nothing; hireOffer `back`, and they greet them so), and they're taken off that one's roll. Asked without the gold, they say what they'd want and stay where
 they are. With a full company, they say so, those mending counted (dialogue.js `adventurer`'s
 `full`).
 
@@ -4103,8 +4110,8 @@ host.js `#orderUnit`, an `order` command; core/followers.js `UNIT_ORDERS`):
   for*). It's on their followers' wheel's other side, at NE (a wheel kept from before, given it
   there: app/wheel.js `WHEELS_VERSION` 3);
 - **their own ability** (`ability`, below);
-- or **go their own way** (dismissed: asked first, in talk or from the party alike, as it's for
-  good).
+- or **go their own way** (dismissed: asked first, in talk or from the party alike), back to the
+  guild where they were found, to be hired again there (above).
 
 A follower who falls is knocked down, up again a while after (*Mercenaries that grow*). How
 they were told to fight is kept with them in the battle (`guarding`, `holdFire`,
@@ -4230,8 +4237,9 @@ in a guild hall.
   knocked down, up again, a level gained, a byname earned, trust grown, and striking their
   nemesis's kind again;
 - the **roll** (`ROLL_MOST`: 20, the latest first): those who've fallen for good or gone their
-  own way, with their level, byname and the foes they brought down, in the journal; and who they
-  were among the folk (`from`), so they're never at their guild for hire again.
+  own way, with their level, byname and the foes they brought down, in the journal; who they
+  were among the folk (`from`); and, for one let go, them as they were (`kept`), to come back so
+  if they're hired again (netplay.js `rollFrom` brings it in through `followerFrom`).
 
 **Kept** with the character in the world they were hired in (`characterOf`'s `followers`: who
 they are and what they've grown into, those mending too, and the `roll`; `save.js`
@@ -4275,9 +4283,10 @@ away from the world. Nowhere else:
   only as they leave, so its page closing doesn't lose a guest's company; and past
   `MOST_VISITORS` it forgets one with nobody following them before one with. The pack's kept the
   moment what a follower wears is given or taken back, or comes back as they part.
-- **By design**: those on the roll don't come back (dismissed, they go their own way; fallen where
-  the world's rule has it, they're gone), and followers belong to the world they were hired in
-  (deleting it, asked first, says it takes them).
+- **Let go**: dismissed, or let go at the desk, they're back at the guild where they were found,
+  for hire again, and to the one who let them go as they were (above). Fallen for good where the
+  world's rule has it, they're gone. Followers belong to the world they were hired in (deleting
+  it, asked first, says it takes them).
 
 ### News and rumours, and the guild's board (M8)
 

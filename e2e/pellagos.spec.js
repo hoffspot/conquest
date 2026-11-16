@@ -9474,6 +9474,47 @@ test("those mending at the guild chosen by name at its desk: one sent for, anoth
     expect(await page.evaluate(() => ({ following: [...window.pellagos.game.host.followers.values()].map(({ name }) => name).sort(), roll: window.pellagos.game.host.players.get(window.pellagos.game.me).roll.map(({ name, gone }) => `${name} ${gone}`) }))).toEqual({ following: ["Pip", "Wren"], roll: ["Tam dismissed", "Bryn fallen"] });
 });
 
+test("a hired adventurer let go goes back to their place in the guild's hall, drawn there, and comes back as they were when hired again by the one who let them go", async ({ page }) => {
+    await leadingTam(page);
+
+    const one = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "guild" && each.place === "home");
+        const player = game.battle.actor("player");
+        const [x, y] = building.door.ends[0].squares[0];
+
+        game.progress.gold = 5000;
+        game.host.mostFollowers = () => 2;
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+
+        for (let k = 0; k < 200 && !building.folk.some(({ id }) => game.host.hireOffer(game.me, id)); k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        const folk = building.folk.find(({ id }) => game.host.hireOffer(game.me, id));
+        const npc = game.battle.actor(folk.id);
+
+        Object.assign(player, { map: npc.map, square: [npc.square[0], npc.square[1] + 2], x: npc.square[0] + 0.5, y: npc.square[1] + 2.5, path: [] });
+        game.host.command(game.me, { type: "talk", with: folk.id });
+
+        const hired = game.host.command(game.me, { type: "effect", effect: { hire: true } });
+
+        game.host.command(game.me, { type: "talk", with: null });
+        game.host.followers.get(hired.follower).called = "Bran";
+        window.letGo = folk.id;
+
+        return { id: folk.id, follower: hired.follower, ok: hired.ok };
+    });
+
+    expect(one.ok).toBe(true);
+    expect(await playUntil(page, () => !window.pellagos.game.host.folk.has(window.letGo) && !window.pellagos.game.avatars.has(window.letGo), { seconds: 5 })).toBe(true);
+    await page.evaluate((follower) => window.pellagos.game.host.command(window.pellagos.game.me, { type: "order", unit: follower, order: "dismiss" }), one.follower);
+    expect(await playUntil(page, () => Boolean(window.pellagos.game.avatars.get(window.letGo)?.character), { seconds: 20 })).toBe(true);
+    expect(await page.evaluate(() => window.pellagos.game.host.hireOffer(window.pellagos.game.me, window.letGo)?.back)).toBe(true);
+    expect(await toldOf(page, /goes back to the guild you found them at/)).not.toBe(null);
+});
+
 test("a hired adventurer knocked down, up again with the player by them, wounded; home to mend after the third fall, listed so in the party menu, and sent for at the guild's desk; Game options' Mercenaries' chatter and Mercenaries can die", async ({ page }) => {
     // (Played a while: more than the usual time)
     test.setTimeout(240000);

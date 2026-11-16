@@ -1990,10 +1990,10 @@ export class Host {
             }
         }
 
-        // (Those they've hired, and those who've parted from them, never standing at their guild
-        // again for hire, whatever the world's forgotten: their world made afresh each time it's
-        // played, #hire, #rollCall)
-        for (const one of [...followers, ...player.roll]) {
+        // (Those they lead, those mending, and those fallen for good, never standing at their
+        // guild for hire, whatever the world's forgotten: their world made afresh each time it's
+        // played, #hire, #rollCall. Those they let go are back there, for hire again)
+        for (const one of [...followers, ...player.roll.filter(({ gone }) => gone !== "dismissed")]) {
             if (typeof one.from === "string") {
                 this.#takeOn(one.from);
             }
@@ -15877,8 +15877,10 @@ export class Host {
      * What one of the adventurers at a guild (by their id among the folk) would follow a player
      * for (docs/WAR.md *Mercenaries that grow*): { calling, level (a level under the most the
      * player's can grow to: capFor; a renowned one's at it), price (gold: followers.js
-     * hirePrice), renowned (their trait: RENOWN, or null) }; or null for one who isn't for hire.
-     * Asked by the game for what they say they'd want, and by #hire for what they're paid.
+     * hirePrice), renowned (their trait: RENOWN, or null), back (one who followed the player
+     * before and was let go, back at their guild: coming back as they were, at their own level if
+     * it's higher, or false) }; or null for one who isn't for hire. Asked by the game for what
+     * they say they'd want, and by #hire for what they're paid.
      */
     hireOffer(playerId, folkId) {
         const one = this.folk.get(folkId);
@@ -15890,9 +15892,16 @@ export class Host {
 
         const cap = this.capFor(playerId);
         const renowned = renownOf(one.seed);
-        const level = renowned ? cap : Math.max(1, cap - 1);
+        const back = this.#letGoBy(playerId, folkId);
+        const level = Math.min(cap, Math.max(renowned ? cap : Math.max(1, cap - 1), back?.level ?? 1));
 
-        return { calling, level, price: hirePrice(HIRES[calling].price, level, Boolean(renowned)), renowned };
+        return { calling, level, price: hirePrice(HIRES[calling].price, level, Boolean(renowned)), renowned, back: Boolean(back) };
+    }
+
+    // One of the folk (by their id) who followed a player before and was let go by them: their
+    // entry on the player's roll, with them as they were (#rollCall `kept`), or null
+    #letGoBy(playerId, folkId) {
+        return (this.players.get(playerId)?.roll ?? []).find((entry) => entry.gone === "dismissed" && entry.from === folkId && entry.kept) ?? null;
     }
 
     /** A player's hired adventurers gone home to mend (their ids: #sendHome). */
@@ -15923,15 +15932,23 @@ export class Host {
 
         player.progress.gold -= price;
 
-        // (Gone from where they sat or read the board, for good)
+        // (Gone from where they sat or read the board, while they follow)
         const npc = this.battle.actor(one.id);
         const at = { square: [...npc.square], map: npc.map };
+        // (One who followed them before, back as they were: what they'd done, their name for
+        // them, how they'd grown; off their roll, theirs again)
+        const back = offer.back ? this.#letGoBy(player.id, one.id) : null;
+        const was = back ? { ...back.kept, xp: Math.max(back.kept.xp ?? 0, LEVEL_XP[level]) } : { xp: LEVEL_XP[level] };
+
+        if (back) {
+            player.roll = player.roll.filter((entry) => entry !== back);
+        }
 
         this.battle.remove(one.id);
         this.folk.delete(one.id);
         this.hired.add(one.id);
 
-        const id = this.#follow(player, { name: one.name, calling, sex: one.sex, seed: one.seed, people: one.people ?? "human", from: one.id, level, xp: LEVEL_XP[level], renowned }, at);
+        const id = this.#follow(player, { ...was, name: one.name, calling, sex: one.sex, seed: one.seed, people: one.people ?? "human", from: one.id, level, renowned, gear: { mainHand: null, body: null } }, at);
 
         actor.talkingTo = null;
         this.#event("gone", { id: one.id });
@@ -16254,10 +16271,42 @@ export class Host {
 
     // A follower named on their leader's roll as they part from them (the company's: the journal):
     // { name, calling, level, byname, gone ("fallen", "dismissed"), kills, at (the world's day),
-    // from (who they were among the folk: never at their guild again, #join) }, the latest first,
-    // ROLL_MOST at most
+    // from (who they were among the folk) }, the latest first, ROLL_MOST at most. One let go
+    // (dismissed) goes back to the folk where they were found, at their guild the next time it's
+    // peopled, for hire again (`hired` no longer holding them: #addFolk), and their entry keeps
+    // them as they were (`kept`), to come back so to the one who let them go (hireOffer `back`);
+    // one fallen for good never does
     #rollCall(player, one, gone) {
-        player.roll = [{ name: one.called ?? one.name, calling: one.calling, level: one.level, byname: bynameOf(one.record), gone, kills: one.record.kills, day: this.war ? dayOf(elapsedOf(this.war)) : Math.floor(this.battle.time / DAY.length), from: one.from ?? null }, ...(player.roll ?? [])].slice(0, ROLL_MOST);
+        // (One let go goes back where they were found, for hire again: as they were, to them)
+        const kept = gone === "dismissed" && one.from ? { kept: { name: one.name, calling: one.calling, sex: one.sex, seed: one.seed, people: one.people, from: one.from, level: one.level, xp: one.xp, wounds: 0, owed: 0, record: structuredClone(one.record), called: one.called, picks: [...one.picks], renowned: one.renowned } } : {};
+
+        player.roll = [{ name: one.called ?? one.name, calling: one.calling, level: one.level, byname: bynameOf(one.record), gone, kills: one.record.kills, day: this.war ? dayOf(elapsedOf(this.war)) : Math.floor(this.battle.time / DAY.length), from: one.from ?? null, ...kept }, ...(player.roll ?? [])].slice(0, ROLL_MOST);
+
+        if (kept.kept) {
+            this.#backToTheGuild(one.from);
+        }
+    }
+
+    // One hired adventurer let go (by their id among the folk): no longer held hired, back where
+    // they were found for hire again: at once, if their building's open with its folk in it (told
+    // as "peopled", so they're drawn), else the next time it's peopled (#folkOf)
+    #backToTheGuild(folkId) {
+        this.hired.delete(folkId);
+
+        for (const building of this.world.interiors?.buildings.values() ?? []) {
+            const one = building.folk?.find(({ id }) => id === folkId);
+
+            if (!one) {
+                continue;
+            }
+
+            if (this.open.has(building.key) && this.#peopled(building) && !this.#notTheirs(building) && this.#addFolk(one, this.#sideOf(building.place === "home" ? this.world.start?.id : building.place, building.people))) {
+                this.open.get(building.key).push(folkId);
+                this.#event("peopled", { key: building.key, folk: [folkId] });
+            }
+
+            return;
+        }
     }
 
     /**

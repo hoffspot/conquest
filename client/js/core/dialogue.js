@@ -889,7 +889,7 @@ export const TREES = Object.freeze({
             },
             // (Asked first: let go, they're on the roll, what they wore sent back: core/host.js #letMendingGo)
             release: {
-                say: "Let {mending} go? They'll find other work once they're mended, but they won't be yours to send for again.",
+                say: "Let {mending} go? Once they're mended they'll be back on the books where you found them: yours to hire again there, but not to send for.",
                 choices: [
                     { say: "Yes, let them go.", next: "released", do: [{ release: true }] },
                     { say: "No, I'll keep them on.", next: "more" },
@@ -1024,9 +1024,9 @@ export const TREES = Object.freeze({
                 ],
                 choices: [{ say: "Good. Back to it.", next: "greet" }],
             },
-            // (Asked first: they go for good)
+            // (Asked first: they go back to their guild, core/host.js #rollCall)
             parting: {
-                say: ["For good? I'll not be coming back.", "You're sure? Once I'm gone, I'm gone."],
+                say: ["You're sure? I'll be back at the guild where you found me. You'll have to pay me again, mind.", "Parting ways? I'll go back to the guild. Hire me again there, if you've a mind to."],
                 choices: [
                     { say: "I'm sure. Go well.", next: "parted", do: [{ follower: "dismiss" }] },
                     { say: "No. Stay with me.", next: "greet" },
@@ -1034,7 +1034,7 @@ export const TREES = Object.freeze({
             },
             waiting: { say: ["I'll be here.", "Right. I'll hold here till you're back."], choices: [{ say: "Good.", next: null }] },
             following: { say: ["About time. Lead on.", "With you."], choices: [{ say: "Good.", next: null }] },
-            parted: { say: ["Fair enough. It was good work while it lasted.", "Then I'll be off. Good luck to you, out there."], choices: [{ say: "Farewell.", next: null }] },
+            parted: { say: ["Fair enough. It was good work while it lasted.", "Then I'll be off. Look me up at the guild if you need a blade again."], choices: [{ say: "Farewell.", next: null }] },
         },
     },
     // The townsfolk out about their business in the streets (core/townsfolk.js): busy, but glad
@@ -1282,6 +1282,8 @@ export const TREES = Object.freeze({
         nodes: {
             greet: {
                 say: [
+                    // (One who followed the player before and was let go: core/host.js hireOffer `back`)
+                    { if: { back: true }, lines: ["{player}! I thought I'd seen the last of you. Need a blade again?", "Back for me, are you? I kept my blade sharp, just in case.", "You again. I'm still on the guild's books, if you want me."] },
                     // (One of the renowned: core/followers.js RENOWN)
                     { if: { renowned: true }, lines: ["{name}. You'll have heard of me, I expect. {renown}, they say, and they're right.", "Yes, {name}. That {name}. {renown}, if you want it in a word."] },
                     { if: { met: false }, lines: ["New blood, eh? Name's {name}. Word of advice: read the notice twice before you take it.", "Hm? {name}. Don't mind me, I'm waiting for a better job to go up.", "You look like you can handle yourself. {name}, Iron rank. Almost Bronze."] },

@@ -2,8 +2,9 @@
 // left in a dungeon as it's made again, or in a sealed room as it's let go of, brought out to
 // their leader; one with no body in the battle given one again by them; magic leaving them behind
 // only once it carries their leader off; any of those mending sent for, or let go, by name at the
-// guild's desk, never another in their place; one hired never at their guild for hire again,
-// whatever the world's forgotten; and one knocked down told so when they're given an order
+// guild's desk, never another in their place; one following or mending never at their guild for
+// hire too, whatever the world's forgotten, and one let go back there, for hire again (to the one
+// who let them go, as they were); and one knocked down told so when they're given an order
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { DOWNED, STEP_MS } from "../client/js/core/battle.js";
@@ -275,29 +276,88 @@ describe("hired adventurers never lost (core/host.js)", () => {
         assert.deepEqual(player.roll.map(({ name, gone }) => ({ name, gone })), [{ name: "Mira", gone: "dismissed" }]);
     });
 
-    it("never at their guild for hire again once hired, the world made afresh (a game started again): those following, those mending, and those on the roll", () => {
-        const first = atTheGuild();
-        const [one, two, three] = first.guild.folk.filter(adventurer);
+    it("let go in their guild's hall, back at their place in it at once, for hire again, as they were to the one who let them go; let go at the desk while mending, the same", () => {
+        const { host, guild, player } = atTheGuild({ gold: 10_000 });
+        const [one, two] = guild.folk.filter(adventurer);
         const hire = (folk) => {
-            talkTo(first.host, folk.id);
+            talkTo(host, folk.id);
 
-            const result = first.host.command(HOST_PLAYER, { type: "effect", effect: { hire: true } });
+            const result = host.command(HOST_PLAYER, { type: "effect", effect: { hire: true } });
 
-            first.host.command(HOST_PLAYER, { type: "talk", with: null });
+            host.command(HOST_PLAYER, { type: "talk", with: null });
+
+            return result;
+        };
+
+        host.mostFollowers = () => 2;
+
+        const [first, second] = [one, two].map(hire);
+
+        assert.ok(first.ok && second.ok);
+        assert.ok(!host.folk.has(one.id) && !host.battle.actor(one.id));
+        host.followers.get(first.follower).called = "Bran";
+
+        host.command(HOST_PLAYER, { type: "order", unit: first.follower, order: "dismiss" });
+
+        const events = run(host, 500);
+
+        assert.ok(host.folk.has(one.id) && host.battle.actor(one.id), "(back at their place in the hall)");
+        assert.deepEqual(host.battle.actor(one.id).square, one.square);
+        assert.ok(events.some(({ type, key, folk }) => type === "peopled" && key === guild.key && folk.includes(one.id)), "(told, to be drawn)");
+        assert.equal(host.hireOffer(HOST_PLAYER, one.id).back, true);
+
+        const again = hire(one);
+
+        assert.equal(again.ok, true);
+        assert.equal(host.followers.get(again.follower).called, "Bran");
+        assert.deepEqual(player.roll, []);
+
+        // (Sent home to mend, then let go at the desk: back in the hall the same)
+        const receptionist = guild.folk.find(({ role }) => role === "receptionist");
+        const mending = host.followers.get(second.follower);
+
+        host.followers.delete(second.follower);
+        host.battle.remove(second.follower);
+        host.mending.set(second.follower, { ...mending, since: 0 });
+        talkTo(host, receptionist.id);
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { release: second.follower } }).ok, true);
+        assert.ok(host.folk.has(two.id) && host.battle.actor(two.id));
+        assert.equal(host.hireOffer(HOST_PLAYER, two.id).back, true);
+    });
+
+    it("never at their guild for hire while they follow or mend, nor once fallen for good, the world made afresh (a game started again); let go, back where they were found, for hire again, to the one who let them go as they were", () => {
+        const first = atTheGuild();
+        const [one, two, three, four] = first.guild.folk.filter(adventurer);
+        const hire = (host, folk) => {
+            talkTo(host, folk.id);
+
+            const result = host.command(HOST_PLAYER, { type: "effect", effect: { hire: true } });
+
+            host.command(HOST_PLAYER, { type: "talk", with: null });
 
             return result;
         };
 
         first.player.progress.gold = 10_000;
-        first.host.mostFollowers = () => 3;
+        first.host.mostFollowers = () => 4;
 
-        const hired = [one, two, three].map(hire);
+        const hired = [one, two, three, four].map((folk) => hire(first.host, folk));
 
         assert.ok(hired.every(({ ok }) => ok), JSON.stringify(hired));
 
-        // (One dismissed, one sent home to mend)
+        // (Three, grown and renamed, let go: back on the guild's books, as they were)
+        const tam = first.host.followers.get(hired[2].follower);
+
+        Object.assign(tam, { xp: tam.xp + 50, called: "Old Three", record: { ...tam.record, kills: 42 } });
         first.host.command(HOST_PLAYER, { type: "order", unit: hired[2].follower, order: "dismiss" });
-        assert.deepEqual(first.player.roll.map(({ from }) => from), [three.id], "(who they were among the folk, on the roll)");
+        assert.deepEqual(first.player.roll.map(({ from, gone }) => ({ from, gone })), [{ from: three.id, gone: "dismissed" }], "(who they were among the folk, on the roll)");
+        assert.equal(first.player.roll[0].kept.called, "Old Three");
+        assert.ok(!first.host.hired.has(three.id), "(no longer held hired: at their guild the next time it's peopled)");
+
+        // (Four fallen for good, where the world's rule has it: on the roll, never back)
+        first.player.roll = [{ name: four.name, calling: "warrior", level: 2, byname: null, gone: "fallen", kills: 3, day: 1, from: four.id }, ...first.player.roll];
+        first.host.followers.delete(hired[3].follower);
+        first.host.battle.remove(hired[3].follower);
 
         const character = first.host.characterOf(first.player);
 
@@ -306,16 +366,33 @@ describe("hired adventurers never lost (core/host.js)", () => {
         // (Carried on as a character brings it: core/netplay.js)
         const brought = characterFrom(character);
 
-        assert.deepEqual(brought.roll.map(({ from }) => from), [three.id]);
+        assert.deepEqual(brought.roll.map(({ from }) => from), [four.id, three.id]);
+        assert.deepEqual({ name: brought.roll[1].kept.name, called: brought.roll[1].kept.called, kills: brought.roll[1].kept.record.kills, gear: brought.roll[1].kept.gear }, { name: three.name, called: "Old Three", kills: 42, gear: { mainHand: null, body: null } });
+        assert.equal(brought.roll[0].kept, undefined, "(none kept of one fallen for good)");
         assert.deepEqual(rollFrom([{ name: "X", calling: "warrior", level: 1, gone: "fallen", kills: 0, day: 1, from: 7 }])[0].from, null);
 
         const again = atTheGuild({ gold: 10_000, followers: brought.followers, roll: brought.roll });
 
-        for (const folk of [one, two, three]) {
-            assert.ok(!again.host.folk.has(folk.id) && !again.host.battle.actor(folk.id), `${folk.name} not at the guild again`);
+        for (const folk of [one, two, four]) {
+            assert.ok(!again.host.folk.has(folk.id) && !again.host.battle.actor(folk.id), `${folk.name} not at the guild`);
             assert.equal(again.host.hireOffer(HOST_PLAYER, folk.id), null);
         }
 
-        assert.ok(again.guild.folk.filter(adventurer).slice(3).some((folk) => again.host.folk.has(folk.id)), "(the others there)");
+        // Three back where they were found, for hire again: to the one who let them go, as they were
+        assert.ok(again.host.folk.has(three.id), "(three at the guild again)");
+
+        const offer = again.host.hireOffer(HOST_PLAYER, three.id);
+
+        assert.equal(offer.back, true);
+        again.host.mostFollowers = () => 4;
+
+        const rehired = hire(again.host, three);
+        const back = again.host.followers.get(rehired.follower);
+
+        assert.equal(rehired.ok, true, JSON.stringify(rehired));
+        assert.deepEqual({ called: back.called, kills: back.record.kills, from: back.from }, { called: "Old Three", kills: 42, from: three.id });
+        assert.ok(back.level >= offer.level && back.xp >= tam.xp);
+        assert.deepEqual(again.player.roll.map(({ from }) => from), [four.id], "(off their roll, theirs again)");
+        assert.ok(again.host.hired.has(three.id));
     });
 });

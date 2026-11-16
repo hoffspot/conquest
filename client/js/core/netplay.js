@@ -407,14 +407,32 @@ export function followerFrom(one) {
 
 /**
  * A character's roll of the hired adventurers who've parted from them (core/host.js #rollCall),
- * made safe to bring in: [{ name, calling, level, byname, gone, kills, day, from }], ROLL_MOST at
- * most (`from` who they were among the world's folk, or null).
+ * made safe to bring in: [{ name, calling, level, byname, gone, kills, day, from, kept }],
+ * ROLL_MOST at most (`from` who they were among the world's folk, or null; `kept`, one let go as
+ * they were, as followerFrom brings one in, wearing nothing, there only for one dismissed).
  */
 export function rollFrom(roll) {
     return (Array.isArray(roll) ? roll : [])
         .filter((one) => isObject(one) && typeof one.name === "string" && HIRES[one.calling] && ["fallen", "dismissed"].includes(one.gone))
         .slice(0, ROLL_MOST)
-        .map((one) => ({ name: one.name.slice(0, 40), calling: one.calling, level: Number.isInteger(one.level) ? Math.max(1, Math.min(MERCENARY.most, one.level)) : 1, byname: typeof one.byname === "string" ? one.byname.slice(0, 40) : null, gone: one.gone, kills: whole(one.kills, 10_000_000), day: whole(one.day, 1_000_000), from: typeof one.from === "string" ? one.from.slice(0, 120) : null }));
+        .map((one) => {
+            // (One let go as they were: never mending, wearing nothing, their gear given back)
+            const kept = (one.gone === "dismissed" && followerFrom(one.kept)) || {};
+
+            delete kept.away;
+
+            return {
+                name: one.name.slice(0, 40),
+                calling: one.calling,
+                level: Number.isInteger(one.level) ? Math.max(1, Math.min(MERCENARY.most, one.level)) : 1,
+                byname: typeof one.byname === "string" ? one.byname.slice(0, 40) : null,
+                gone: one.gone,
+                kills: whole(one.kills, 10_000_000),
+                day: whole(one.day, 1_000_000),
+                from: typeof one.from === "string" ? one.from.slice(0, 120) : null,
+                ...(kept.name ? { kept: { ...kept, gear: { mainHand: null, body: null } } } : {}),
+            };
+        });
 }
 
 /**

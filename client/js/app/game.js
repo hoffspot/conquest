@@ -10030,6 +10030,8 @@ export class Game {
                             ? Boolean(hire && company < this.host.mostFollowers(this.me)) === condition.hire
                           : "full" in condition
                             ? Boolean(hire && company >= this.host.mostFollowers(this.me)) === condition.full
+                          : "back" in condition
+                            ? Boolean(hire?.back) === condition.back
                             : "purse" in condition
                               ? (this.progress.gold >= (hire?.price ?? 0)) === condition.purse
                               : "renowned" in condition
@@ -13336,13 +13338,14 @@ export class Game {
     }
 
     // Tell one of the party to follow, wait or go (core/host.js #orderUnit); said why not, if not.
-    // Going's for good, so asked first (onAskDismiss), from the party menu or the wheel alike
+    // Going's asked first (onAskDismiss), from the party menu or the wheel alike: a creature's
+    // gone for good, a hired adventurer back at their guild
     #orderUnit(id, order, { sure = false } = {}) {
         if (order === "dismiss" && !sure && this.onAskDismiss) {
             const name = this.battle.actor(id)?.name ?? "them";
             const called = Boolean(this.host.companions?.has(id));
 
-            this.onAskDismiss({ name, note: called ? `${name} will be gone for good, its time with you over.` : `${name} will leave your party and go their own way, for good.`, go: () => this.#orderUnit(id, "dismiss", { sure: true }) });
+            this.onAskDismiss({ name, note: called ? `${name} will be gone for good, its time with you over.` : `${name} will leave your party and go back to the guild where you found them, to be hired again there, by you or anyone.`, go: () => this.#orderUnit(id, "dismiss", { sure: true }) });
 
             return;
         }
@@ -13477,7 +13480,7 @@ export class Game {
         const words = {
             joined: event.back ? null : `${name} follows you now${event.level > 1 ? `, at level ${event.level}` : ""}.`,
             fallen: `${name} has fallen, for good.`,
-            dismissed: `${name} goes their own way.`,
+            dismissed: `${name} goes back to the guild you found them at: hire them there again if you want them.`,
             levelled: `${name} is level ${event.level} now.${event.level === MERCENARY.gift && event.gift ? ` A veteran: ${event.gift.toLowerCase()} for you while they're on their feet.` : ""}`,
             byname: `They're calling ${plain} ${event.byname} now.`,
             trusted: `${name} trusts you more: choose how they grow (party menu, More).`,
