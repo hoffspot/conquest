@@ -393,18 +393,37 @@ describe("saving (save.js)", () => {
         assert.deepEqual(visitorOf(world.id, { hero: { ...wren, guid: undefined }, progress: {} }).talks, { memory: {}, knowledge: [] });
         assert.equal(keepVisitor("zzzz9999", { hero: wren }), false);
 
-        // Up to MOST_VISITORS: the one gone longest forgotten for a new one
+        // Up to MOST_VISITORS: the one gone longest forgotten for a new one, one with nobody
+        // following them before one with a company (Wren's Pip kept, though Wren's gone longest)
         const guid = (n) => `9a1b2c3d-4e5f-4a6b-8c7d-${String(n).padStart(12, "0")}`;
+        const guest = (n) => keepVisitor(world.id, { hero: { ...wren, name: `Guest ${n}`, guid: guid(n) }, talks: { memory: {}, knowledge: [] } });
 
         for (let n = 1; n < MOST_VISITORS + 1; n++) {
-            keepVisitor(world.id, { hero: { ...wren, name: `Guest ${n}`, guid: guid(n) }, talks: { memory: {}, knowledge: [] } });
+            guest(n);
         }
 
-        const kept = Object.values(loadLocalWorld(world.id).places).filter((one) => typeof one.visitor === "string");
+        let kept = Object.values(loadLocalWorld(world.id).places).filter((one) => typeof one.visitor === "string");
+        const firstGuest = loadLocalWorld(world.id).places[guid(1)];
 
         assert.equal(MOST_VISITORS, 12);
         assert.equal(kept.length, MOST_VISITORS);
-        assert.equal(loadLocalWorld(world.id).places[wren.guid], undefined, "Wren, gone longest, forgotten");
+        assert.ok(loadLocalWorld(world.id).places[wren.guid], "Wren, gone longest, kept: someone follows them");
+        assert.deepEqual(visitorOf(world.id, { hero: wren, progress: {} }).followers.map(({ name }) => name), ["Pip"]);
+        assert.equal(firstGuest, undefined, "the first guest, with nobody, forgotten");
+
+        // (With no one left who's nobody following them: the one gone longest, company or not)
+        for (let n = 2; n <= MOST_VISITORS; n++) {
+            const one = loadLocalWorld(world.id).places[guid(n)];
+
+            if (one) {
+                keepVisitor(world.id, { hero: { ...wren, name: `Guest ${n}`, guid: guid(n) }, followers: [{ name: `Hob ${n}`, calling: "warrior" }] });
+            }
+        }
+
+        guest(MOST_VISITORS + 1);
+        kept = Object.values(loadLocalWorld(world.id).places).filter((one) => typeof one.visitor === "string");
+        assert.equal(kept.length, MOST_VISITORS);
+        assert.equal(loadLocalWorld(world.id).places[wren.guid], undefined, "Wren, gone longest of those with a company, forgotten at last");
         assert.deepEqual([...items.keys()].filter((key) => key.startsWith(`pellagos.${place.id}.`)), [], "and all of it");
 
         // Forgotten with the world

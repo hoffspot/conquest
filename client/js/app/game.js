@@ -72,7 +72,7 @@ import { HELD_REACH, Steering } from "./steering.js";
 import { actionFor, heldBy, keyMap, keyOf, keysOf, mouseOf } from "./keys.js";
 import { PICKED, pickInFront } from "./gamepad.js";
 import { Surroundings } from "./surroundings.js";
-import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
+import { Conversation, MENDERS_LISTED, treeFor, upstairsIs } from "../core/dialogue.js";
 import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, READY, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, snagChoice, snaggable, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
 import { dress, HELD_LOOKS, UNIQUE_LOOKS } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, gearLook, levelOf, offHandFree } from "../core/gear.js";
@@ -9947,7 +9947,22 @@ export class Game {
         const hire = one && (one.role === "adventurer" || one.talk === "adventurer") ? this.host.hireOffer(this.me, npc.id) : null;
         const following = npc.kind === "follower" ? this.host.followers.get(npc.id) : null;
         const company = [...this.host.followers.values()].filter(({ leader }) => leader === this.me).length + this.host.mendingOf(this.me).length;
-        const recall = one?.role === "receptionist" ? this.host.recallOffer(this.me) : null;
+        // (Those mending as they are now, not as they were as the talk began; the one asked about,
+        // chosen among them, or the first: sent for or let go by their id, never another in their
+        // place, core/host.js recallOffer)
+        const menders = () => (one?.role === "receptionist" ? this.host.mendingOf(this.me).map((id) => this.host.recallOffer(this.me, id)).filter(Boolean) : []);
+        let mender = null;
+        const recall = () => menders().find(({ id }) => id === mender) ?? menders()[0] ?? null;
+        const mended = () => {
+            const asked = recall();
+            const all = menders();
+
+            Object.assign(names, { mending: asked?.name ?? "", recallPrice: String(asked?.price ?? 0), menders: String(all.length) });
+
+            for (let k = 0; k < MENDERS_LISTED; k++) {
+                names[`mender${k}`] = all[k] ? `${all[k].name} (${all[k].price} gold)` : "";
+            }
+        };
         // (A stablemaster's: what a horse costs, and bringing back the first of theirs fallen, as
         // it stands now: core/host.js stableOffer)
         const stable = npc.role === "stablemaster" ? () => this.host.stableOffer(this.me) : null;
@@ -9956,6 +9971,7 @@ export class Game {
             names.hirePrice = String(hire.price);
             names.hireLevel = String(hire.level);
             names.renown = RENOWN.traits[hire.renowned]?.label ?? "";
+            names.fullWhy = this.host.mendingOf(this.me).length ? "Those of yours mending count too, mind: send for them, or let them go, at any guild's desk." : "Let one go first, or learn to lead more.";
         }
 
         if (following) {
@@ -9964,10 +9980,7 @@ export class Game {
             Object.assign(names, { level: String(following.level), kills: String(following.record.kills), wounds: String(following.wounds), trustWords: ["You keep paying, I keep swinging.", "You're all right, you know.", "I'd follow you a long way.", "I'd follow you anywhere."][trust] });
         }
 
-        if (recall) {
-            names.mending = recall.name;
-            names.recallPrice = String(recall.price);
-        }
+        mended();
 
         if (stable) {
             const { price, revive, fallen } = stable();
@@ -10015,14 +10028,22 @@ export class Game {
                           ? Boolean(names.hellRumour) === condition.hell
                           : "hire" in condition
                             ? Boolean(hire && company < this.host.mostFollowers(this.me)) === condition.hire
+                          : "full" in condition
+                            ? Boolean(hire && company >= this.host.mostFollowers(this.me)) === condition.full
+                          : "back" in condition
+                            ? Boolean(hire?.back) === condition.back
                             : "purse" in condition
                               ? (this.progress.gold >= (hire?.price ?? 0)) === condition.purse
                               : "renowned" in condition
                                 ? Boolean(hire?.renowned) === condition.renowned
                               : "mending" in condition
-                                ? Boolean(recall) === condition.mending
+                                ? Boolean(recall()) === condition.mending
+                              : "menders" in condition
+                                ? (menders().length > 1) === condition.menders
+                              : "mender" in condition
+                                ? Boolean(menders()[condition.mender])
                               : "recallPurse" in condition
-                                ? (this.progress.gold >= (recall?.price ?? 0)) === condition.recallPurse
+                                ? (this.progress.gold >= (recall()?.price ?? 0)) === condition.recallPurse
                               : stable && "horsePurse" in condition
                                 ? (this.progress.gold >= stable().price) === condition.horsePurse
                               : stable && "revivePurse" in condition
@@ -10073,6 +10094,24 @@ export class Game {
                     return;
                 }
 
+                // (One of theirs mending asked about, by their place in the guild's list: theirs
+                // the lines that follow)
+                if ("mender" in effect) {
+                    mender = menders()[effect.mender]?.id ?? null;
+                    mended();
+
+                    return;
+                }
+
+                // (One of theirs mending sent for, or let go: the one asked about, by their id, as
+                // they're named in what's said back; those mending after, as they are then)
+                if (effect.recall || effect.release) {
+                    const asked = recall();
+
+                    names.sentFor = asked?.name ?? names.mending;
+                    effect = effect.recall ? { ...effect, recall: asked?.id ?? true } : { ...effect, release: asked?.id ?? true };
+                }
+
                 // (A fallen horse brought back: named as it was, the next fallen named after)
                 if (effect.stable === "revive") {
                     names.revivedHorse = names.fallenHorse;
@@ -10082,6 +10121,11 @@ export class Game {
                 this.#command({ type: "effect", effect }, (result) => {
                     if (stable) {
                         names.fallenHorse = stable().fallen[0]?.name ?? "";
+                    }
+
+                    if (effect.recall || effect.release) {
+                        mender = null;
+                        mended();
                     }
 
                     if (!result.ok) {
@@ -13294,13 +13338,14 @@ export class Game {
     }
 
     // Tell one of the party to follow, wait or go (core/host.js #orderUnit); said why not, if not.
-    // Going's for good, so asked first (onAskDismiss), from the party menu or the wheel alike
+    // Going's asked first (onAskDismiss), from the party menu or the wheel alike: a creature's
+    // gone for good, a hired adventurer back at their guild
     #orderUnit(id, order, { sure = false } = {}) {
         if (order === "dismiss" && !sure && this.onAskDismiss) {
             const name = this.battle.actor(id)?.name ?? "them";
             const called = Boolean(this.host.companions?.has(id));
 
-            this.onAskDismiss({ name, note: called ? `${name} will be gone for good, its time with you over.` : `${name} will leave your party and go their own way, for good.`, go: () => this.#orderUnit(id, "dismiss", { sure: true }) });
+            this.onAskDismiss({ name, note: called ? `${name} will be gone for good, its time with you over.` : `${name} will leave your party and go back to the guild where you found them, to be hired again there, by you or anyone.`, go: () => this.#orderUnit(id, "dismiss", { sure: true }) });
 
             return;
         }
@@ -13416,6 +13461,14 @@ export class Game {
         this.hud.say(id, words, 1 + bubbleSeconds(words));
     }
 
+    // Said as the player's about to be carried off by magic (answering a summons), if they lead
+    // anyone: that they'll be left behind, to be sent for (core/host.js #loseRetinue); or nothing
+    #leftBehind() {
+        const led = [...this.host.followers.values()].filter(({ leader }) => leader === this.me).length;
+
+        return led ? ` ${led === 1 ? "The one" : `The ${led}`} you lead will be left behind, to be sent for at a guild's desk.` : "";
+    }
+
     // What's come of one of the player's hired adventurers, told (core/host.js "follower" events):
     // in a line, a sound for some, a word from them for some (#bark); drawn as they are, and kept
     // with the character
@@ -13427,13 +13480,13 @@ export class Game {
         const words = {
             joined: event.back ? null : `${name} follows you now${event.level > 1 ? `, at level ${event.level}` : ""}.`,
             fallen: `${name} has fallen, for good.`,
-            dismissed: `${name} goes their own way.`,
+            dismissed: `${name} goes back to the guild you found them at: hire them there again if you want them.`,
             levelled: `${name} is level ${event.level} now.${event.level === MERCENARY.gift && event.gift ? ` A veteran: ${event.gift.toLowerCase()} for you while they're on their feet.` : ""}`,
             byname: `They're calling ${plain} ${event.byname} now.`,
             trusted: `${name} trusts you more: choose how they grow (party menu, More).`,
             down: `${name} is down (${wounds})! Stand by them, heal them, or give them a draught.`,
             up: `${name} is back on their feet.`,
-            home: event.why === "lost" ? `${name} is left behind: they'll wait for you at the guild.` : `${name} can't go on, and goes home to mend. Send for them at any guild's desk.`,
+            home: event.why === "lost" ? `${name} is left behind, and makes their way back to the guild: send for them at any guild's desk.` : `${name} can't go on, and goes home to mend. Send for them at any guild's desk.`,
             recalled: `${name} is back at your side, mended (${event.price} gold).`,
             outfitted: event.item ? `${name} wears what you gave them.` : `You take back what ${name} wore.`,
             renamed: `You call them ${name} now.`,
@@ -13464,8 +13517,13 @@ export class Game {
 
         this.#mirror();
 
-        // (Kept with the character)
+        // (Kept with the character; and what they wore, back in the pack or given them, kept with
+        // it at once: never in neither, should the game close before the next save)
         this.#keepFollowers();
+
+        if (["outfitted", "dismissed", "fallen"].includes(event.change)) {
+            this.onProgress(this.progress);
+        }
 
         if (this.partyPanel?.open) {
             this.#showParty();
@@ -13777,7 +13835,7 @@ export class Game {
             mending: this.host.mendingOf(this.me).map((id) => {
                 const one = this.host.mending.get(id);
 
-                return { name: calledBy(one), calling: one.calling, level: one.level ?? 1 };
+                return { name: calledBy(one), calling: one.calling, level: one.level ?? 1, price: this.host.recallOffer(this.me, id)?.price ?? null };
             }),
             roll: this.host.players.get(this.me)?.roll ?? [],
             most: this.host.mostFollowers(this.me),
@@ -17987,7 +18045,7 @@ export class Game {
             this.hud.message(`You resist ${event.name}'s summons.`, 3);
         } else if (event.change === "asked") {
             this.sound?.play("wake");
-            this.hud.choose(`${event.name} is summoning you to their side. Go?`, [{ label: `Go to ${event.name}`, value: true }, { label: "Resist", value: false }], (come) => come !== undefined && this.#command({ type: "summoned", come }), { cancel: null, seconds: Math.max(1, (event.until - this.battle.time) / 1000) });
+            this.hud.choose(`${event.name} is summoning you to their side.${this.#leftBehind()} Go?`, [{ label: `Go to ${event.name}`, value: true }, { label: "Resist", value: false }], (come) => come !== undefined && this.#command({ type: "summoned", come }), { cancel: null, seconds: Math.max(1, (event.until - this.battle.time) / 1000) });
         } else if (event.change === "sent") {
             this.hud.message(`You call to ${event.name}...`, 2.5);
         } else if (event.change === "came" && event.target) {

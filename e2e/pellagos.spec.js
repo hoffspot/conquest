@@ -1552,7 +1552,7 @@ test("worlds on this device, apart from the characters: one made, and a characte
     await page.locator("#localworldsbutton").click();
     await expect(rows.filter({ hasText: "Thornvale" }).locator(".about")).toContainText("Cole has been here");
     await worlds.getByRole("button", { name: "Delete Thornvale" }).click();
-    await expect(forget.locator("#forgetnote")).toHaveText("Thornvale will be permanently deleted: its war, and what its folk remember of everyone who's been there. Your characters stay, with all they carry and have grown into. This can't be undone.");
+    await expect(forget.locator("#forgetnote")).toHaveText("Thornvale will be permanently deleted: its war, what its folk remember of everyone who's been there, and the adventurers hired there, with what they wear. Your characters stay, with all they carry and have grown into. This can't be undone.");
     await forget.getByRole("button", { name: "Delete Thornvale" }).click();
     await expect(rows.locator(".name")).toHaveText(["Cole's world", "Fen's world", "Ember's world", "Dun's world", "Briar's world", "Ash's world"]);
     expect(await page.evaluate((ids) => Object.keys(localStorage).filter((key) => ids.some((id) => key.startsWith(`pellagos.${id}.`))), [vale, place])).toEqual([]);
@@ -9287,13 +9287,13 @@ test("an adventurer hired from their drink at one of the guild's tables follows 
 // who's fallen (docs/WAR.md *Mercenaries that grow*)
 const TAM = Object.freeze({ name: "Tam", calling: "warrior", sex: "m", seed: 7, people: "human", level: 3, xp: 450, wounds: 0, record: { kills: 12, damage: 300, falls: 1, rises: 1, together: 35, earned: 4, best: null, slain: {}, nemesis: null } });
 
-async function leadingTam(page, tam = TAM) {
+async function leadingTam(page, tam = TAM, { others = [] } = {}) {
     await page.addInitScript(
         ({ save, kept }) => {
             localStorage.setItem("pellagos.save", JSON.stringify(save));
             localStorage.setItem("pellagos.followers", JSON.stringify(kept));
         },
-        { save: { ...SAVE, seed: 2 }, kept: { seed: 2, created: SAVE.created, followers: [tam], roll: [{ name: "Bryn", calling: "mage", level: 4, byname: null, gone: "fallen", kills: 9, day: 2 }] } },
+        { save: { ...SAVE, seed: 2 }, kept: { seed: 2, created: SAVE.created, followers: [tam, ...others], roll: [{ name: "Bryn", calling: "mage", level: 4, byname: null, gone: "fallen", kills: 9, day: 2 }] } },
     );
     await title(page);
     await page.locator("#continuebutton").click();
@@ -9420,6 +9420,99 @@ test("a hired adventurer grown with the player: the party menu's More tells thei
     await expect(journal.getByRole("heading", { name: "Your roll" })).toBeVisible();
     await expect(journal.locator(".roll .journal-follower-name")).toHaveText(["Bryn"]);
     await expect(journal.locator(".roll .journal-follower-state")).toHaveText(["Level 4 mage, 9 foes; fell on day 3"]);
+});
+
+test("those mending at the guild chosen by name at its desk: one sent for, another let go, the receptionist's words as they stand after each", async ({ page }) => {
+    await leadingTam(page, { ...TAM, name: "Wren", seed: 9 }, { others: [{ ...TAM, away: true }, { ...TAM, name: "Pip", calling: "rogue", seed: 8, level: 1, xp: 0, away: true }] });
+
+    const prices = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "guild");
+        const player = game.battle.actor("player");
+        const [x, y] = building.door.ends[0].squares[0];
+
+        game.progress.gold = 500;
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+        game.advance(0.3);
+
+        const receptionist = game.battle.actors.find((actor) => actor.map === player.map && actor.role === "receptionist");
+
+        game.approaching = receptionist.id;
+        game.battle.command("player", { type: "approach", target: receptionist.id });
+
+        for (let k = 0; k < 200 && !game.talking; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        game.start();
+
+        return Object.fromEntries(game.host.mendingOf(game.me).map((id) => [game.host.mending.get(id).name, game.host.recallOffer(game.me, id).price]));
+    });
+    const talk = page.locator(".talk");
+    const mending = () => page.evaluate(() => window.pellagos.game.host.mendingOf(window.pellagos.game.me).map((id) => window.pellagos.game.host.mending.get(id).name));
+
+    await expect(talk).toBeVisible();
+    expect(await mending()).toEqual(["Tam", "Pip"]);
+
+    // (Pip asked about, by name: the lines that follow his)
+    await talk.getByRole("button", { name: "Not Tam: another of mine with the healers." }).click();
+    await expect(talk.locator(".talk-line")).toContainText("2 of yours");
+    await talk.getByRole("button", { name: `Pip (${prices.Pip} gold)` }).click();
+    await talk.getByRole("button", { name: `Send for Pip, please. (${prices.Pip} gold)` }).click();
+    await expect(talk.locator(".talk-line")).toContainText(/runner's gone for Pip|Pip\? Mended nicely/);
+    await expect.poll(mending, { timeout: 10000 }).toEqual(["Tam"]);
+
+    // (Tam the one left: his the lines now, and no one else to ask about)
+    await talk.getByRole("button", { name: "Thank you." }).click();
+    await expect(talk.getByRole("button", { name: `Send for Tam, please. (${prices.Tam} gold)` })).toBeVisible();
+    await expect(talk.getByRole("button", { name: /^Not Tam/ })).toHaveCount(0);
+    await talk.getByRole("button", { name: "I won't be needing Tam any more." }).click();
+    await expect(talk.locator(".talk-line")).toContainText("Let Tam go?");
+    await talk.getByRole("button", { name: "Yes, let them go." }).click();
+    await expect.poll(mending, { timeout: 10000 }).toEqual([]);
+    expect(await page.evaluate(() => ({ following: [...window.pellagos.game.host.followers.values()].map(({ name }) => name).sort(), roll: window.pellagos.game.host.players.get(window.pellagos.game.me).roll.map(({ name, gone }) => `${name} ${gone}`) }))).toEqual({ following: ["Pip", "Wren"], roll: ["Tam dismissed", "Bryn fallen"] });
+});
+
+test("a hired adventurer let go goes back to their place in the guild's hall, drawn there, and comes back as they were when hired again by the one who let them go", async ({ page }) => {
+    await leadingTam(page);
+
+    const one = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "guild" && each.place === "home");
+        const player = game.battle.actor("player");
+        const [x, y] = building.door.ends[0].squares[0];
+
+        game.progress.gold = 5000;
+        game.host.mostFollowers = () => 2;
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+
+        for (let k = 0; k < 200 && !building.folk.some(({ id }) => game.host.hireOffer(game.me, id)); k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        const folk = building.folk.find(({ id }) => game.host.hireOffer(game.me, id));
+        const npc = game.battle.actor(folk.id);
+
+        Object.assign(player, { map: npc.map, square: [npc.square[0], npc.square[1] + 2], x: npc.square[0] + 0.5, y: npc.square[1] + 2.5, path: [] });
+        game.host.command(game.me, { type: "talk", with: folk.id });
+
+        const hired = game.host.command(game.me, { type: "effect", effect: { hire: true } });
+
+        game.host.command(game.me, { type: "talk", with: null });
+        game.host.followers.get(hired.follower).called = "Bran";
+        window.letGo = folk.id;
+
+        return { id: folk.id, follower: hired.follower, ok: hired.ok };
+    });
+
+    expect(one.ok).toBe(true);
+    expect(await playUntil(page, () => !window.pellagos.game.host.folk.has(window.letGo) && !window.pellagos.game.avatars.has(window.letGo), { seconds: 5 })).toBe(true);
+    await page.evaluate((follower) => window.pellagos.game.host.command(window.pellagos.game.me, { type: "order", unit: follower, order: "dismiss" }), one.follower);
+    expect(await playUntil(page, () => Boolean(window.pellagos.game.avatars.get(window.letGo)?.character), { seconds: 20 })).toBe(true);
+    expect(await page.evaluate(() => window.pellagos.game.host.hireOffer(window.pellagos.game.me, window.letGo)?.back)).toBe(true);
+    expect(await toldOf(page, /goes back to the guild you found them at/)).not.toBe(null);
 });
 
 test("a hired adventurer knocked down, up again with the player by them, wounded; home to mend after the third fall, listed so in the party menu, and sent for at the guild's desk; Game options' Mercenaries' chatter and Mercenaries can die", async ({ page }) => {
