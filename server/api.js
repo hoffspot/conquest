@@ -73,6 +73,8 @@
 //   GET, DELETE /server/worlds/:id/measures  the measured runs a world keeps (its last MEASURES.kept), and cleared
 //   GET    /server/journal, /server/health  what's happened; how it's keeping up
 //   GET    /server/history/day, /week       how it's been keeping up: what Health charts
+//   GET, POST {kind}, DELETE /server/loadtest   the server's own load test (loadtest.js): how it stands, begun, stopped
+//   GET    /server/loadtest/report          its last report (text), to download
 //   GET, POST {label}, DELETE /server/creators[/:id]                  creator keys
 //   PUT    /server/certificate {key, cert}  a certificate of the owner's own (PEM) put in; DELETE takes it out
 //   GET    /server/certificate/acme         what a free certificate needs: routes, DNS hosts, the CA's terms
@@ -133,7 +135,7 @@ export class Download {
 }
 
 // What each refusal is, as HTTP says it
-const STATUS = Object.freeze({ "no-world": 404, key: 401, banned: 403, locked: 403, offline: 409, home: 403, role: 403, full: 409, version: 409, netcode: 409, replication: 409, code: 401, wait: 429, busy: 429, maker: 403, unproved: 401, "made-each": 409, "made-most": 409 });
+const STATUS = Object.freeze({ "no-world": 404, loadtest: 409, key: 401, banned: 403, locked: 403, offline: 409, home: 403, role: 403, full: 409, version: 409, netcode: 409, replication: 409, code: 401, wait: 429, busy: 429, maker: 403, unproved: 401, "made-each": 409, "made-most": 409 });
 
 const refuse = (why, extra = {}) => new Refusal(STATUS[why] ?? 403, why, REFUSED[why] ?? extra.message ?? "That can't be done.", extra);
 
@@ -773,6 +775,34 @@ export function apiHandler(server, { mac = false } = {}) {
             admin(request);
 
             return manage.health();
+        }],
+        ["GET", /^\/server\/loadtest$/, { server: true }, async (request) => {
+            admin(request);
+
+            return manage.loadtest.status();
+        }],
+        ["POST", /^\/server\/loadtest$/, { server: true }, async (request, body) => {
+            admin(request);
+
+            try {
+                return manage.loadtest.start(String(body.kind ?? ""));
+            } catch (error) {
+                throw refuse("loadtest", { message: error.message });
+            }
+        }],
+        ["DELETE", /^\/server\/loadtest$/, { server: true }, async (request) => {
+            admin(request);
+
+            return manage.loadtest.stop();
+        }],
+        ["GET", /^\/server\/loadtest\/report$/, { server: true }, async (request) => {
+            admin(request);
+
+            if (!manage.loadtest.report) {
+                throw refuse("loadtest", { message: "No load test has been played since the server started." });
+            }
+
+            return new Download(manage.loadtest.name, Buffer.from(manage.loadtest.report), "text/plain; charset=utf-8");
         }],
         ["GET", /^\/server\/history\/(day|week)$/, { server: true }, async (request, body, [, span]) => {
             admin(request);

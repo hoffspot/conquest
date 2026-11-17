@@ -192,6 +192,9 @@ async function copyServer(into, { version }) {
     await mkdir(into, { recursive: true });
     await cp(path.join(root, "server"), path.join(into, "server"), { recursive: true });
     await cp(path.join(root, "client"), path.join(into, "client"), { recursive: true });
+    // (The load the server's own load test plays: server/loadtest.js)
+    await mkdir(path.join(into, "scripts"), { recursive: true });
+    await cp(path.join(root, "scripts/load.js"), path.join(into, "scripts/load.js"));
     await writeFile(path.join(into, "package.json"), packageJson({ version }));
 
     await cp(path.join(root, "LICENSE"), path.join(into, "LICENSE"));
