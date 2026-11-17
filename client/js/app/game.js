@@ -39,7 +39,7 @@ import { AFFLICTIONS } from "../core/afflictions.js";
 import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
 import { cheering, greetingOf, isEmote } from "../core/emotes.js";
 import { carriesTorch, playerSight, sightAt, torchesLit } from "../core/light.js";
-import { aloftShare, BOMBS, LOCK_REACH, SIGHT, sitting, STEP_MS, TALK_REACH, WAIT_BEYOND } from "../core/battle.js";
+import { aloftShare, Battle, BOMBS, LOCK_REACH, SIGHT, sitting, STEP_MS, TALK_REACH, WAIT_BEYOND } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
 import { FINDS, foodFor, FRESH, HEALING_DRAUGHTS, OBSTACLES, STRANGERS } from "../core/director.js";
 import { compass } from "../core/ways.js";
@@ -4126,10 +4126,15 @@ export class Game {
      * (unless not to `render`: for tests stepping through what happens, drawn only at the end,
      * and debugging on slow machines). Nothing done elsewhere (a worker's skins) can come back
      * while it plays on, so what would wait on it is done here then, unless it's to `wait` (for
-     * a caller that lets the page's events in between, as frames do).
+     * a caller that lets the page's events in between, as frames do). So a player's way isn't
+     * waited for either (core/battle.js Battle.farWaits): its tiles are baked off the page's
+     * thread, and none could come back.
      */
     advance(seconds, { frame = 1 / 30, render = true, wait = false } = {}) {
+        const farWaits = Battle.farWaits;
+
         this.waits = wait;
+        Battle.farWaits = farWaits && wait;
 
         try {
             for (let time = 0; time < seconds; time += frame) {
@@ -4137,6 +4142,7 @@ export class Game {
             }
         } finally {
             this.waits = true;
+            Battle.farWaits = farWaits;
         }
 
         // (Not while the screen's kept dark: #curtain)

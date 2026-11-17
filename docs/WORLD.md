@@ -1298,7 +1298,10 @@ found the same 2,012 ways over them to the last bit).
   off once the tiles are in. Only the goal's own ground is looked at as the command's heard (the
   square to stand on there). It waits `WAY_WAIT_MS` (10 s) at the most, then the way's made in
   the step as it was, so a hero always sets off. Nothing waits where tiles are baked on the
-  step's own thread (no worker: the navigation's `later` unset). The host says which ways wait
+  step's own thread (no worker: the navigation's `later` unset). Nor while the game's played on
+  by hand (`Game.advance` without `wait`, as the browser tests step it: nothing baked off the
+  page's thread can come back meanwhile, and a hero stood at Bellhaven's way in waited the 10 s
+  out). The host says which ways wait
   (`["v", time, id, [], 1]`), so every copy's hero waits alike: `NET_VERSION` 233.
   **No way is looked for across more than 256 tiles** (`MOST_ASKED`: the box between its two
   ends, 4 m round it; a line walked over the mesh, `raycast`, the same). Asked across more,
