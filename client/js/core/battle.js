@@ -7551,12 +7551,15 @@ export class Battle {
      * walk to), to the centimetre; or, replaying a host's game, the way the host found for it
      * just now (#replayed). Whoever's listening is told it (onPath: a host's netplay, recording).
      */
+    // (Whether the way just found, #route, waits for its tiles: farWaits)
+    #routeWaits = false;
+
     #route(actor, find, navigation = null) {
         let way = this.replay ? this.#replayed(actor) : null;
 
         if (!way) {
             way = find().map(([x, y]) => [cm(x), cm(y)]);
-            this.routeWaits = Boolean(navigation?.awaited) && !way.length;
+            this.#routeWaits = Boolean(navigation?.awaited) && !way.length;
 
             // (The first corner is where it is, or as near to it as the mesh comes)
             if (way.length && hypot(way[0][0] - actor.x, way[0][1] - actor.y) < 0.05) {
@@ -7565,7 +7568,7 @@ export class Battle {
         }
 
         // (A copy: the way's walked off as it's walked)
-        this.onPath?.(actor.id, way.map(([x, y]) => [x, y]), this.routeWaits);
+        this.onPath?.(actor.id, way.map(([x, y]) => [x, y]), this.#routeWaits);
 
         return way;
     }
@@ -7580,11 +7583,11 @@ export class Battle {
 
         const [time, id, way, waits] = this.replay[0] ?? [];
 
-        this.routeWaits = false;
+        this.#routeWaits = false;
 
         if (time === this.time && id === actor.id) {
             this.replay.shift();
-            this.routeWaits = Boolean(waits);
+            this.#routeWaits = Boolean(waits);
 
             return structuredClone(way);
         }
@@ -7649,7 +7652,7 @@ export class Battle {
         // (A player's, waiting for its tiles: since when, for whoever makes the ground to be told
         // of: awaited. A forecast's is its own: it waits for nothing)
         if (hero && !this.bakedOnly) {
-            if (this.routeWaits) {
+            if (this.#routeWaits) {
                 actor.awaits ??= this.time;
             } else {
                 delete actor.awaits;
