@@ -7641,7 +7641,7 @@ export class Battle {
         try {
             const navigation = hero && wait && !this.bakedOnly ? navigatorOf(this.maps[actor.map]) : null;
 
-            actor.path = this.#route(actor, () => (actor.kind === "wagon" ? wagonWay(this.maps[actor.map], [actor.x, actor.y], point, { wait }) : this.bakedOnly ? this.#madeWay(actor, point) : navigatorOf(this.maps[actor.map]).path([actor.x, actor.y], point, { wait })), navigation);
+            actor.path = this.#route(actor, () => (actor.kind === "wagon" ? wagonWay(this.maps[actor.map], [actor.x, actor.y], point, { wait }) : this.bakedOnly ? this.#madeWay(actor, point) : navigatorOf(this.maps[actor.map]).path([actor.x, actor.y], point, hero ? { wait, widenWait: false } : { wait })), navigation);
         } finally {
             outer(from);
         }

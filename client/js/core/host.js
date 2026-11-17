@@ -7077,10 +7077,19 @@ export class Host {
 
         const theirs = coming.map(() => []);
 
-        // (The ground a player's way is waiting for, with the navigation's border round it:
-        // battle.js farWaits; generated/multiplayer_scaling_plan.md 1-32)
-        for (const [x0, y0, x1, y1] of outside ? this.battle.awaited("town") : []) {
-            boxes.push([Math.floor(x0 - WAY_MARGIN), Math.floor(y0 - WAY_MARGIN), Math.ceil(x1 + WAY_MARGIN), Math.ceil(y1 + WAY_MARGIN)]);
+        // (The ground a player's way is waiting for: all of every navigation tile it runs
+        // over, with the border a tile's baked with, since a tile's baked once all its ground
+        // is made: battle.js farWaits; generated/multiplayer_scaling_plan.md 1-32)
+        const waited = outside ? this.battle.awaited("town") : [];
+
+        if (waited.length) {
+            const navigation = navigatorOf(this.world.maps.town);
+            const { tile, border } = navigation.measures;
+            const [wide, deep] = navigation.size;
+
+            for (const [x0, y0, x1, y1] of waited) {
+                boxes.push([Math.max(0, Math.floor((x0 - WAY_MARGIN) / tile) * tile - border), Math.max(0, Math.floor((y0 - WAY_MARGIN) / tile) * tile - border), Math.min(wide - 1, (Math.floor((x1 + WAY_MARGIN) / tile) + 1) * tile + border), Math.min(deep - 1, (Math.floor((y1 + WAY_MARGIN) / tile) + 1) * tile + border)]);
+            }
         }
 
         if (!places.length) {

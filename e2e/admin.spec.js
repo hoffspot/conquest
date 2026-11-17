@@ -476,6 +476,42 @@ test("Health's charts: the last day drawn from what the server's kept, the serve
     expect(errors).toEqual([]);
 });
 
+test("Health's load test: a quick look played on the server's own computer from the page, said as it goes, and its report downloaded as text", async ({ page }) => {
+    // (A world of 8 made and played 20 s in a process of its own: longer than most here)
+    test.setTimeout(240000);
+
+    const errors = [];
+
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(`http://localhost:${server.adminPort}/`);
+    await page.locator('[data-tab="health"]').click();
+
+    const panel = page.locator("#health .panel", { hasText: "Load test" });
+
+    // Its kinds, each with about how long it takes; no report yet
+    await expect(panel.getByRole("button", { name: "The baseline table (about 10 min)" })).toBeVisible();
+    await expect(panel.getByRole("button", { name: "Stage 1's gate (about 15 min)" })).toBeVisible();
+    await expect(panel.getByRole("button", { name: "Download the report" })).toHaveCount(0);
+
+    // Begun: said to be going, with a way to stop it; ended, its report to download
+    await panel.getByRole("button", { name: "A quick look (about 1 min)" }).click();
+    await expect(panel).toContainText("Going: run 1 of 1 (8 players spread, walking, 20 s, seed 2)");
+    await expect(panel.getByRole("button", { name: "Stop" })).toBeVisible();
+    await expect(panel).toContainText("The last one ended after", { timeout: 200000 });
+
+    const [download] = await Promise.all([page.waitForEvent("download"), panel.getByRole("button", { name: "Download the report" }).click()]);
+    const text = await readFile(await download.path(), "utf8");
+
+    expect(download.suggestedFilename()).toMatch(/^pellagos-load-quick-[\d-]+\.txt$/);
+    expect(text).toContain("Pellagos load test report");
+    expect(text).toContain("Test: A quick look (quick), 1 of 1 runs");
+    expect(text).toContain("=== 1 of 1: 8 players spread, walking, 20 s, seed 2");
+    // (What the load itself says of the run: its steps' mean, and nothing gone wrong)
+    expect(text).toMatch(/mean \d/);
+    expect(text).not.toContain("(It ended with");
+    expect(errors).toEqual([]);
+});
+
 test("its Updates: a newer version found, with its notes, and how this copy of the repository is updated", async ({ page }) => {
     await page.goto(`http://localhost:${server.adminPort}/`);
     await page.locator('[data-tab="settings"]').click();

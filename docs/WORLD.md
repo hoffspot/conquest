@@ -1286,6 +1286,20 @@ found the same 2,012 ways over them to the last bit).
   where nothing's drawn, so never holds a step up while the world under its way is made (seen
   replaying 20 minutes of play: up to 40 tiles for a patrol's 3 m way, 0.6–0.8 s on a desktop,
   several times that on a phone), and stands where it is, unseen, till it can go.
+  **A player's way waits too, where its tiles aren't in** (battle.js `Battle.farWaits`;
+  generated/multiplayer_scaling_plan.md 1-32): near a player they always are, baked ahead, so a
+  tap on the screen is answered in its step as ever. A way over ground no one's near (a hero sent
+  500 m across the wilds; one fallen and risen in another town, going back) had every tile
+  between its ends baked, and the ground under them made, in the step that heard the command:
+  0.7 to 2.8 s of one step on a world server with 100 players spread. Now the tiles are sent on
+  as anyone's are, the host says what ground the way runs over (`awaited`, host.js `soon`: made
+  between steps by the server's `Ahead` or the game's `#groundAhead`), the hero stands, their
+  order kept and none of its legs spent, the way looked for again every half second, and sets
+  off once the tiles are in. Only the goal's own ground is looked at as the command's heard (the
+  square to stand on there). It waits `WAY_WAIT_MS` (10 s) at the most, then the way's made in
+  the step as it was, so a hero always sets off. Nothing waits where tiles are baked on the
+  step's own thread (no worker: the navigation's `later` unset). The host says which ways wait
+  (`["v", time, id, [], 1]`), so every copy's hero waits alike: `NET_VERSION` 233.
   **No way is looked for across more than 256 tiles** (`MOST_ASKED`: the box between its two
   ends, 4 m round it; a line walked over the mesh, `raycast`, the same). Asked across more,
   there's no way, and nothing's baked, sent to be baked or made for it, whoever asks: a hero

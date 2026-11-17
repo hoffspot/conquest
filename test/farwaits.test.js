@@ -60,7 +60,10 @@ describe("a player's way over ground not made yet waits for it (core/battle.js B
         // (The ground from the hero to where they're going, for whoever makes it ahead: soon)
         const { boxes } = host.soon();
 
-        assert.ok(boxes.some(([x0, y0, x1, y1]) => x0 <= me.x && x1 >= to[0] && y0 <= me.y && y1 >= me.y), JSON.stringify(boxes.slice(0, 3)));
+        // (All of every tile it runs over, and the border a tile's baked with)
+        const { tile, border } = navigation.measures;
+
+        assert.ok(boxes.some(([x0, y0, x1, y1]) => x0 <= Math.floor(me.x / tile) * tile - border && x1 >= (Math.floor(to[0] / tile) + 1) * tile + border && y0 <= Math.floor(me.y / tile) * tile - border && y1 >= (Math.floor(me.y / tile) + 1) * tile + border), JSON.stringify(boxes.slice(-2)));
         // (Told to those who've joined as a way that waits)
         assert.deepEqual(told.filter(([kind, , id]) => kind === "v" && id === HOST_PLAYER).at(-1).slice(3), [[], 1]);
 
@@ -74,6 +77,9 @@ describe("a player's way over ground not made yet waits for it (core/battle.js B
     it("sets off once the tiles are in, made between steps", () => {
         const { host, me, navigation, wanted, to } = world();
         const from = [me.x, me.y];
+
+        // (As a world server has it: the tiles further round a way that falls short sent on too)
+        navigation.widenLater = true;
 
         host.command(HOST_PLAYER, { type: "move", to });
         steps(host, 200);

@@ -601,6 +601,21 @@ each (every pass, and what each counter went up by in it) is in what `GET /api/v
 gives the page. `/metrics` counts them by the pass that took most of each, below. The panel isn't
 shown while no world has had one.
 
+**Load test** (Health's panel; `server/loadtest.js`; generated/multiplayer_scaling_plan.md 0-11
+and 1-14) plays the world authority's load (`scripts/load.js`, which the Mac app carries) on the
+server's own computer, each run in a process of its own, one after another: *A quick look* (8
+players for 20 s, to see that it works), *The baseline table* (8, 25, 50 and 100 players spread
+and walking, 120 s each: about 10 minutes), *Stage 1's gate* (its six runs and its verdict: about
+15 minutes) or both. One test at a time; *Stop* ends the run going and keeps what was measured.
+*Download the report* gives one text file: what the computer is (its processor, cores, memory,
+Node, its load before and after, how many worlds and players were going here meanwhile) and
+everything each run said (a step's mean, 99th percentile and worst by the clock and in processor
+time, each pass by name, the late steps with their parts, what each player's sent, a snapshot's
+size and time, memory; the gate's table and whether it's met). It takes the processors while it
+runs: worlds going are slower for it, and its numbers are truest with no one playing. The last
+report is kept till the server stops. `GET`, `POST {kind}` and `DELETE /api/v1/server/loadtest`,
+and `GET /api/v1/server/loadtest/report`, the admin's alone.
+
 Taking the whole world for a player (one coming in, or one whose copy went astray or fell too far
 behind and asks for it again) is the dearest thing a world's thread does for one player: 4 ms
 with eight in it, and more with more. So a world on a server takes it once for however many want

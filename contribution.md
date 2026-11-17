@@ -228,7 +228,9 @@ no time in it is a gate: a hosted runner's clock differs by half from one machin
 fails only by what's the same on any machine (a run that can't be made, players who didn't stay in,
 a report not as its schema says) or a mean step over 50 ms, which no working world reaches
 (`--ceiling 50`); the plan's gates are timed by hand on the owner's Mac (`npm run load -- --gate`,
-below: no workflow and no script of `package.json` runs it, which `test/load.test.js` checks). A scheduled workflow runs
+below: no workflow and no script of `package.json` runs it, which `test/load.test.js` checks; the
+server's admin page can play it, and the baseline table, on the computer it runs on: Health's
+*Load test*, `server/loadtest.js`, whose report is a text file to download: `test/loadtest.test.js`). A scheduled workflow runs
 from `main` only, and GitHub turns one off after 60 days in which the repository has had no
 commit: *Actions → Scale → Enable workflow* turns it on again.
 
