@@ -369,6 +369,12 @@ export class Navigation {
          * the world asks for itself and goes by at once, which must come out the same in all.
          */
         this.widenLater = false;
+
+        /**
+         * Whether the last way asked for (path) is waiting for tiles sent on to be made (`wait`,
+         * later): none yet, but there may be once they're in (core/battle.js Battle.farWaits).
+         */
+        this.awaited = false;
     }
 
     /**
@@ -696,6 +702,9 @@ export class Navigation {
      */
     path(from, to, { wait = false, now = false } = {}) {
         const [baked, start] = [this.baked, performance.now()];
+
+        this.awaited = false;
+
         const way = this.#path(from, to, wait, now);
         const ms = performance.now() - start;
 
@@ -724,6 +733,8 @@ export class Navigation {
 
         // (Tiles still to come: none till they're in)
         if (sent) {
+            this.awaited = true;
+
             return [];
         }
 
