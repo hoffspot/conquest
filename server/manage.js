@@ -41,6 +41,7 @@ import { reportOf } from "./storage/crashes.js";
 import { runOf } from "./storage/measures.js";
 import { ensureFolder, exists, FILE_MODE, readGzip, readJSON, SERVER_JOURNAL, stampOf, writeGzip } from "./storage/files.js";
 import { LAYOUT_VERSION } from "./storage/folder.js";
+import { LoadTest } from "./loadtest.js";
 import { schemaReason } from "./storage/settings.js";
 import { NewerDataError, SERVER_VERSION } from "./storage/versions.js";
 import { BACKUP_NAME, CHARACTER_RULES, FIRST_HEROES, HERO_MODES, HEROES, isOffline, JOURNAL, netcodeOf, NOW, RULE_MODES, ruleOf, settingsOf, STATE, StoredWorld, VISITORS, WORLD_FILE, WORLD_SETTINGS } from "./storage/worlds.js";
@@ -127,6 +128,9 @@ export class Management {
 
         /** Archives read, to be restored or brought in from: id → { archive, at }. */
         this.archives = new Map();
+
+        /** The server's own load test (loadtest.js): played from the admin page's Health. */
+        this.loadtest = new LoadTest({ busy: () => ({ worlds: this.server.registry.going.length, players: this.server.registry.going.reduce((sum, entry) => sum + (entry.thread.state?.players ?? []).filter((one) => one.id).length, 0) }) });
     }
 
     #world(id) {

@@ -926,7 +926,7 @@ describe("crafting on a joined player's copy of the world (NET_VERSION 231)", ()
             }
         };
 
-        assert.equal(NET_VERSION, 232, "230 junk's, 231 crafting's (docs/CRAFTING.md), 232 mercenaries never lost (docs/WAR.md)");
+        assert.equal(NET_VERSION, 233, "230 junk's, 231 crafting's (docs/CRAFTING.md), 232 mercenaries never lost (docs/WAR.md), 233 a player's far way waiting (docs/WORLD.md)");
         joining.onWelcome = ({ seed, race, snapshot }) => joining.attach(Host.restore(buildWorld({ seed, race }), snapshot));
         joining.hello({ hero: { ...HERO, name: "Bryn", race: "human" }, progress: { gold: 200, pack: [stack("ironIngot", 2), stack("tannedLeather"), stack("demonHorn"), stack("sword", 2), junk("axe", 1, "fine"), junk("potion")] } });
         deliver();

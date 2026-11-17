@@ -2337,7 +2337,37 @@ async function renderHealth() {
                 ["Up for", duration(health.server.uptime)],
             ]),
         ),
+        loadTest(await call("GET", "/server/loadtest").catch(() => null)),
         charts(),
+    );
+}
+
+// The server's own load test (server/loadtest.js): begun, stopped, and its report downloaded
+function loadTest(test) {
+    if (!test) {
+        return "";
+    }
+
+    const status = h("p", { class: "muted small" });
+    const { going, report } = test;
+    const last = test.test;
+    const begin = (kind) => doing(() => call("POST", "/server/loadtest", { kind }).then(() => show("health")), { status });
+
+    return panel(
+        "Load test",
+        h("p", { class: "muted small" }, "Plays worlds of 8 to 100 pretend players on this computer and measures what each step costs. It takes the processors while it runs: worlds going here are slower meanwhile, and its numbers are truest with no one playing."),
+        going
+            ? h("p", {}, `Going: run ${last.run} of ${last.runs} (${last.title}), ${duration(Date.now() - last.started)} so far.`)
+            : last
+              ? h("p", { class: last.error ? "bad" : "" }, last.error ? `The last one went wrong: ${last.error}` : `The last one ${last.stopped ? "was stopped" : "ended"} after ${duration(last.ended - last.started)}.`)
+              : "",
+        h(
+            "div",
+            { class: "row" },
+            ...(going ? [button("Stop", () => doing(() => call("DELETE", "/server/loadtest").then(() => show("health")), { status }))] : test.kinds.map(({ id, name, minutes }) => button(`${name} (about ${minutes} min)`, () => begin(id)))),
+            ...(report ? [button("Download the report", () => doing(() => download("/server/loadtest/report"), { status, done: "The report's in your downloads: paste it to whoever reads it." }), "primary")] : []),
+        ),
+        status,
     );
 }
 

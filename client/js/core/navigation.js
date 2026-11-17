@@ -369,6 +369,12 @@ export class Navigation {
          * the world asks for itself and goes by at once, which must come out the same in all.
          */
         this.widenLater = false;
+
+        /**
+         * Whether the last way asked for (path) is waiting for tiles sent on to be made (`wait`,
+         * later): none yet, but there may be once they're in (core/battle.js Battle.farWaits).
+         */
+        this.awaited = false;
     }
 
     /**
@@ -692,11 +698,16 @@ export class Navigation {
      * Asked for `now`, the tiles further round are made here whatever widenLater says: for a way
      * that isn't walked but decides something there and then in every copy of the world, each
      * asking its own mesh (core/host.js #spots), where a world server's and a browser's must
-     * find the same.
+     * find the same. `widenWait` (as `wait`, unless said) is whether the tiles further round wait
+     * as those between do: a player's don't (battle.js farWaits), their ground being no one's to
+     * make ahead.
      */
-    path(from, to, { wait = false, now = false } = {}) {
+    path(from, to, { wait = false, now = false, widenWait = wait } = {}) {
         const [baked, start] = [this.baked, performance.now()];
-        const way = this.#path(from, to, wait, now);
+
+        this.awaited = false;
+
+        const way = this.#path(from, to, wait, now, widenWait);
         const ms = performance.now() - start;
 
         // (Tiles baked here and now for it, slowly: told to the debug log, as work done a step at
@@ -709,7 +720,7 @@ export class Navigation {
     }
 
     // (path's way, found)
-    #path(from, to, wait, now) {
+    #path(from, to, wait, now, widenWait) {
         const [x0, y0, x1, y1] = [Math.min(from[0], to[0]), Math.min(from[1], to[1]), Math.max(from[0], to[0]), Math.max(from[1], to[1])];
         const [tx0, ty0] = this.tileOf(x0, y0);
         const [tx1, ty1] = this.tileOf(x1, y1);
@@ -724,6 +735,8 @@ export class Navigation {
 
         // (Tiles still to come: none till they're in)
         if (sent) {
+            this.awaited = true;
+
             return [];
         }
 
@@ -747,7 +760,7 @@ export class Navigation {
 
             // (Tiles round it still to come: the way as it is, for now, looked for further again
             // once they're in)
-            if (this.#cover(...box, 0, wait || (this.widenLater && !now))) {
+            if (this.#cover(...box, 0, widenWait || (this.widenLater && !now))) {
                 break;
             }
 

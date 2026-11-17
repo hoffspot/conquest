@@ -79,7 +79,7 @@ import { ADJECTIVES } from "./war/peoples.js";
 import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, STAGES, TURN_MS, War, WORKED } from "./war/war.js";
 import { countOut, crierOf, doorsOf, errandsOf, SHELTER, shelterOf, stablemasterOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
 import { distanceBetween, KNIFE, longestReach, WEAPONS } from "./weapons.js";
-import { dropTiles, navigatorOf } from "./navigation.js";
+import { dropTiles, MARGIN as WAY_MARGIN, navigatorOf } from "./navigation.js";
 import { Culling, Near } from "./near.js";
 import { FORTS, footprintOf, fortSize } from "./war/forts.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
@@ -1415,6 +1415,7 @@ export class Host {
          * others records it, for those who've joined to do again: core/netplay.js), or null:
          * ["a", ms] moved on, ["c", playerId, command], ["j", options] a player come, ["l", id]
          * gone, ["p"] its own people put in; and, just after each of those, ["v", time, id, way]
+         * (["v", time, id, [], 1] for a player's way that waits for its tiles: battle.js farWaits)
          * for each way the battle found doing it (battle.js #route: those who've joined take the
          * host's ways rather than finding their own).
          */
@@ -3633,7 +3634,7 @@ export class Host {
 
     // The battle telling the recorder each way it finds, and taking the host's, replaying
     #wire() {
-        this.battle.onPath = (id, way) => this.recorder?.(["v", this.battle.time, id, way]);
+        this.battle.onPath = (id, way, waits) => this.recorder?.(waits ? ["v", this.battle.time, id, way, 1] : ["v", this.battle.time, id, way]);
         this.battle.replay = this.replay;
     }
 
@@ -7075,6 +7076,21 @@ export class Host {
         const dungeons = [];
 
         const theirs = coming.map(() => []);
+
+        // (The ground a player's way is waiting for: all of every navigation tile it runs
+        // over, with the border a tile's baked with, since a tile's baked once all its ground
+        // is made: battle.js farWaits; generated/multiplayer_scaling_plan.md 1-32)
+        const waited = outside ? this.battle.awaited("town") : [];
+
+        if (waited.length) {
+            const navigation = navigatorOf(this.world.maps.town);
+            const { tile, border } = navigation.measures;
+            const [wide, deep] = navigation.size;
+
+            for (const [x0, y0, x1, y1] of waited) {
+                boxes.push([Math.max(0, Math.floor((x0 - WAY_MARGIN) / tile) * tile - border), Math.max(0, Math.floor((y0 - WAY_MARGIN) / tile) * tile - border), Math.min(wide - 1, (Math.floor((x1 + WAY_MARGIN) / tile) + 1) * tile + border), Math.min(deep - 1, (Math.floor((y1 + WAY_MARGIN) / tile) + 1) * tile + border)]);
+            }
+        }
 
         if (!places.length) {
             return { around, boxes, dungeons, theirs, foreseen: [] };

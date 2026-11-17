@@ -554,6 +554,12 @@ const ROUND_REST = [1500, 3500];
 const REPATH_MS = 500;
 
 /**
+ * How long (ms) a player's way waits for ground and navigation tiles not made yet (Battle.farWaits)
+ * before it's made in the step that asks, as it always was: so a hero always sets off.
+ */
+export const WAY_WAIT_MS = 10000;
+
+/**
  * How near a player someone and where they're going must both be for their way to be found at
  * once, any navigation tiles it wants made there and then (metres): a fight beside a player
  * never waits. Further off, the way waits for its tiles (#pathTo). So near, they're the tiles
@@ -903,6 +909,17 @@ export class Battle {
      * `map` and `neutral`, so nothing that writes either has anything to remember.
      */
     static counting = true;
+
+    /**
+     * Whether a player's way over navigation tiles not made yet waits for them (and the ground
+     * under them: core/host.js soon) to be made between steps, the hero setting off once they're
+     * in, as anyone else's way does; or is made whole in the step that asks, as it always was. A
+     * way 500 m over ground no one was near took 0.7 to 2.8 s of one step on a world server
+     * (generated/multiplayer_scaling_plan.md 1-32). It waits WAY_WAIT_MS at the most. Only where
+     * the tiles are made off the step's thread (navigation.js later): elsewhere nothing waits.
+     * The host says which ways wait (["v", time, id, way, 1]), so every copy's hero waits alike.
+     */
+    static farWaits = true;
 
     /**
      * Whether a building's folk and the soldiers quartered in a barracks stand as they are while
@@ -4190,6 +4207,18 @@ export class Battle {
         if (order?.type === "move") {
             if (actor.path.length) {
                 return;
+            }
+
+            // (Its way waiting for ground and tiles to be made: looked for again every REPATH_MS,
+            // none of its legs spent: farWaits)
+            if (actor.awaits !== undefined) {
+                if (this.time - actor.lastPathAt >= REPATH_MS) {
+                    this.#pathTo(actor, order.to);
+                }
+
+                if (actor.path.length || actor.awaits !== undefined) {
+                    return;
+                }
             }
 
             // (A way found only part of the way, as far as could be looked at once: on from where
@@ -7522,11 +7551,15 @@ export class Battle {
      * walk to), to the centimetre; or, replaying a host's game, the way the host found for it
      * just now (#replayed). Whoever's listening is told it (onPath: a host's netplay, recording).
      */
-    #route(actor, find) {
+    // (Whether the way just found, #route, waits for its tiles: farWaits)
+    #routeWaits = false;
+
+    #route(actor, find, navigation = null) {
         let way = this.replay ? this.#replayed(actor) : null;
 
         if (!way) {
             way = find().map(([x, y]) => [cm(x), cm(y)]);
+            this.#routeWaits = Boolean(navigation?.awaited) && !way.length;
 
             // (The first corner is where it is, or as near to it as the mesh comes)
             if (way.length && hypot(way[0][0] - actor.x, way[0][1] - actor.y) < 0.05) {
@@ -7535,7 +7568,7 @@ export class Battle {
         }
 
         // (A copy: the way's walked off as it's walked)
-        this.onPath?.(actor.id, way.map(([x, y]) => [x, y]));
+        this.onPath?.(actor.id, way.map(([x, y]) => [x, y]), this.#routeWaits);
 
         return way;
     }
@@ -7548,10 +7581,13 @@ export class Battle {
             this.replay.shift();
         }
 
-        const [time, id, way] = this.replay[0] ?? [];
+        const [time, id, way, waits] = this.replay[0] ?? [];
+
+        this.#routeWaits = false;
 
         if (time === this.time && id === actor.id) {
             this.replay.shift();
+            this.#routeWaits = Boolean(waits);
 
             return structuredClone(way);
         }
@@ -7567,6 +7603,25 @@ export class Battle {
         return way.length ? way : [point];
     }
 
+    /**
+     * The ground the players' ways waiting for their tiles run over (farWaits), on a map: [[x0,
+     * y0, x1, y1]...] (metres), each from where its hero stands to where it's going, for whoever
+     * makes ground ahead of need (core/host.js soon). Nothing changes for the asking.
+     */
+    awaited(map) {
+        const boxes = [];
+
+        for (const actor of this.actors) {
+            if (actor.awaits !== undefined && actor.kind === "player" && !actor.dead && actor.map === map && actor.pathGoal) {
+                const [gx, gy] = actor.pathGoal;
+
+                boxes.push([Math.min(actor.x, gx), Math.min(actor.y, gy), Math.max(actor.x, gx + 1), Math.max(actor.y, gy + 1)]);
+            }
+        }
+
+        return boxes;
+    }
+
     // Find the way to a square (to `point` on it: its middle, unless said), over the map's
     // navigation mesh; a wagon's through a town's gate along its middle (wagonWay). Anyone but a
     // player, or someone with a player near them and where they're going (WAIT_BEYOND), waits for
@@ -7578,16 +7633,30 @@ export class Battle {
             actor.progress = null;
         }
 
-        const wait = actor.kind !== "player" && !(this.#playerWithin(actor.map, actor.x, actor.y, WAIT_BEYOND) && this.#playerWithin(actor.map, point[0], point[1], WAIT_BEYOND));
+        // (A player's waits too, for tiles not made yet, till it's waited WAY_WAIT_MS: farWaits)
+        const hero = actor.kind === "player";
+        const wait = hero ? Battle.farWaits && this.time - (actor.awaits ?? this.time) < WAY_WAIT_MS : !(this.#playerWithin(actor.map, actor.x, actor.y, WAIT_BEYOND) && this.#playerWithin(actor.map, point[0], point[1], WAIT_BEYOND));
         const from = inner("battle.paths");
 
         count("battle.paths");
         count(PATHS[actor.ai] ?? PATHS.other);
 
         try {
-            actor.path = this.#route(actor, () => (actor.kind === "wagon" ? wagonWay(this.maps[actor.map], [actor.x, actor.y], point, { wait }) : this.bakedOnly ? this.#madeWay(actor, point) : navigatorOf(this.maps[actor.map]).path([actor.x, actor.y], point, { wait })));
+            const navigation = hero && wait && !this.bakedOnly ? navigatorOf(this.maps[actor.map]) : null;
+
+            actor.path = this.#route(actor, () => (actor.kind === "wagon" ? wagonWay(this.maps[actor.map], [actor.x, actor.y], point, { wait }) : this.bakedOnly ? this.#madeWay(actor, point) : navigatorOf(this.maps[actor.map]).path([actor.x, actor.y], point, hero ? { wait, widenWait: false } : { wait })), navigation);
         } finally {
             outer(from);
+        }
+
+        // (A player's, waiting for its tiles: since when, for whoever makes the ground to be told
+        // of: awaited. A forecast's is its own: it waits for nothing)
+        if (hero && !this.bakedOnly) {
+            if (this.#routeWaits) {
+                actor.awaits ??= this.time;
+            } else {
+                delete actor.awaits;
+            }
         }
 
         actor.pathGoal = [...goal];
