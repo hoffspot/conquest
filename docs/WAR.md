@@ -3663,6 +3663,20 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   through `asRemote` (app/session.js), and `test/remote.test.js` fails for a use of `remote`
   that isn't on the list. It's there so another way of being linked to a world can stand in the
   same place (generated/multiplayer_scaling_plan.md 3-2).
+- **The read seam.** What a game reads of the world's rules that isn't in its battle goes
+  through its world view (`game.worldview`, `core/worldview.js`; the plan's 3-3 to 3-8), so a
+  game with no `Host` of its own can one day be told the same by its server. Its first supplier,
+  `LocalView`, wraps the game's own `Host` and is there for good. Its first group is shops, talk,
+  hires and trades: a talk's facts (`talk`: who they are to the director, their hire, their
+  shop's special, a messenger's words; and, read whenever asked, those mending, a stable's offer,
+  who's hired) and a shop's (`shop`: its stock, its prices' factor, a thread's wares) are asked
+  for as the talk or the shop opens and may come later, a promise; the open trade (`trade`) is
+  read at once. `after` takes an answer either way: a world of the game's own answers at once,
+  so a talk opens in the tap that asked, as it always did. A talk or shop asked for and left
+  before its answer isn't opened (`talkAsked`, `shopAsked`). `DeferredView` answers a moment
+  later, as a server would: `test/worldview.test.js` holds both suppliers to the same answers
+  and fails for a read of the group on the `Host` from `app/game.js`, and a browser test opens
+  a talk and a shop through it.
 - **One authority.** The host's game is the world's one authority. Everything done to its world
   it records as it's done (`host.recorder`), and sends every tenth of a second: each step it's
   moved on, each command anyone gives, each player come or gone.

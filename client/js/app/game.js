@@ -57,6 +57,7 @@ import { CHUNK } from "../core/worldplan/plan.js";
 import { atPortal, beforePortal, branchesFrom, branchOf, fareOff, portalOn } from "../core/portals.js";
 import { atStrongroom, beforeStrongroom, strongroomOn } from "../core/strongroom.js";
 import { atWarTable, beforeWarTable, mayRead, warTableOn } from "../core/wartable.js";
+import { after, LocalView } from "../core/worldview.js";
 import { atWriting, beforeWriting, keepRead, WRITINGS, writingOn } from "../core/writings.js";
 import { ambienceOf, doorOf, TOLLS, tolled } from "../audio/ambience.js";
 import { footing } from "../audio/footing.js";
@@ -1420,6 +1421,8 @@ export class Game {
         // come in before the world's own people), and the battle as the host has it
         this.me = me;
         this.host = host ?? new Host(world, { populate: false, war, legends });
+        /** The world's rules as the game reads them (core/worldview.js): its own Host's. */
+        this.worldview = new LocalView(this.host);
         this.onWar = onWar;
 
         // Playing its own world: what moves it on, step by step as the frames give the time, and
@@ -9930,6 +9933,26 @@ export class Game {
 
     // Start talking to one of the folk: they stop and face the player, and the talk shows
     #openTalk(npc) {
+        if (!npc) {
+            return;
+        }
+
+        // (What the talk needs of the world, asked for: at once from a world of the game's own,
+        // a moment later from a server's, core/worldview.js; not begun if another's asked for, or
+        // they've gone, meanwhile)
+        const folk = this.world.interiors?.of(npc.map)?.folk ?? this.world.folk ?? [];
+        const one = folk.find(({ id }) => id === npc.id);
+        const asked = (this.talkAsked = (this.talkAsked ?? 0) + 1);
+
+        after(this.worldview.talk(this.me, npc.id, { hirable: Boolean(one && (one.role === "adventurer" || one.talk === "adventurer")) }), (told) => {
+            if (this.talkAsked === asked && this.battle.actor(npc.id) === npc) {
+                this.#talkWith(npc, told);
+            }
+        });
+    }
+
+    // The talk begun, with what the world says of it (`told`: worldview.js talk)
+    #talkWith(npc, told) {
         // Where they are, and the folk there they might talk of (by their part: the barkeep, the
         // madam...), and what's upstairs
         const building = npc ? this.world.interiors?.of(npc.map) : null;
@@ -9937,7 +9960,7 @@ export class Game {
 
         // (Their talk: their role's, or another's: an adventurer drinking at a guild's table; a
         // stranger met out in the wilds, theirs: core/director.js STRANGERS)
-        const stranger = npc ? this.host.strangerOf(npc.id) : null;
+        const stranger = told.stranger;
         const own = npc && !npc.dead ? treeFor({ ...npc, talk: npc.kind === "follower" ? "follower" : stranger ? (stranger.folk?.talk ?? "bandits") : folk.find(({ id }) => id === npc.id)?.talk }) : null;
 
         if (!own) {
@@ -9947,7 +9970,7 @@ export class Game {
         // (A thread's word to ask them, its talk step theirs; or a rumour of theirs that begins one:
         // core/rare.js threadTalk)
         const asker = folk.find(({ id }) => id === npc.id) ?? npc;
-        const asked = building && npc.role ? this.#threadAsked(asker, this.#townOf(building), folk.filter((each) => each.map === npc.map && !this.host.hired?.has(each.id)), building.kind === "guild") : null;
+        const asked = building && npc.role ? this.#threadAsked(asker, this.#townOf(building), folk.filter((each) => each.map === npc.map && !told.hired(each.id)), building.kind === "guild") : null;
         const tree = asked ? threadTalk(own, asked, (text) => text.replace(/\{way\}/g, asked.way ?? "near").replace(/\{place\}/g, asked.place ?? "the village")) : own;
 
         this.#tradeOver(npc);
@@ -9976,19 +9999,19 @@ export class Game {
 
         const heardAt = building ?? (out ? { place: out.place === this.world.start?.id ? "home" : out.place } : null);
 
-        Object.assign(names, soldier?.names, official?.words, this.#rumours(heardAt), this.#cultWords(heardAt, npc), this.#guildWords(), this.#messengerWords(npc));
+        Object.assign(names, soldier?.names, official?.words, this.#rumours(heardAt), this.#cultWords(heardAt, npc), this.#guildWords(), this.#messengerWords(told.messenger));
 
         // (An adventurer who could be hired, how strong and for how much (core/host.js hireOffer);
         // a follower waiting or following, and how they're holding up; one of the player's mending
         // at the guild, to send for at a guild's desk: recallOffer)
         const one = folk.find(({ id }) => id === npc.id);
-        const hire = one && (one.role === "adventurer" || one.talk === "adventurer") ? this.host.hireOffer(this.me, npc.id) : null;
+        const hire = told.hire;
         const following = npc.kind === "follower" ? this.host.followers.get(npc.id) : null;
         const company = [...this.host.followers.values()].filter(({ leader }) => leader === this.me).length + this.host.mendingOf(this.me).length;
         // (Those mending as they are now, not as they were as the talk began; the one asked about,
         // chosen among them, or the first: sent for or let go by their id, never another in their
         // place, core/host.js recallOffer)
-        const menders = () => (one?.role === "receptionist" ? this.host.mendingOf(this.me).map((id) => this.host.recallOffer(this.me, id)).filter(Boolean) : []);
+        const menders = () => (one?.role === "receptionist" ? told.menders() : []);
         let mender = null;
         const recall = () => menders().find(({ id }) => id === mender) ?? menders()[0] ?? null;
         const mended = () => {
@@ -10003,7 +10026,7 @@ export class Game {
         };
         // (A stablemaster's: what a horse costs, and bringing back the first of theirs fallen, as
         // it stands now: core/host.js stableOffer)
-        const stable = npc.role === "stablemaster" ? () => this.host.stableOffer(this.me) : null;
+        const stable = npc.role === "stablemaster" ? () => told.stable() : null;
 
         if (hire) {
             names.hirePrice = String(hire.price);
@@ -10033,13 +10056,13 @@ export class Game {
 
         // (A shop with a daily stock: its special today, by name, and what it's asked for, brought to
         // the player's might's level as the shop shows and sells it: core/host.js #buy)
-        const stock = this.host.stockOf(npc.id);
+        const stock = told.stock;
 
         if (stock?.special) {
             const special = atLevel(stock.special, levelOf(this.host.mightFor(this.me)));
 
             names.special = itemLabel(special).toLowerCase();
-            names.specialPrice = String(shopPrice(special, stock.shop, { haggle: this.progress.bonuses().haggle, special: true, times: this.host.shopTimes(npc.id) }));
+            names.specialPrice = String(shopPrice(special, stock.shop, { haggle: this.progress.bonuses().haggle, special: true, times: told.times }));
         }
 
         // (They stop and face the player, if they can talk now: the host says)
@@ -11023,6 +11046,9 @@ export class Game {
 
     // Stop talking: they go back to what they were doing
     #endTalk() {
+        // (A talk asked for and not yet begun, core/worldview.js: not to begin now)
+        this.talkAsked = (this.talkAsked ?? 0) + 1;
+
         if (!this.talking) {
             return;
         }
@@ -13708,8 +13734,8 @@ export class Game {
     // higher it is; or the briefing, line by line. As the world has them (core/host.js
     // messengerSaysOf), not as their hailing the player was heard: whole after the game's loaded
     // again, or from one who stopped to wait before they'd found the player
-    #messengerWords(npc) {
-        const mission = this.host.messengerSaysOf(npc.id)?.mission;
+    #messengerWords(says) {
+        const mission = says?.mission;
 
         if (!mission) {
             return {};
@@ -14229,7 +14255,7 @@ export class Game {
 
     // The trade the player's in with another player (host.js trades: both said yes), if any
     #tradeNow() {
-        return [...(this.host.trades?.values() ?? [])].find((trade) => trade.open && (trade.from === this.me || trade.to === this.me)) ?? null;
+        return this.worldview.trade(this.me);
     }
 
     // Ask another player to trade (or say yes to their asking), walking up to them first if
@@ -14344,9 +14370,21 @@ export class Game {
     #openShop({ shop, keeper, name, tab = "buy" }) {
         this.closeJournal();
         this.strongroom = null;
-        this.shopping = { shop, keeper, name, people: this.host.folk.get(keeper)?.people ?? "human" };
-        this.pack.openOn(tab);
-        this.#showPack();
+        // (Its stock asked for, core/worldview.js: at once from a world of the game's own, a
+        // moment later from a server's; the pack's opened on it once it's there, unless the
+        // shop's been left or another opened meanwhile)
+        const asked = (this.shopAsked = (this.shopAsked ?? 0) + 1);
+
+        this.shopping = null;
+        after(this.worldview.shop(keeper), (stocked) => {
+            if (this.shopAsked !== asked) {
+                return;
+            }
+
+            this.shopping = { shop, keeper, name, people: this.host.folk.get(keeper)?.people ?? "human", stocked };
+            this.pack.openOn(tab);
+            this.#showPack();
+        });
     }
 
     /**
@@ -14414,6 +14452,8 @@ export class Game {
     #stopShopping() {
         const keeper = this.shopping?.keeper;
 
+        // (A shop asked for and not yet opened, core/worldview.js: not to open now)
+        this.shopAsked = (this.shopAsked ?? 0) + 1;
         this.shopping = null;
 
         if (keeper && this.talking?.id !== keeper) {
@@ -14475,9 +14515,9 @@ export class Game {
         // player's mighty; a shop with a daily stock's, what it has in today, how many of each left,
         // and its daily special, as it is; what it won't buy, said; what one is, worked out as it's
         // looked at: a piece of gear's with what's rolled on it as it's bought)
-        const stock = this.shopping && this.host.stockOf(this.shopping.keeper);
+        const stock = this.shopping && this.shopping.stocked.stock();
         // (Its prices as the world's changes have them: a thread's festival, core/rare.js)
-        const times = this.shopping ? this.host.shopTimes(this.shopping.keeper) : 1;
+        const times = this.shopping ? this.shopping.stocked.times() : 1;
         const ask = (item, special = false) => shopPrice(item, this.shopping.shop, { haggle, special, times });
         // (Made for their might as they're bought: core/host.js #buy)
         const level = levelOf(might);
@@ -14487,7 +14527,7 @@ export class Game {
         const sale = this.shopping && junkSale(progress.pack, this.shopping.shop, { haggle });
         const shop = this.shopping && {
             name: this.shopping.name,
-            wares: (stock ? stock.wares : [...wares(this.shopping.shop, this.shopping.people, { tier: mightTier(might) }), ...this.host.threadWaresOf(this.shopping.keeper)])
+            wares: (stock ? stock.wares : [...wares(this.shopping.shop, this.shopping.people, { tier: mightTier(might) }), ...this.shopping.stocked.threadWares()])
                 .sort(shopOrder)
                 .map((ware) => {
                     const item = wareAt(ware, level);

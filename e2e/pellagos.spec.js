@@ -6923,6 +6923,53 @@ test("the guild's portal: a character kept from before there were portals has th
     await expect(page.locator("#portalgo")).toBeDisabled();
 });
 
+test("a talk and a shop open as well when the world's answers come a moment later, as a server's would: the world view's second supplier (core/worldview.js DeferredView)", async ({ page }) => {
+    await playing(page, "/?play&seed=2");
+
+    const opened = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { DeferredView } = await import("/js/core/worldview.js");
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "guild");
+        const player = game.battle.actor("player");
+        const turn = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.worldview = new DeferredView(game.worldview);
+
+        // Into the guild, and up to the receptionist's counter to talk
+        const [x, y] = building.door.ends[0].squares[0];
+
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+        game.advance(0.3);
+
+        const receptionist = game.battle.actors.find((actor) => actor.map === player.map && actor.role === "receptionist");
+
+        game.approaching = receptionist.id;
+        game.battle.command("player", { type: "approach", target: receptionist.id });
+
+        for (let k = 0; k < 300 && !game.talking; k++) {
+            game.advance(0.1, { render: false });
+            await turn();
+        }
+
+        const talking = game.talking?.id === receptionist.id;
+        const choices = game.talking.conversation.choices.map(({ text }) => text);
+
+        // Her wares asked for: not there in the choosing, there a moment later, as they stand
+        game.talk.onChoose(choices.indexOf("I'd like to buy or sell something."));
+
+        const atOnce = Boolean(game.shopping);
+
+        await turn();
+
+        return { talking, atOnce, shopping: game.shopping?.keeper === receptionist.id, times: game.shopping?.stocked.times(), wares: Array.isArray(game.shopping?.stocked.threadWares()) };
+    });
+
+    expect(opened).toEqual({ talking: true, atOnce: false, shopping: true, times: 1, wares: true });
+});
+
 test("trading with the guild's receptionist, she stays at her counter till it's done, though her rounds would take her off to the files and out of reach; done, or the player off to talk to someone else, she's back about her business", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 
