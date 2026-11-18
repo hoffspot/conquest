@@ -4,12 +4,21 @@
 // the tests: a lockstep game given its battle through these must do all it does without anyone
 // it can't see, so every handler that took an actor for granted is found before a server stops
 // sending them. Nothing in the world changes: the battle behind is whole, and steps as ever.
+import { hypot } from "./exact.js";
 
 /**
  * How far off the hero others are still known (metres, as the crow flies, on the hero's own map):
  * past what's drawn (app/game.js DRAW_REACH, 160) by a cell of the interest grid (32 m).
  */
 export const BLINKERS = Object.freeze({ radius: 192 });
+
+/**
+ * Whether the games made on this page wear them, and how far they then know anyone (`radius`:
+ * metres, or null: all of it, as ever). Set by the page as it reads its address (main.js:
+ * `?blinkers`, `?blinkers=120`), before any game's made; read by a game as it takes its battle
+ * (app/game.js). Here, not on the game, so the page needn't load the game to say so.
+ */
+export const WORN = { radius: null };
 
 /**
  * A battle seen through blinkers: `actors` are only the hero (`me`: () => their id) and those on
@@ -21,7 +30,7 @@ export function blinkered(battle, me, { radius = BLINKERS.radius } = {}) {
     let seenAt = null;
     let seen = null;
 
-    const seeing = (actor, hero) => actor === hero || (actor.map === hero.map && Math.hypot(actor.x - hero.x, actor.y - hero.y) <= radius);
+    const seeing = (actor, hero) => actor === hero || (actor.map === hero.map && hypot(actor.x - hero.x, actor.y - hero.y) <= radius);
     const hero = () => battle.actor(me());
 
     return new Proxy(battle, {

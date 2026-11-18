@@ -39,7 +39,7 @@ import { AFFLICTIONS } from "../core/afflictions.js";
 import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
 import { cheering, greetingOf, isEmote } from "../core/emotes.js";
 import { carriesTorch, playerSight, sightAt, torchesLit } from "../core/light.js";
-import { blinkered } from "../core/blinkers.js";
+import { blinkered, WORN } from "../core/blinkers.js";
 import { aloftShare, Battle, BOMBS, LOCK_REACH, SIGHT, sitting, STEP_MS, TALK_REACH, WAIT_BEYOND } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
 import { FINDS, foodFor, FRESH, HEALING_DRAUGHTS, OBSTACLES, STRANGERS } from "../core/director.js";
@@ -1318,13 +1318,6 @@ export class Game {
     #begin = null;
 
     /**
-     * For the tests (generated/multiplayer_scaling_plan.md 3-9): how far off its hero a game
-     * knows anyone (metres), its battle read through blinkers (core/blinkers.js), or null: all
-     * of it, as ever. A game opened with `?blinkers` (or `?blinkers=120`) has them (main.js).
-     */
-    static blinkers = null;
-
-    /**
      * @param {object} options
      * @param {import("../world/view.js").View} options.view
      * @param {object} options.kit - The character kit (characters/kit.js).
@@ -1579,7 +1572,7 @@ export class Game {
             this.host.populate();
         }
 
-        this.battle = Game.blinkers ? blinkered(this.host.battle, () => this.me, { radius: Game.blinkers }) : this.host.battle;
+        this.battle = WORN.radius ? blinkered(this.host.battle, () => this.me, { radius: WORN.radius }) : this.host.battle;
         this.avatars = new Map();
         this.previous = new Map();
         // (Those in view who can be drawn in full this frame, the crowd biggest on the screen, if
@@ -14159,7 +14152,7 @@ export class Game {
      * to life getting up; and the player's taken to the map they're on, if it's another.
      */
     rehost() {
-        this.battle = Game.blinkers ? blinkered(this.host.battle, () => this.me, { radius: Game.blinkers }) : this.host.battle;
+        this.battle = WORN.radius ? blinkered(this.host.battle, () => this.me, { radius: WORN.radius }) : this.host.battle;
 
         for (const actor of this.battle.actors) {
             const avatar = this.avatars.get(actor.id);

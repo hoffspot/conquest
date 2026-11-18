@@ -3685,7 +3685,7 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   The game now reaches its `Host` only as its world's authority (`battle`, `command`, `join`,
   `populate`, `soon`), which the same test holds it to.
 - **Blinkers** (`core/blinkers.js`; the plan's 3-9). For the tests, a game opened with
-  `?blinkers` (or `?blinkers=120`) reads its battle through a wrapper that knows only its hero
+  `?blinkers` (or `?blinkers=120`; `WORN`) reads its battle through a wrapper that knows only its hero
   and those on their map within 192 m: `actors` leaves the rest out and `actor(id)` is null
   for them, as a replicated world's game will be told only of what's near. The battle behind is
   whole and steps as ever. `e2e/blinkers.spec.js` plays a game so, alone (the world played on,
