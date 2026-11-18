@@ -20,17 +20,6 @@ export const VIEW = Object.freeze({
     talk: "What a talk needs of the world, asked as it opens (may come later): who they are to the director, their hire, their shop's special, what a messenger says; and, read at once whenever asked, those of the player's mending, a stable's offer and who's hired.",
     shop: "A shop's stock, asked as it opens (may come later): read at once whenever its wares are drawn, as they stand.",
     trade: "The trade the player's in with another player, if any: read at once, as last known.",
-    // The second group (3-4), war and news: each read at once, as last known
-    war: "The war (core/war/war.js War): who holds each town and works, the realms, its turn and its news; what the war table, the criers and the clock read.",
-    invasions: "The invasions going ([{ town, ... }]).",
-    invader: "Whether a character is one of an invasion's (an id, or an actor).",
-    burnt: "The settlements burnt down (a Set of their ids).",
-    soldiers: "The towns' soldiers out, by id (a Map): whose they are, their part and their banner.",
-    fortsOut: "The fortifications' garrisons out, by id (a Map).",
-    envoys: "The envoys on the roads, by id (a Map).",
-    convoys: "The convoys on the roads, by id (a Map).",
-    supplies: "The supply wagons on the roads, by id (a Map).",
-    wagons: "The wagons drawn, by id (a Map).",
 });
 
 /** Do `then` with a value once it's there: at once, or when its promise settles. */
@@ -82,50 +71,42 @@ export class LocalView {
     trade(me) {
         return [...(this.host.trades?.values() ?? [])].find((trade) => trade.open && (trade.from === me || trade.to === me)) ?? null;
     }
-
-    get war() {
-        return this.host.war;
-    }
-
-    get invasions() {
-        return this.host.invasions;
-    }
-
-    invader(who) {
-        return this.host.invader(who);
-    }
-
-    get burnt() {
-        return this.host.burnt;
-    }
-
-    get soldiers() {
-        return this.host.soldiers;
-    }
-
-    get fortsOut() {
-        return this.host.fortsOut;
-    }
-
-    get envoys() {
-        return this.host.envoys;
-    }
-
-    get convoys() {
-        return this.host.convoys;
-    }
-
-    get supplies() {
-        return this.host.supplies;
-    }
-
-    get wagons() {
-        return this.host.wagons;
-    }
 }
 
-// What's read at once of a view, whoever supplies it (VIEW's, but what's asked for: talk, shop)
-const AT_ONCE = Object.freeze(["war", "invasions", "burnt", "soldiers", "fortsOut", "envoys", "convoys", "supplies", "wagons"]);
+/**
+ * What's read at once of a view, as the world has it or as it was last told, by the plan's
+ * groups (3-4 to 3-8): `state` is read as it is (the war whole, a map by id, a set), `asks` are
+ * asked with what they're about and answered at once. Each is the Host's own of the same name
+ * (core/host.js says what it holds): a server's supplier keeps a mirror of each.
+ */
+export const READS = Object.freeze({
+    war: { words: "War and news: who holds each town and works, the realms, the invasions, what's burnt, and who's out on the war's business.", state: ["war", "invasions", "burnt", "soldiers", "fortsOut", "envoys", "convoys", "supplies", "wagons", "quartered"], asks: ["invader", "engagements"] },
+    party: { words: "Party and roster: the players wherever they are, their parties, invitations and ready checks.", state: ["players", "pausable"], asks: ["partyFor", "partyOf", "fellows", "invitation", "waiting"] },
+    company: { words: "Followers, companions and the hero's own: who follows whom, those mending, and what each may do.", state: ["followers", "companions", "mending"], asks: ["mendingOf", "mostFollowers", "unitAbility", "stance", "recallOffer", "vitalsOf", "capFor", "mightFor", "fightFor", "canFight", "characterOf"] },
+    props: { words: "The director's props: caches, finds, strangers, obstacles, trails, what's dropped, campfires, treasures and what's open or shut.", state: ["caches", "finds", "strangers", "obstacles", "ground", "campfires", "ambushes", "treasures", "open", "fresh", "wild", "slain"], asks: ["trailCreatureOf", "treasuresOf", "campRefusal", "shutOf"] },
+    rest: { words: "The rest: legends and their threads, the dungeons, hell's rifts, the world's rules, its folk out of doors, and where and when.", state: ["legends", "dungeons", "hellRifts", "rules", "done", "folk", "world"], asks: ["placeOf", "dueTo"] },
+});
+
+const STATE = Object.values(READS).flatMap(({ state }) => state);
+const ASKS = Object.values(READS).flatMap(({ asks }) => asks);
+
+for (const name of STATE) {
+    Object.defineProperty(LocalView.prototype, name, {
+        get() {
+            return this.host[name];
+        },
+    });
+}
+
+// (Asked as the game asks them: one the Host hasn't, an older world's, is undefined, so
+// `view.shutOf?.(...)` reads as it did on the Host)
+for (const name of ASKS) {
+    Object.defineProperty(LocalView.prototype, name, {
+        get() {
+            return typeof this.host[name] === "function" ? (...asked) => this.host[name](...asked) : undefined;
+        },
+    });
+}
 
 /**
  * A view whose answers come a moment later, as a server's would: what's asked for (talk, shop) is
@@ -148,13 +129,9 @@ export class DeferredView {
     trade(me) {
         return this.view.trade(me);
     }
-
-    invader(who) {
-        return this.view.invader(who);
-    }
 }
 
-for (const name of AT_ONCE) {
+for (const name of [...STATE, ...ASKS]) {
     Object.defineProperty(DeferredView.prototype, name, {
         get() {
             return this.view[name];

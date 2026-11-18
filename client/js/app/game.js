@@ -2090,12 +2090,12 @@ export class Game {
 
     /** This game's player, as the host has them (core/host.js players). */
     get self() {
-        return this.host.players.get(this.me);
+        return this.worldview.players.get(this.me);
     }
 
     /** In another's world, the name of whose it is (their hero's); else null. */
     get hostName() {
-        return this.remote ? (this.host.players.get(HOST_PLAYER)?.hero?.name ?? null) : null;
+        return this.remote ? (this.worldview.players.get(HOST_PLAYER)?.hero?.name ?? null) : null;
     }
 
     /** Where the player stands with their people, and the requests they carry (core/standing.js Standing). */
@@ -2185,7 +2185,7 @@ export class Game {
             quality: view.qualityName,
             pixels: view.adaptiveScale,
             hz: one(1000 / this.pacing.beat.value),
-            world: { map: this.mapId, together: this.remote ? "joined" : this.hosting ? "hosting" : null, players: this.host.players.size, actors: this.battle.actors.length, avatars: this.avatars.size },
+            world: { map: this.mapId, together: this.remote ? "joined" : this.hosting ? "hosting" : null, players: this.worldview.players.size, actors: this.battle.actors.length, avatars: this.avatars.size },
             guard: this.memoryGuard?.level ?? 0,
             device: this.deviceAbout(),
         };
@@ -2246,7 +2246,7 @@ export class Game {
 
     /** What's been done in the world by talking (things bought, rooms rented: the host's). */
     get done() {
-        return this.host.done;
+        return this.worldview.done;
     }
 
     /** Where a map is drawn in the world ([x, z] metres). */
@@ -2751,7 +2751,7 @@ export class Game {
         this.#bakeAhead();
 
         // (And the floors of the buildings got ready already: a world carried on, or joined)
-        for (const key of this.host.open.keys()) {
+        for (const key of this.worldview.open.keys()) {
             const building = this.world.interiors?.buildings.get(key);
 
             if (building) {
@@ -2922,7 +2922,7 @@ export class Game {
         const hairDetail = this.view.quality.hair;
 
         if (actor.kind === "folk") {
-            return yield* this.#addingFolk(this.host.folk.get(actor.id));
+            return yield* this.#addingFolk(this.worldview.folk.get(actor.id));
         }
 
         // A town's siege engine (core/invasions.js ENGINES): its own model (world/siege3d.js)
@@ -2964,7 +2964,7 @@ export class Game {
         }
 
         if (actor.kind === "player") {
-            const { hero: { shape, look, weapon }, progress } = this.host.players.get(actor.id);
+            const { hero: { shape, look, weapon }, progress } = this.worldview.players.get(actor.id);
             // (Another player's garments drawn all at once, as everyone's are but the player's own
             // hero's, who's seen closest and changes what they wear: 8 meshes for 15, measured
             // on seven of them in mixed gear. But one dressed here in one frame, come into the
@@ -2972,7 +2972,7 @@ export class Game {
             // together in that frame too, but a step at a time from the next: #outfitting)
             const apart = actor.id === this.me || !OUTFITTING.others || this.piecewise.has(actor.id);
             const merge = !apart && !atOnce;
-            const character = yield* this.#built(actor, { shape, look, equipment: heroEquipment(weapon, progress.worn(), this.host.players.get(actor.id).hero.parts ?? [], progress.wielded()), hairDetail, merge });
+            const character = yield* this.#built(actor, { shape, look, equipment: heroEquipment(weapon, progress.worn(), this.worldview.players.get(actor.id).hero.parts ?? [], progress.wielded()), hairDetail, merge });
 
             if (!character) {
                 return this.avatars.get(actor.id) ?? null;
@@ -3135,7 +3135,7 @@ export class Game {
     // from the same calling, sex, seed and people (folkLook). Whether they were: not if the
     // adventurer's gone already, or was one of a crowd
     #adopted(actor) {
-        const following = this.host.followers.get(actor.id);
+        const following = this.worldview.followers.get(actor.id);
         const was = following?.from ? this.avatars.get(following.from) : null;
 
         if (!(was instanceof Avatar) || this.battle.actor(following.from)) {
@@ -3179,7 +3179,7 @@ export class Game {
     // How one of the hired adventurers looks: as the adventurer they were, in the body armour
     // their leader gave them (characters/folk.js followerLook)
     #followerLook(id) {
-        const { calling = "warrior", sex = "m", seed = 1, people = "human", gear } = this.host.followers.get(id) ?? {};
+        const { calling = "warrior", sex = "m", seed = 1, people = "human", gear } = this.worldview.followers.get(id) ?? {};
 
         return followerLook({ calling, sex, seed, people, body: gear?.body ?? null });
     }
@@ -3565,7 +3565,7 @@ export class Game {
             return false;
         }
 
-        if (world && this.host.pausable) {
+        if (world && this.worldview.pausable) {
             this.stop();
 
             return true;
@@ -5198,7 +5198,7 @@ export class Game {
     // followers, companions), and the MANY.full of them nearest the player, drawn in full
     #allying() {
         const me = this.battle.actor(this.me);
-        const ids = [...(this.host?.followers?.keys() ?? []), ...(this.host?.companions?.keys() ?? [])];
+        const ids = [...(this.worldview?.followers?.keys() ?? []), ...(this.worldview?.companions?.keys() ?? [])];
 
         this.allies = new Set(ids);
         this.alliesNear = new Set(
@@ -5274,7 +5274,7 @@ export class Game {
     // A war's messenger's scroll over their head (world/scroll3d.js), floating, bobbing and
     // turning, so it's plain who they are: theirs made the first time they're drawn
     #scrollOver(actor, avatar) {
-        if (this.host.folk?.get(actor.id)?.role !== "messenger" || actor.dead) {
+        if (this.worldview.folk?.get(actor.id)?.role !== "messenger" || actor.dead) {
             return;
         }
 
@@ -5672,7 +5672,7 @@ export class Game {
             viewer.party.clear();
             viewer.partyFoes.clear();
 
-            for (const id of this.host.fellows(me.id)) {
+            for (const id of this.worldview.fellows(me.id)) {
                 const fellow = this.battle.actor(id);
 
                 viewer.party.add(id);
@@ -6334,7 +6334,7 @@ export class Game {
     // the figure's look, for their own colours and build. Null for the rest of the folk (a crier in
     // his livery, a stranger by the road, one of a look of their own: presets.js FOLK)
     #folkKind(actor) {
-        const one = this.host.folk.get(actor.id);
+        const one = this.worldview.folk.get(actor.id);
 
         if (one?.role !== "townsfolk" || one.preset) {
             return null;
@@ -6451,7 +6451,7 @@ export class Game {
 
     // Whether any player in the world carries a horse's whistle
     #whistlesAbout() {
-        return [...(this.host?.players?.values() ?? [])].some((player) => player.progress?.pack.some((stack) => stack?.id === "mountWhistle"));
+        return [...(this.worldview?.players?.values() ?? [])].some((player) => player.progress?.pack.some((stack) => stack?.id === "mountWhistle"));
     }
 
     // Whether one of the wild's people-shaped creatures drawn as its stand-in (a character: a
@@ -6529,7 +6529,7 @@ export class Game {
     // The kinds an open hell rift near the player pours out and guards its altar with
     // (core/hellrift.js RIFT_DEMONS, RIFT_GUARDS' warden), drawn from a model (RIFT_MODELS)
     #modelsOfRift() {
-        const open = this.host?.hellRifts?.open;
+        const open = this.worldview?.hellRifts?.open;
         const actor = this.battle.actor(this.me);
 
         if (!open || actor?.map !== "town" || Math.hypot(open.at[0] - actor.x, open.at[1] - actor.y) > HELL_RIFT.radius + RIFT_MODELS) {
@@ -6800,7 +6800,7 @@ export class Game {
 
         // (One of the players' own, named and on the party's icons: drawn as they look, a figure of their own)
         if (actor.kind === "follower") {
-            const { calling = "warrior", sex = "m", seed = 1, people = "human", gear } = this.host.followers.get(actor.id) ?? {};
+            const { calling = "warrior", sex = "m", seed = 1, people = "human", gear } = this.worldview.followers.get(actor.id) ?? {};
             const body = gear?.body ? `${gear.body.id}.${gear.body.people ?? ""}` : "";
 
             return { key: `follower:${people}:${sex}:${calling}:${seed}:${weapon}:${body}`, size: 1, spec: { ...fights, look: this.#followerLook(actor.id) } };
@@ -7499,7 +7499,7 @@ export class Game {
         const me = this.battle.actor(this.me);
         const view = { arrows: [], commanders: [] };
 
-        for (const { sides } of me ? (this.host?.engagements?.() ?? []) : []) {
+        for (const { sides } of me ? (this.worldview?.engagements?.() ?? []) : []) {
             for (const side of sides) {
                 const ids = side.bodies.flatMap(({ formation }) => formationsOfBody(formation));
                 const commander = side.commander === null ? null : this.battle.actor(side.commander);
@@ -7529,11 +7529,11 @@ export class Game {
     #spyCaches() {
         const me = this.battle.actor(this.me);
 
-        if (!me || me.dead || me.map !== "town" || !this.host?.caches?.size) {
+        if (!me || me.dead || me.map !== "town" || !this.worldview?.caches?.size) {
             return;
         }
 
-        for (const cache of this.host.caches.values()) {
+        for (const cache of this.worldview.caches.values()) {
             if (!cache.treasure && !this.cachesSeen.has(cache.id) && !cache.opened && Math.hypot(me.x - cache.at[0], me.y - cache.at[1]) <= CACHE_SEEN) {
                 this.cachesSeen.add(cache.id);
                 this.hud.message(`An adventurer's cache, and ${CACHE_BANDS[cache.band]?.name ?? "brigands"} keeping it. Put them all down to open it.`, 4);
@@ -7610,11 +7610,11 @@ export class Game {
     #spyFinds() {
         const me = this.battle.actor(this.me);
 
-        if (!me || me.dead || me.map !== "town" || !this.host?.finds?.size) {
+        if (!me || me.dead || me.map !== "town" || !this.worldview?.finds?.size) {
             return;
         }
 
-        for (const find of this.host.finds.values()) {
+        for (const find of this.worldview.finds.values()) {
             if (!this.findsSeen.has(find.id) && Math.hypot(me.x - find.at[0], me.y - find.at[1]) <= FINDS.seen) {
                 this.findsSeen.add(find.id);
 
@@ -7631,11 +7631,11 @@ export class Game {
     #spyStrangers() {
         const me = this.battle.actor(this.me);
 
-        if (!me || me.dead || me.map !== "town" || !this.host?.strangers?.size) {
+        if (!me || me.dead || me.map !== "town" || !this.worldview?.strangers?.size) {
             return;
         }
 
-        for (const stranger of this.host.strangers.values()) {
+        for (const stranger of this.worldview.strangers.values()) {
             const one = stranger.folk ? this.battle.actor(stranger.ids[0]) : null;
 
             if (one && !this.strangersSeen.has(stranger.id) && Math.hypot(me.x - one.x, me.y - one.y) <= STRANGERS.seen) {
@@ -7792,7 +7792,7 @@ export class Game {
     // as its kind's is (obstacles3d.js), over its squares
     #obstaclesNear() {
         const me = this.battle.actor(this.me);
-        const near = me && me.map === "town" && this.host?.obstacles?.size ? [...this.host.obstacles.values()].filter(({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y) <= OBSTACLE_LOOK.seen) : [];
+        const near = me && me.map === "town" && this.worldview?.obstacles?.size ? [...this.worldview.obstacles.values()].filter(({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y) <= OBSTACLE_LOOK.seen) : [];
 
         if (near.length || this.obstacleProps.shown.size) {
             const [ox, oz] = this.originOf("town");
@@ -7809,11 +7809,11 @@ export class Game {
     #spyObstacles() {
         const me = this.battle.actor(this.me);
 
-        if (!me || me.dead || me.map !== "town" || !this.host?.obstacles?.size) {
+        if (!me || me.dead || me.map !== "town" || !this.worldview?.obstacles?.size) {
             return;
         }
 
-        for (const obstacle of this.host.obstacles.values()) {
+        for (const obstacle of this.worldview.obstacles.values()) {
             if (!this.obstaclesSeen.has(obstacle.id) && Math.hypot(me.x - obstacle.at[0], me.y - obstacle.at[1]) <= OBSTACLES.seen) {
                 this.obstaclesSeen.add(obstacle.id);
                 this.hud.message(OBSTACLE_WORDS[obstacle.kind].seen, 4);
@@ -7830,7 +7830,7 @@ export class Game {
     // off it
     #walkTo(id, { run = false } = {}) {
         const me = this.battle.actor(this.me);
-        const obstacle = this.host.obstacles.get(id);
+        const obstacle = this.worldview.obstacles.get(id);
 
         if (!me || !obstacle) {
             return;
@@ -7848,7 +7848,7 @@ export class Game {
     // or once they've walked up to it (#keepToObstacle), for as long as it's held
     #holdOn(pointer, id) {
         const me = this.battle.actor(this.me);
-        const obstacle = this.host.obstacles.get(id);
+        const obstacle = this.worldview.obstacles.get(id);
 
         if (!me || me.dead || !obstacle) {
             return;
@@ -7873,7 +7873,7 @@ export class Game {
     #keepToObstacle() {
         const id = this.toClear;
         const me = this.battle.actor(this.me);
-        const obstacle = id ? this.host.obstacles.get(id) : null;
+        const obstacle = id ? this.worldview.obstacles.get(id) : null;
 
         if (!id || me?.clearing === id) {
             return;
@@ -7958,7 +7958,7 @@ export class Game {
     // kind's is (finds3d.js), on the ground where it lies
     #findsNear() {
         const me = this.battle.actor(this.me);
-        const near = me && me.map === "town" && this.host?.finds?.size ? [...this.host.finds.values()].filter(({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y) <= FIND_LOOK.seen) : [];
+        const near = me && me.map === "town" && this.worldview?.finds?.size ? [...this.worldview.finds.values()].filter(({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y) <= FIND_LOOK.seen) : [];
 
         if (near.length || this.findProps.shown.size) {
             this.findProps.set(
@@ -7974,7 +7974,7 @@ export class Game {
      * gone with them.
      */
     findIcons() {
-        const finds = this.host?.finds;
+        const finds = this.worldview?.finds;
 
         if (!finds?.size || !this.findsSeen.size) {
             return [];
@@ -8123,7 +8123,7 @@ export class Game {
     #barracksCleared({ town: id, by, how, people }) {
         const town = this.worldview?.war?.town(id);
         const me = this.battle.actor(this.me);
-        const inside = me && this.host?.quartered.get(id)?.map === me.map;
+        const inside = me && this.worldview?.quartered.get(id)?.map === me.map;
 
         if (!town || (by !== this.self?.realm && !inside)) {
             return;
@@ -8153,7 +8153,7 @@ export class Game {
 
         this.enlisting.push(...ids, ...guards);
 
-        if (!town || ![people, by].includes(this.self?.realm) || this.host?.quartered.get(id)?.map === me?.map) {
+        if (!town || ![people, by].includes(this.self?.realm) || this.worldview?.quartered.get(id)?.map === me?.map) {
             return;
         }
 
@@ -8168,7 +8168,7 @@ export class Game {
         const me = this.battle.actor(this.me);
 
         // (Further off: a crier cries it)
-        if (!town || by !== this.self?.realm || this.host?.quartered.get(id)?.map === me?.map || !this.#nearNews(town.at)) {
+        if (!town || by !== this.self?.realm || this.worldview?.quartered.get(id)?.map === me?.map || !this.#nearNews(town.at)) {
             return;
         }
 
@@ -8190,7 +8190,7 @@ export class Game {
         // fight's, a way in to go in by or a master to strike down in there, and a card's kept at a
         // site marked on the maps, `mark`: the Orc King's war camp;
         // and where a card's kept that they fell to, `fell`. None of a thread they've given up)
-        const legends = this.host.legends;
+        const legends = this.worldview.legends;
         const threads = Object.entries(legends?.threads ?? {})
             .filter(([id]) => !legends.gaveUp?.(id, this.me))
             .map(([id, thread]) => ({ id, thread, def: legends.stepOf(id), fell: (thread.fell ?? []).includes(this.me) }))
@@ -8205,7 +8205,7 @@ export class Game {
      * maps: [{ id, kind ("cache"), x, z (metres), rim (grey once it's opened) }]; gone with it.
      */
     cacheIcons() {
-        const caches = this.host?.caches;
+        const caches = this.worldview?.caches;
 
         if (!caches?.size || !this.cachesSeen.size) {
             return [];
@@ -8350,7 +8350,7 @@ export class Game {
         // (Each one's rim and words written again only when it's cleared, or made again: not a
         // sentence for every dungeon in the world every time the minimap's drawn)
         for (const icon of known.icons) {
-            const cleared = Boolean(this.host?.dungeons?.get(icon.id)?.cleared);
+            const cleared = Boolean(this.worldview?.dungeons?.get(icon.id)?.cleared);
 
             if (cleared !== (icon.rim !== null)) {
                 icon.rim = cleared ? PLACE_RIMS.cleared : null;
@@ -8427,7 +8427,7 @@ export class Game {
         // camps and lairs they've tracked home, found or not: core/tracks.js. A fortification
         // once seen, whosever it is: their own side's uncovered by reading the war table)
         // (Or shown every player by one of the world's threads: core/rare.js CHANGES `reveal`)
-        const revealed = new Set((this.host.legends?.lasting() ?? []).filter(({ kind }) => kind === "reveal").map(({ site }) => site));
+        const revealed = new Set((this.worldview.legends?.lasting() ?? []).filter(({ kind }) => kind === "reveal").map(({ site }) => site));
         const known = (icon) => this.explored.knows(icon.id, icon.x, icon.z) || this.explored.tracked.has(icon.id) || revealed.has(icon.id);
 
         return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.#trackedMarks(this.placeIcons().filter(known)).map(finder), ...this.#trackedMarks(this.dungeonIcons().filter(known)).map(finder), ...this.#trackedMarks(this.denIcons().filter(known)), ...this.worksIcons().filter(seen), ...this.fortIcons().filter(seen), ...this.cacheIcons(), ...this.findIcons(), ...this.rareIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), rift: this.riftView(), ...this.pinView() };
@@ -8439,7 +8439,7 @@ export class Game {
      * else a red ring with a "?"), left (ms till it seals itself) }; null with none open.
      */
     riftView() {
-        const open = this.host?.hellRifts?.open;
+        const open = this.worldview?.hellRifts?.open;
 
         if (!open) {
             return null;
@@ -8456,7 +8456,7 @@ export class Game {
      * grade (its map's make), own (theirs) }].
      */
     treasureCircles() {
-        return (this.host?.treasuresOf?.(this.me) ?? []).map(({ id, centre: [x, z], radius, grade, owner }) => ({ id, x, z, radius, grade, own: owner === this.me }));
+        return (this.worldview?.treasuresOf?.(this.me) ?? []).map(({ id, centre: [x, z], radius, grade, owner }) => ({ id, x, z, radius, grade, own: owner === this.me }));
     }
 
     /**
@@ -8471,7 +8471,7 @@ export class Game {
      * None, out of a party.
      */
     partyView() {
-        const party = this.host.partyFor(this.me);
+        const party = this.worldview.partyFor(this.me);
 
         return (party?.members ?? []).flatMap((id) => {
             const actor = id === this.me ? null : this.battle.actor(id);
@@ -8483,7 +8483,7 @@ export class Game {
             const [x, z] = this.#outside(actor);
             const name = this.world.maps?.[actor.map]?.name ?? this.world.interiors?.of(actor.map)?.name ?? null;
 
-            return [{ id, name: this.host.players.get(id)?.hero.name ?? actor.name ?? "", colour: partyColour(party.members, id), x, z, map: actor.map, inside: actor.map === "town" ? null : name ? `in ${name.replace(/^The /, "the ")}` : "indoors", dead: Boolean(actor.dead) }];
+            return [{ id, name: this.worldview.players.get(id)?.hero.name ?? actor.name ?? "", colour: partyColour(party.members, id), x, z, map: actor.map, inside: actor.map === "town" ? null : name ? `in ${name.replace(/^The /, "the ")}` : "indoors", dead: Boolean(actor.dead) }];
         });
     }
 
@@ -8497,7 +8497,7 @@ export class Game {
      * ("unpartied", or "soon") }; refused by the host, what's refused said.
      */
     ping([x, z]) {
-        if (!this.host.partyFor(this.me)) {
+        if (!this.worldview.partyFor(this.me)) {
             return { ok: false, reason: "unpartied" };
         }
 
@@ -8552,8 +8552,8 @@ export class Game {
         const me = this.battle.actor(this.me);
         const spots = [];
 
-        if (me && this.mapId === "town" && this.host?.treasures?.size) {
-            for (const treasure of this.host.treasuresOf(this.me)) {
+        if (me && this.mapId === "town" && this.worldview?.treasures?.size) {
+            for (const treasure of this.worldview.treasuresOf(this.me)) {
                 const [x, z] = treasure.spot ?? treasure.at;
 
                 if (Math.hypot(me.x - x, me.y - z) <= TREASURE.seen) {
@@ -8596,7 +8596,7 @@ export class Game {
 
         // (Laid again as the player goes, or as the wilds director lays fresh tracks or they go, or a
         // rare card's tracks come or go)
-        const fresh = [...(this.host.fresh?.keys() ?? []), ...threadTracks(this.host.legends).map(({ id, points }) => `${id}:${points.at(-1)}`)].join();
+        const fresh = [...(this.worldview.fresh?.keys() ?? []), ...threadTracks(this.worldview.legends).map(({ id, points }) => `${id}:${points.at(-1)}`)].join();
 
         if (!this.trailsAt || Math.hypot(me.x - this.trailsAt[0], me.y - this.trailsAt[1]) > TRAIL_SEEN.again || fresh !== this.freshLaid) {
             this.trailsAt = [me.x, me.y];
@@ -8612,7 +8612,7 @@ export class Game {
     // The fresh tracks the player's come upon (#spyFresh), for the minimap to show the way they lead
     // (prints can be hard to see in long grass): [{ id, points }]
     #freshTrails() {
-        return [...(this.host.fresh?.values() ?? [])].filter(({ id }) => this.freshSeen.has(id)).map(({ id, points }) => ({ id, points }));
+        return [...(this.worldview.fresh?.values() ?? [])].filter(({ id }) => this.freshSeen.has(id)).map(({ id, points }) => ({ id, points }));
     }
 
     // Fresh tracks the wilds director's laid (core/director.js FRESH) come upon by the player for
@@ -8621,7 +8621,7 @@ export class Game {
     #spyFresh(me) {
         // (A rare card's: core/rare.js threadTracks, the Stone Golem's sunk deep, the Orc King's war
         // band's; said as its step says, `spoor`)
-        for (const tracks of threadTracks(this.host.legends)) {
+        for (const tracks of threadTracks(this.worldview.legends)) {
             if (!this.freshSeen.has(tracks.id) && tracks.points.some(([x, y]) => Math.hypot(x - me.x, y - me.y) <= FRESH.seen)) {
                 const way = compass(tracks.points[0], tracks.points.at(-1));
 
@@ -8630,7 +8630,7 @@ export class Game {
             }
         }
 
-        for (const tracks of this.host.fresh?.values() ?? []) {
+        for (const tracks of this.worldview.fresh?.values() ?? []) {
             if (!this.freshSeen.has(tracks.id) && tracks.points.some(([x, y]) => Math.hypot(x - me.x, y - me.y) <= FRESH.seen)) {
                 this.freshSeen.add(tracks.id);
 
@@ -8678,11 +8678,11 @@ export class Game {
         // even into stony ground, `sunk`: the Stone Golem's, from the Lantern Company's remains to
         // where it is, core/rare.js threadTracks)
         const near = ({ points }) => points.some(([x, y]) => Math.hypot(x - me.x, y - me.y) <= TRAIL_SEEN.prints + 10);
-        const fresh = [...(this.host.fresh?.values() ?? [])].filter(near).map((tracks) => ({ ...tracks, fresh: true }));
-        const sunk = threadTracks(this.host.legends).filter(near).map((tracks) => ({ ...tracks, fresh: true, sunk: true }));
+        const fresh = [...(this.worldview.fresh?.values() ?? [])].filter(near).map((tracks) => ({ ...tracks, fresh: true }));
+        const sunk = threadTracks(this.worldview.legends).filter(near).map((tracks) => ({ ...tracks, fresh: true, sunk: true }));
 
         for (const trail of [...trailsNear(plan, [me.x, me.y], TRAIL_SEEN.prints), ...fresh, ...sunk]) {
-            const creature = trail.fresh ? trail.creature : this.host.trailCreatureOf(this.me, trail);
+            const creature = trail.fresh ? trail.creature : this.worldview.trailCreatureOf(this.me, trail);
             const { print, size } = creature ? lookPrint(creature, CREATURE_LOOKS[creature], this.gaitsSeen.get(creature)) : { print: null };
 
             if (!print) {
@@ -8858,7 +8858,7 @@ export class Game {
             return { ok: false, reason: "marker" };
         }
 
-        if (!this.host.partyFor(this.me)) {
+        if (!this.worldview.partyFor(this.me)) {
             return { ok: false, reason: "unpartied" };
         }
 
@@ -9313,10 +9313,10 @@ export class Game {
             return null;
         }
 
-        const members = this.host.partyFor(this.me)?.members ?? [];
+        const members = this.worldview.partyFor(this.me)?.members ?? [];
         const colour = one.kind === "player" && members.includes(one.id) ? partyColour(members, one.id) : null;
 
-        return { name: (one.kind === "player" ? this.host.players.get(one.id)?.hero.name : null) ?? one.name ?? "", colour };
+        return { name: (one.kind === "player" ? this.worldview.players.get(one.id)?.hero.name : null) ?? one.name ?? "", colour };
     }
 
     // A taunt's mark over each foe tracked that's taunted (Show whom foes are on: hud.js taunt), its
@@ -9978,7 +9978,7 @@ export class Game {
         const soldier = npc.kind === "soldier" ? this.#soldierWords(npc) : null;
         const names = {};
         // (One of the townsfolk out in the streets: theirs, and the place they're of)
-        const out = !building ? this.host.folk.get(npc.id) : null;
+        const out = !building ? this.worldview.folk.get(npc.id) : null;
         // (An official's words, and what they ask and do; or a crier's, his news)
         const official = this.#officialOf(npc, building, names) ?? this.#crierOf(npc, out, names);
         const title = soldier?.title ?? folk.find(({ id }) => id === npc.id)?.title ?? out?.title ?? (stranger?.kind === "bandits" ? "Outlaw" : null) ?? ROLES[npc.role]?.title ?? "";
@@ -10006,8 +10006,8 @@ export class Game {
         // at the guild, to send for at a guild's desk: recallOffer)
         const one = folk.find(({ id }) => id === npc.id);
         const hire = told.hire;
-        const following = npc.kind === "follower" ? this.host.followers.get(npc.id) : null;
-        const company = [...this.host.followers.values()].filter(({ leader }) => leader === this.me).length + this.host.mendingOf(this.me).length;
+        const following = npc.kind === "follower" ? this.worldview.followers.get(npc.id) : null;
+        const company = [...this.worldview.followers.values()].filter(({ leader }) => leader === this.me).length + this.worldview.mendingOf(this.me).length;
         // (Those mending as they are now, not as they were as the talk began; the one asked about,
         // chosen among them, or the first: sent for or let go by their id, never another in their
         // place, core/host.js recallOffer)
@@ -10032,7 +10032,7 @@ export class Game {
             names.hirePrice = String(hire.price);
             names.hireLevel = String(hire.level);
             names.renown = RENOWN.traits[hire.renowned]?.label ?? "";
-            names.fullWhy = this.host.mendingOf(this.me).length ? "Those of yours mending count too, mind: send for them, or let them go, at any guild's desk." : "Let one go first, or learn to lead more.";
+            names.fullWhy = this.worldview.mendingOf(this.me).length ? "Those of yours mending count too, mind: send for them, or let them go, at any guild's desk." : "Let one go first, or learn to lead more.";
         }
 
         if (following) {
@@ -10059,7 +10059,7 @@ export class Game {
         const stock = told.stock;
 
         if (stock?.special) {
-            const special = atLevel(stock.special, levelOf(this.host.mightFor(this.me)));
+            const special = atLevel(stock.special, levelOf(this.worldview.mightFor(this.me)));
 
             names.special = itemLabel(special).toLowerCase();
             names.specialPrice = String(shopPrice(special, stock.shop, { haggle: this.progress.bonuses().haggle, special: true, times: told.times }));
@@ -10088,9 +10088,9 @@ export class Game {
                         : "hell" in condition
                           ? Boolean(names.hellRumour) === condition.hell
                           : "hire" in condition
-                            ? Boolean(hire && company < this.host.mostFollowers(this.me)) === condition.hire
+                            ? Boolean(hire && company < this.worldview.mostFollowers(this.me)) === condition.hire
                           : "full" in condition
-                            ? Boolean(hire && company >= this.host.mostFollowers(this.me)) === condition.full
+                            ? Boolean(hire && company >= this.worldview.mostFollowers(this.me)) === condition.full
                           : "back" in condition
                             ? Boolean(hire?.back) === condition.back
                             : "purse" in condition
@@ -10344,7 +10344,7 @@ export class Game {
             .filter(({ far }) => far <= BELL.reach)
             .sort((a, b) => a.far - b.far);
         const nearest = near[0];
-        const out = nearest && this.host.folk.get(nearest.one.id);
+        const out = nearest && this.worldview.folk.get(nearest.one.id);
         const at = out && war ? this.#crierAt(out) : null;
         const unheard = at ? this.#crierNews(at).told : [];
 
@@ -10364,7 +10364,7 @@ export class Game {
             const state = this.crierCalls.get(nearest.one.id) ?? {};
             const invasion = this.worldview.invasions.find(({ place, broke }) => broke === null && `crier:${place}` === nearest.one.id);
             // (A hell rift open in the wilds: his news before any other's, which way it is from him)
-            const rift = this.host.hellRifts?.open;
+            const rift = this.worldview.hellRifts?.open;
             const headline = rift ? riftCry(nearest.one, rift) : (unheard.at(-1)?.words ?? null);
             const call = invasion ? this.#invasionCall(invasion, state, now * 1000) : callOf({ now: now * 1000, state, headline, night: torchesLit(elapsedOf(war)), random: this.cryRandom });
 
@@ -10561,7 +10561,7 @@ export class Game {
     // falling, a body breaking, wheeling onto a flank, falling back and coming on again
     #battleTurn(event) {
         const me = this.battle.actor(this.me);
-        const engagement = this.host?.engagements?.().find(({ id }) => id === event.id) ?? null;
+        const engagement = this.worldview?.engagements?.().find(({ id }) => id === event.id) ?? null;
         const side = engagement?.sides.find(({ key }) => key === event.side) ?? null;
         const say = (words, seconds = 4) => this.hud.message(words, seconds);
 
@@ -10845,7 +10845,7 @@ export class Game {
             offer: () => Boolean(state.offer),
             // (A guild's board: its notices, each there or not)
             ...Object.fromEntries(Array.from({ length: BOARD_SIZE }, (_, k) => [`offer${k + 1}`, () => Boolean(state.board[k])])),
-            due: () => this.host.dueTo(this.me, npc.id).length > 0,
+            due: () => this.worldview.dueTo(this.me, npc.id).length > 0,
             reported: () => state.reported,
             keep: () => rank >= OPENS.keep,
             armoury: () => own && giftDue(),
@@ -11565,7 +11565,7 @@ export class Game {
 
     #slept({ id, where, passed, until = null }) {
         const mine = id === this.me;
-        const together = this.host.rules?.rest === "everyone";
+        const together = this.worldview.rules?.rest === "everyone";
 
         // (Everyone woken together, where everyone rests: each told of their own sleep alone)
         if (!mine && (!passed || together)) {
@@ -11590,13 +11590,13 @@ export class Game {
         const long = hours ? ` for ${hours} hour${hours === 1 ? "" : "s"}` : ` till ${until === "sundown" ? "sundown" : until === "morning" || morning ? "the sun's up" : "evening"}`;
 
         this.hud.message(passed ? `${who}${how}${long}, ${Math.round(passed / 60000)} minutes gone.` : together ? `You rest${how}.` : `You rest${how}: the time's the host's to pass.`, 3.5);
-        this.onWar?.(this.worldview.war, this.host.legends);
+        this.onWar?.(this.worldview.war, this.worldview.legends);
     }
 
     // A player marked away (core/host.js AFK: no command for a while), or back: "AFK" by their
     // name, while there are others in the world to see it; this player told why, if it's them
     #away({ id, away }) {
-        const shown = away && this.host.players.size > 1;
+        const shown = away && this.worldview.players.size > 1;
 
         this.hud.setAway(id, shown);
 
@@ -11608,7 +11608,7 @@ export class Game {
     // The players' camps out in the world (core/host.js campfires), drawn while their fires burn:
     // the sleeper's tent by its fire, pitched and struck as the host has them
     #restCamps() {
-        const burning = this.host.campfires ?? [];
+        const burning = this.worldview.campfires ?? [];
         const drawn = (this.restDrawn ??= new Set());
         const [ox, oz] = this.originOf("town");
 
@@ -11665,7 +11665,7 @@ export class Game {
     #nextEnlistee(put, busy = false) {
         const me = this.battle.actor(this.me);
         const far = (actor) => (me && actor.map === me.map ? Math.hypot(actor.x - me.x, actor.y - me.y) : Infinity);
-        const later = (actor) => this.host.folk.get(actor.id)?.role === "townsfolk";
+        const later = (actor) => this.worldview.folk.get(actor.id)?.role === "townsfolk";
         let nearest = null;
 
         // (Those gone, or drawn some other way meanwhile, off the list; and those a dungeon's walls
@@ -12063,7 +12063,7 @@ export class Game {
     // Someone's gear changed: what they wear and carry shown (and how they hold their weapon)
     #regear({ id, weapon, worn, held = null }) {
         const avatar = this.avatars.get(id);
-        const hero = this.host.players.get(id)?.hero;
+        const hero = this.worldview.players.get(id)?.hero;
 
         if (!avatar || !hero) {
             return;
@@ -12294,7 +12294,7 @@ export class Game {
      * get up if they're down; null if it's someone else's world.
      */
     place() {
-        return this.remote ? null : this.host.placeOf(this.me);
+        return this.remote ? null : this.worldview.placeOf(this.me);
     }
 
     /**
@@ -12302,7 +12302,7 @@ export class Game {
      * save.js saveVitals), or null (a world joined: kept by its host).
      */
     vitals() {
-        return this.remote ? null : this.host.vitalsOf(this.me);
+        return this.remote ? null : this.worldview.vitalsOf(this.me);
     }
 
     // Where the player is in the world ([x, y] metres): out in it, or at the door of the building they're in
@@ -12425,19 +12425,19 @@ export class Game {
         this.partyShownAt = this.clock;
         this.partyPanel.show({
             members: this.#party().filter(({ kind }) => kind !== "player").map(({ id, kind, actor, waiting, left, picture }) => {
-                const follower = this.host.followers.get(id);
-                const called = this.host.companions.get(id);
+                const follower = this.worldview.followers.get(id);
+                const called = this.worldview.companions.get(id);
 
-                const { guarding, holdFire } = this.host.stance(id);
+                const { guarding, holdFire } = this.worldview.stance(id);
 
                 return { id, name: actor.name ?? follower?.name ?? "", kind, calling: follower?.calling ?? null, creature: CREATURES[called?.creature]?.name.toLowerCase() ?? null, hp: actor.hp, maxHp: actor.maxHp, waiting, guarding, holdFire, away: actor.map !== this.battle.actor(this.me)?.map, left: left?.ms ?? null, ally: id === this.allyTarget, picture, merc: follower ? this.#mercView(id, follower) : null };
             }),
-            mending: this.host.mendingOf(this.me).map((id) => {
-                const one = this.host.mending.get(id);
+            mending: this.worldview.mendingOf(this.me).map((id) => {
+                const one = this.worldview.mending.get(id);
 
                 return { name: one.called ?? one.name, calling: one.calling, level: one.level, price: recallPrice(hirePrice(HIRES[one.calling]?.price ?? 40, one.level, Boolean(one.renowned))) };
             }),
-            most: this.host.mostFollowers(this.me),
+            most: this.worldview.mostFollowers(this.me),
             ...this.#partyPlayers(),
             chat: this.#chat(),
             world: Boolean(this.onWorldPanel),
@@ -12452,13 +12452,13 @@ export class Game {
         }
 
         // (Saying to someone who's gone, or blocked since: to the party again)
-        if (this.chatTo && (!this.host.players.has(this.chatTo) || this.isBlocked(this.chatTo))) {
+        if (this.chatTo && (!this.worldview.players.has(this.chatTo) || this.isBlocked(this.chatTo))) {
             this.chatTo = null;
         }
 
         const together = Boolean(this.hosting || this.remote);
-        const party = together ? this.host.partyFor(this.me) : null;
-        const others = together ? [...this.host.players.values()].filter(({ id }) => id !== this.me && !this.isBlocked(id)) : [];
+        const party = together ? this.worldview.partyFor(this.me) : null;
+        const others = together ? [...this.worldview.players.values()].filter(({ id }) => id !== this.me && !this.isBlocked(id)) : [];
 
         return {
             lines: this.chatLines,
@@ -12517,7 +12517,7 @@ export class Game {
             return /^([A-Za-z0-9_-]+)\.[1-9]$/.exec(id)?.[1] ?? id;
         }
 
-        const guid = this.host.players.get(id)?.hero?.guid;
+        const guid = this.worldview.players.get(id)?.hero?.guid;
 
         return isGuid(guid) ? guid : id;
     }
@@ -12538,7 +12538,7 @@ export class Game {
         const who = this.whoIs(id);
         const rest = this.blocked.filter((one) => !(one.world === this.worldKey && one.who === who));
 
-        this.blocked = on ? [...rest, { world: this.worldKey, who, name: this.host.players.get(id)?.hero.name ?? "" }] : rest;
+        this.blocked = on ? [...rest, { world: this.worldKey, who, name: this.worldview.players.get(id)?.hero.name ?? "" }] : rest;
 
         if (on && this.chatTo === id) {
             this.chatTo = null;
@@ -12588,7 +12588,7 @@ export class Game {
      * Party menu's Ready check, Y, or "/ready" in its chat): refused, said why.
      */
     readyCheck() {
-        const party = this.host.partyFor(this.me);
+        const party = this.worldview.partyFor(this.me);
         const refused = !party ? "unpartied" : party.leader !== this.me ? "leader" : null;
 
         if (refused) {
@@ -12612,8 +12612,8 @@ export class Game {
     //  - counted down ("countdown"): its numbers big on the screen, a wooden tick each second, and
     //    "Go!", a fuller one (hud.js countdown); its leader's panel let go of
     #readyEvent(event) {
-        const party = this.host.partyFor(this.me);
-        const nameOf = (id) => this.host.players.get(id)?.hero.name ?? "";
+        const party = this.worldview.partyFor(this.me);
+        const nameOf = (id) => this.worldview.players.get(id)?.hero.name ?? "";
 
         if (event.change === "readyCheck") {
             const members = party?.members ?? [];
@@ -12701,7 +12701,7 @@ export class Game {
         }
 
         const to = this.chatTo;
-        const said = !to && !this.host.partyFor(this.me) ? { ok: false, reason: "unpartied" } : this.hosting ? this.hosting.chat(text, { to }) : this.remote ? this.remote.chat(text, { to }) : { ok: false, reason: "unpartied" };
+        const said = !to && !this.worldview.partyFor(this.me) ? { ok: false, reason: "unpartied" } : this.hosting ? this.hosting.chat(text, { to }) : this.remote ? this.remote.chat(text, { to }) : { ok: false, reason: "unpartied" };
 
         if (said.ok) {
             this.sound?.play("tap");
@@ -12722,12 +12722,12 @@ export class Game {
     // Playing together, the party of players this one's in (core/host.js partyFor) and the
     // others in the world, for the party menu: { together, players, others, leads, full }
     #partyPlayers() {
-        const party = this.host.partyFor(this.me);
-        const nameOf = (id) => this.host.players.get(id)?.hero.name ?? "";
+        const party = this.worldview.partyFor(this.me);
+        const nameOf = (id) => this.worldview.players.get(id)?.hero.name ?? "";
         const me = this.battle.actor(this.me);
 
         return {
-            together: this.host.players.size > 1,
+            together: this.worldview.players.size > 1,
             players: (party?.members ?? []).map((id) => ({
                 id,
                 name: nameOf(id),
@@ -12735,9 +12735,9 @@ export class Game {
                 me: id === this.me,
                 away: id !== this.me && this.battle.actor(id)?.map !== me?.map,
                 colour: partyColour(party.members, id),
-                with: id === this.me ? [] : this.host.partyOf(id).map((one) => this.battle.actor(one.id)?.name ?? this.host.followers.get(one.id)?.name ?? "").filter(Boolean),
+                with: id === this.me ? [] : this.worldview.partyOf(id).map((one) => this.battle.actor(one.id)?.name ?? this.worldview.followers.get(one.id)?.name ?? "").filter(Boolean),
             })),
-            others: [...this.host.players.keys()].filter((id) => id !== this.me && !party?.members.includes(id)).map((id) => ({ id, name: nameOf(id), asked: Boolean(this.host.invitation(id)) })),
+            others: [...this.worldview.players.keys()].filter((id) => id !== this.me && !party?.members.includes(id)).map((id) => ({ id, name: nameOf(id), asked: Boolean(this.worldview.invitation(id)) })),
             leads: party?.leader === this.me,
             full: (party?.members.length ?? 1) >= PARTY.most,
             partied: Boolean(party),
@@ -12752,20 +12752,19 @@ export class Game {
     // they are, and what the player can do about them (ask them to their party, or, leading it,
     // put them out of it; message them; block them, or unblock them)
     #everyone() {
-        const host = this.host;
-        const mine = host.partyFor(this.me);
+        const mine = this.worldview.partyFor(this.me);
         const me = this.battle.actor(this.me);
-        const nameOf = (id) => host.players.get(id)?.hero.name ?? "";
+        const nameOf = (id) => this.worldview.players.get(id)?.hero.name ?? "";
         const full = (mine?.members.length ?? 1) >= PARTY.most;
         const order = (id) => (id === this.me ? -1 : mine?.members.includes(id) ? mine.members.indexOf(id) : PARTY.most);
 
-        return [...host.players.values()]
+        return [...this.worldview.players.values()]
             .sort((a, b) => order(a.id) - order(b.id) || a.hero.name.localeCompare(b.hero.name) || (a.id < b.id ? -1 : 1))
             .map((player) => {
                 const { id } = player;
                 const actor = this.battle.actor(id);
-                const party = host.partyFor(id);
-                const asked = host.invitation(id);
+                const party = this.worldview.partyFor(id);
+                const asked = this.worldview.invitation(id);
                 const yours = Boolean(party && party === mine);
                 const can = id === this.me ? null : yours ? (mine.leader === this.me ? "dismiss" : null) : party ? null : asked ? "asked" : full ? "full" : "invite";
 
@@ -12852,11 +12851,10 @@ export class Game {
     // and drawn on their maps (a quill's scratch); woken: who keep it, to those near; dug up by
     // the others, who weren't there for it; given up, theirs
     #treasureEvent(event) {
-        const host = this.host;
         const reader = event.id ?? event.owner;
-        const ours = reader === this.me || host.fellows(this.me).includes(reader);
-        const name = host.players.get(reader)?.hero.name ?? "Someone";
-        const map = itemLabel({ id: "treasureMap", quality: event.grade ?? host.treasures.get(event.treasure)?.grade ?? "common" });
+        const ours = reader === this.me || this.worldview.fellows(this.me).includes(reader);
+        const name = this.worldview.players.get(reader)?.hero.name ?? "Someone";
+        const map = itemLabel({ id: "treasureMap", quality: event.grade ?? this.worldview.treasures.get(event.treasure)?.grade ?? "common" });
 
         if (!ours) {
             return;
@@ -12869,7 +12867,7 @@ export class Game {
             this.hud.message(reader === this.me ? `The ${map.toLowerCase()} shows somewhere ${where}: it's marked on your world map, and your party's. Search the circle.` : `${name}'s ${map.toLowerCase()}: where it leads is marked on your world map. Search the circle.`, 4);
             this.sound?.play("quill");
         } else if (event.change === "roused") {
-            const treasure = host.treasures.get(event.treasure);
+            const treasure = this.worldview.treasures.get(event.treasure);
             const me = this.battle.actor(this.me);
             const keepers = CACHE_BANDS[treasure?.band]?.name ?? "brigands";
 
@@ -13085,9 +13083,9 @@ export class Game {
             return;
         }
 
-        const name = event.name || this.host.players.get(event.who)?.hero.name || "They";
+        const name = event.name || this.worldview.players.get(event.who)?.hero.name || "They";
         const mine = event.who === this.me;
-        const leader = this.host.players.get(this.host.partyFor(this.me)?.leader)?.hero.name ?? "their";
+        const leader = this.worldview.players.get(this.worldview.partyFor(this.me)?.leader)?.hero.name ?? "their";
         const said = {
             sent: `You ask ${name} to join your party.`,
             declined: `${name} says no to your party.`,
@@ -13151,11 +13149,11 @@ export class Game {
             return [];
         }
 
-        const fellows = this.host.fellows(this.me).map((id) => ({ id, kind: "player" }));
+        const fellows = this.worldview.fellows(this.me).map((id) => ({ id, kind: "player" }));
 
-        return [...fellows, ...this.host.partyOf(this.me)].flatMap(({ id, kind }) => {
+        return [...fellows, ...this.worldview.partyOf(this.me)].flatMap(({ id, kind }) => {
             const actor = this.battle.actor(id);
-            const called = this.host.companions.get(id);
+            const called = this.worldview.companions.get(id);
 
             if (!actor || (actor.dead && !actor.downed)) {
                 return [];
@@ -13165,7 +13163,7 @@ export class Game {
             const ms = called ? Math.max(0, called.until - this.battle.time) : 0;
 
             // (A beast tamed: theirs till it falls, no time left to tell)
-            return [{ id, kind, actor, waiting: this.host.waiting(id), left: called && !called.tamed ? { ms, share: lasts ? Math.min(1, ms / lasts) : 1 } : null, picture: this.partyLikenesses.get(id) ?? null }];
+            return [{ id, kind, actor, waiting: this.worldview.waiting(id), left: called && !called.tamed ? { ms, share: lasts ? Math.min(1, ms / lasts) : 1 } : null, picture: this.partyLikenesses.get(id) ?? null }];
         });
     }
 
@@ -13185,7 +13183,7 @@ export class Game {
 
         // (Their names and dots in green: theirs, and the other players' in their party and
         // theirs, who have no icon)
-        const allied = new Set([...ids, ...this.host.fellows(this.me).flatMap((id) => this.host.partyOf(id).map((one) => one.id))]);
+        const allied = new Set([...ids, ...this.worldview.fellows(this.me).flatMap((id) => this.worldview.partyOf(id).map((one) => one.id))]);
 
         for (const id of this.allied ?? []) {
             if (!allied.has(id)) {
@@ -13229,7 +13227,7 @@ export class Game {
 
         this.hud.party(
             player && !player.dead
-                ? party.map(({ id, kind, actor, waiting, left, picture }) => ({ id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, kind, ally: id === this.allyTarget, waiting, away: actor.map !== player.map, left: left?.share ?? null, picture, leader: kind === "player" && this.host.partyFor(this.me)?.leader === id, colour: kind === "player" ? partyColour(this.host.partyFor(this.me)?.members ?? [], id) : null, foes: foesOn.get(id) ?? 0, ready: kind === "player" && this.clock < this.readyMarksUntil ? (this.readyMarks.get(id) ?? null) : null }))
+                ? party.map(({ id, kind, actor, waiting, left, picture }) => ({ id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, kind, ally: id === this.allyTarget, waiting, away: actor.map !== player.map, left: left?.share ?? null, picture, leader: kind === "player" && this.worldview.partyFor(this.me)?.leader === id, colour: kind === "player" ? partyColour(this.worldview.partyFor(this.me)?.members ?? [], id) : null, foes: foesOn.get(id) ?? 0, ready: kind === "player" && this.clock < this.readyMarksUntil ? (this.readyMarks.get(id) ?? null) : null }))
                 : [],
         );
 
@@ -13370,7 +13368,7 @@ export class Game {
 
     // Whether someone's one of the player's own: a follower of theirs, or a creature they've called or raised
     #ownUnit(id) {
-        return [this.host.followers.get(id), this.host.companions.get(id)].some((one) => one?.leader === this.me);
+        return [this.worldview.followers.get(id), this.worldview.companions.get(id)].some((one) => one?.leader === this.me);
     }
 
     // The one of their party the player's chosen to help (and still can: standing, where they
@@ -13407,7 +13405,7 @@ export class Game {
     #orderUnit(id, order, { sure = false } = {}) {
         if (order === "dismiss" && !sure && this.onAskDismiss) {
             const name = this.battle.actor(id)?.name ?? "them";
-            const called = Boolean(this.host.companions?.has(id));
+            const called = Boolean(this.worldview.companions?.has(id));
 
             this.onAskDismiss({ name, note: called ? `${name} will be gone for good, its time with you over.` : `${name} will leave your party and go back to the guild where you found them, to be hired again there, by you or anyone.`, go: () => this.#orderUnit(id, "dismiss", { sure: true }) });
 
@@ -13450,7 +13448,7 @@ export class Game {
             level: one.level,
             xp: one.xp,
             next,
-            held: next !== null && one.level >= this.host.capFor(this.me) && one.xp >= next,
+            held: next !== null && one.level >= this.worldview.capFor(this.me) && one.xp >= next,
             wounds: one.wounds,
             down: Boolean(actor?.dead && actor.downed),
             trust,
@@ -13487,7 +13485,7 @@ export class Game {
 
     /** Whether the player may change this world's rules (core/host.js "rule": its host's player, or an owner). */
     mayRule() {
-        return this.me === HOST_PLAYER || this.host.players.get(this.me)?.role === "owner";
+        return this.me === HOST_PLAYER || this.worldview.players.get(this.me)?.role === "owner";
     }
 
     /** Whether this world's mercenaries can die (core/host.js RULES mortal), as the world's host says. */
@@ -13501,7 +13499,7 @@ export class Game {
 
     // The player's followers kept with their character, and their roll (core/host.js characterOf)
     #keepFollowers() {
-        const character = this.host.characterOf(this.host.players.get(this.me));
+        const character = this.worldview.characterOf(this.worldview.players.get(this.me));
 
         this.onFollowers(character.followers, character.roll);
     }
@@ -13528,7 +13526,7 @@ export class Game {
     // Said as the player's about to be carried off by magic (answering a summons), if they lead
     // anyone: that they'll be left behind, to be sent for (core/host.js #loseRetinue); or nothing
     #leftBehind() {
-        const led = [...this.host.followers.values()].filter(({ leader }) => leader === this.me).length;
+        const led = [...this.worldview.followers.values()].filter(({ leader }) => leader === this.me).length;
 
         return led ? ` ${led === 1 ? "The one" : `The ${led}`} you lead will be left behind, to be sent for at a guild's desk.` : "";
     }
@@ -13681,7 +13679,7 @@ export class Game {
     set messengers(on) {
         this.messengersOn = on !== false;
 
-        const player = !this.remote ? this.host.players?.get(this.me) : null;
+        const player = !this.remote ? this.worldview.players?.get(this.me) : null;
 
         if (player) {
             player.own = { ...(player.own ?? {}), settings: { ...(player.own?.settings ?? {}), messengers: this.messengersOn } };
@@ -13865,7 +13863,7 @@ export class Game {
             })),
             missionsDone: (standing.missionsDone ?? []).slice(0, 4).map(({ title, from: sender, state }) => ({ title, from: senderName(sender), state })),
             // (In a party with other players: each request to share with them)
-            party: this.host.fellows(this.me).length > 0,
+            party: this.worldview.fellows(this.me).length > 0,
             people: realm
                 ? {
                       name: realm.name,
@@ -13888,7 +13886,7 @@ export class Game {
                   }
                 : null,
             done: standing.done.slice(0, 6).map(({ title, from: giver, state }) => ({ title, from: giver.townName, state })),
-            company: [...this.host.followers]
+            company: [...this.worldview.followers]
                 .filter(([, { leader }]) => leader === this.me)
                 .map(([id, one]) => {
                     const actor = this.battle.actor(id);
@@ -13896,19 +13894,19 @@ export class Game {
                     return { name: calledBy(one), calling: one.calling, level: one.level ?? 1, hp: actor?.hp ?? 0, maxHp: actor?.maxHp ?? 1, waiting: one.waiting, down: Boolean(actor?.dead && actor.downed) };
                 }),
             // (Those mending at the guilds, and the roll of those who've left them: core/host.js)
-            mending: this.host.mendingOf(this.me).map((id) => {
-                const one = this.host.mending.get(id);
+            mending: this.worldview.mendingOf(this.me).map((id) => {
+                const one = this.worldview.mending.get(id);
 
-                return { name: calledBy(one), calling: one.calling, level: one.level ?? 1, price: this.host.recallOffer(this.me, id)?.price ?? null };
+                return { name: calledBy(one), calling: one.calling, level: one.level ?? 1, price: this.worldview.recallOffer(this.me, id)?.price ?? null };
             }),
-            roll: this.host.players.get(this.me)?.roll ?? [],
-            most: this.host.mostFollowers(this.me),
+            roll: this.worldview.players.get(this.me)?.roll ?? [],
+            most: this.worldview.mostFollowers(this.me),
             heard: this.#heardTell(at),
             trails: this.#trailNotes(at),
             moonRoads: this.#moonNotes(at),
             legends: this.#legendNotes(at),
             // (The treasures they're hunting: their own to give up, their party's shown)
-            treasures: this.host.treasuresOf(this.me).map(({ id, grade, owner, name, centre }) => ({ id, title: itemLabel({ id: "treasureMap", quality: grade }), from: owner === this.me ? "Your map" : `${name}'s map`, where: at ? bearing(at, centre) : "", grade, own: owner === this.me })),
+            treasures: this.worldview.treasuresOf(this.me).map(({ id, grade, owner, name, centre }) => ({ id, title: itemLabel({ id: "treasureMap", quality: grade }), from: owner === this.me ? "Your map" : `${name}'s map`, where: at ? bearing(at, centre) : "", grade, own: owner === this.me })),
             writings: [...(this.memory.writings ?? []).filter((id) => WRITINGS[id]).map((id) => ({ id, title: WRITINGS[id].title, found: WRITINGS[id].found })), ...this.#riftLetters().map(({ id, letter }) => ({ id, title: letter.title, found: letter.found }))],
             bestiary: { ...bestiaryOf(this.progress.bestiary.kinds), portraitOf: (kind) => this.portraitOf(kind), cardOf: (id) => (INGREDIENTS[id] ? this.#ingredientCard(id) : null) },
             messages: this.messages,
@@ -13981,18 +13979,18 @@ export class Game {
         const names = (list) => (list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : (list[0] ?? ""));
         const titleOf = (card) => cardOf(card)?.title ?? "Something rare";
         const out = [...this.raresSeen.values()].map(({ card, at: seen, map }) => ({ title: titleOf(card), state: map === "town" ? "Out there" : "Below ground", words: cardOf(card)?.word ?? "", where: at && map === "town" ? `Seen ${bearing(at, seen)}` : "" }));
-        const met = [...(this.host.legends?.done ?? [])]
+        const met = [...(this.worldview.legends?.done ?? [])]
             .filter(({ how }) => how === "done")
             .reverse()
             .map(({ card, by, at: where, map }) => ({ title: titleOf(card), state: "Overcome", words: by.length ? `Overcome by ${names(by)}${cardOf(card)?.kind === "unique" ? ": it won't come again." : "."}` : "Overcome.", where: at && where && (map ?? "town") === "town" ? bearing(at, where) : "" }));
         const uniques = (this.progress.legends?.uniques ?? []).map((id) => UNIQUES[id]).filter(Boolean).map(({ name, about }) => ({ name, about }));
         // (The world's threads: what's next of each, and where, theirs to give up; those they've
         // given up, who'll take them back on it and where; those at an end, that they are)
-        const threads = Object.entries(this.host.legends?.threads ?? {}).map(([id, thread]) => {
-            const def = this.host.legends.stepOf(id);
+        const threads = Object.entries(this.worldview.legends?.threads ?? {}).map(([id, thread]) => {
+            const def = this.worldview.legends.stepOf(id);
             const title = THREADS[id]?.title ?? "A thread";
 
-            if (!thread.done && this.host.legends.gaveUp?.(id, this.me)) {
+            if (!thread.done && this.worldview.legends.gaveUp?.(id, this.me)) {
                 const back = this.#takenBackBy(id);
 
                 return { title, state: "Given up", words: back.words, where: at && back.at ? `${back.name}, ${bearing(at, back.at)}` : "", thread: null };
@@ -14040,7 +14038,7 @@ export class Game {
         }
 
         const notes = [...homes.values()].reverse().map(({ last: { trail, sign }, read }) => {
-            const name = CREATURES[this.host.trailCreatureOf(this.me, trail)]?.name ?? "Something";
+            const name = CREATURES[this.worldview.trailCreatureOf(this.me, trail)]?.name ?? "Something";
             const tracked = this.explored.tracked.has(trail.home.id);
             const home = homeWords(trail.home);
 
@@ -14140,7 +14138,7 @@ export class Game {
      * (their people at war with the player's) }.
      */
     others() {
-        return [...this.host.players.values()]
+        return [...this.worldview.players.values()]
             .filter(({ id }) => id !== this.me)
             .map((player) => ({ id: player.id, name: player.hero.name, people: peopleOf(player.realm), hostile: Boolean(this.worldview.war?.hostile(this.self.realm, player.realm)) }));
     }
@@ -14204,7 +14202,7 @@ export class Game {
             }
         }
 
-        for (const key of this.host.open.keys()) {
+        for (const key of this.worldview.open.keys()) {
             const building = this.world.interiors?.buildings.get(key);
 
             if (building && !this.visits.has(key)) {
@@ -14381,7 +14379,7 @@ export class Game {
                 return;
             }
 
-            this.shopping = { shop, keeper, name, people: this.host.folk.get(keeper)?.people ?? "human", stocked };
+            this.shopping = { shop, keeper, name, people: this.worldview.folk.get(keeper)?.people ?? "human", stocked };
             this.pack.openOn(tab);
             this.#showPack();
         });
@@ -14398,7 +14396,7 @@ export class Game {
      */
     openCrafting(keeper) {
         const actor = this.battle.actor(keeper);
-        const shop = actor && (this.host.folk.get(keeper)?.shop ?? SHOPKEEPERS[actor.role]);
+        const shop = actor && (this.worldview.folk.get(keeper)?.shop ?? SHOPKEEPERS[actor.role]);
 
         if (!shop || !Object.hasOwn(CRAFTERS, shop) || actor.dead) {
             return false;
@@ -14425,7 +14423,7 @@ export class Game {
     #ingredientCard(id) {
         const known = (kind) => (this.progress.bestiary.levelOf(kind) ?? 0) > 0;
 
-        return ingredientInfo(id, { known, level: this.host.mightFor(this.me), haggle: this.progress.bonuses().haggle });
+        return ingredientInfo(id, { known, level: this.worldview.mightFor(this.me), haggle: this.progress.bonuses().haggle });
     }
 
     // A piece as a crafter would make it of what's chosen, shown before it's made (core/crafting.js
@@ -14468,7 +14466,7 @@ export class Game {
         // (At a crafter's: which, and whether in a capital, where it works to the legendary as the
         // host has it: core/crafting.js inCapital, the one rule)
         const crafter = this.shopping && Object.hasOwn(CRAFTERS, this.shopping.shop) ? this.shopping.shop : null;
-        const capital = Boolean(crafter) && inCapital(this.host.world, this.battle.actor(this.shopping.keeper)?.map ?? null);
+        const capital = Boolean(crafter) && inCapital(this.worldview.world, this.battle.actor(this.shopping.keeper)?.map ?? null);
         const skills = Object.entries(TREES).map(([tree, { name, grows, abilities }]) => {
             const rank = progress.rank(tree);
             const { xp, from, to } = progress.toNext(tree);
@@ -14509,7 +14507,7 @@ export class Game {
             slots: tabs[tab].map((stack, place) => entry(stack, place, true)),
         };
         const me = this.battle.actor(this.me);
-        const might = this.host.mightFor(this.me);
+        const might = this.worldview.mightFor(this.me);
         const summed = totals(progress, { hp: me ? me.maxHp - progress.bonuses().hp : 50, stamina: me ? me.maxStamina - progress.bonuses().stamina : 50, might });
         // (A shop's wares by kind, the commoner made first: a blacksmith's as well made as the
         // player's mighty; a shop with a daily stock's, what it has in today, how many of each left,
@@ -14588,7 +14586,7 @@ export class Game {
             totals: summed,
             pack,
             shop,
-            trade: trade && { name: this.host.players.get(other)?.hero.name ?? "them", mine: offer(trade.offers[this.me]), theirs: offer(trade.offers[other]), agreed: { mine: Boolean(trade.agreed[this.me]), theirs: Boolean(trade.agreed[other]) }, rev: trade.rev ?? 0 },
+            trade: trade && { name: this.worldview.players.get(other)?.hero.name ?? "them", mine: offer(trade.offers[this.me]), theirs: offer(trade.offers[other]), agreed: { mine: Boolean(trade.agreed[this.me]), theirs: Boolean(trade.agreed[other]) }, rev: trade.rev ?? 0 },
             strongroom: trade || shop ? null : strongroom,
         });
     }
@@ -14600,7 +14598,7 @@ export class Game {
     // wearable: a weapon of their calling's, or body armour, made for no mightier than them), on
     // their feet: [{ id, name }] (the pack's Give to: the "outfit" command)
     #wearers(stack) {
-        return [...this.host.followers]
+        return [...this.worldview.followers]
             .filter(([id, one]) => one.leader === this.me && !this.battle.actor(id)?.dead && !wearable(stack, { weapon: HIRES[one.calling]?.weapon, level: one.level }))
             .map(([id]) => ({ id, name: this.battle.actor(id)?.name ?? "them" }));
     }
@@ -14769,7 +14767,7 @@ export class Game {
         const title = card?.title ?? "Something rare";
         const named = title.replace(/^The /, "the ");
         const mine = this.battle.actor(this.me);
-        const fellows = new Set(this.host.fellows?.(this.me) ?? []);
+        const fellows = new Set(this.worldview.fellows?.(this.me) ?? []);
         const names = (list) => (list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : (list[0] ?? ""));
         const saw = this.raresSeen.has(event.n) || (event.told ?? []).includes(this.me);
 
@@ -14860,7 +14858,7 @@ export class Game {
         }
 
         if (!this.remote) {
-            this.onWar(this.worldview.war, this.host.legends);
+            this.onWar(this.worldview.war, this.worldview.legends);
         }
     }
 
@@ -14871,7 +14869,7 @@ export class Game {
     #vaultTold(event) {
         const me = this.battle.actor(this.me);
         const mine = (event.took ?? []).includes(this.me);
-        const room = (n) => Object.values(this.host.legends?.vaults ?? {}).find((one) => one.n === n);
+        const room = (n) => Object.values(this.worldview.legends?.vaults ?? {}).find((one) => one.n === n);
         const inRoom = (n) => me && room(n) && me.map === `${room(n).floor}/vault-${n}`;
 
         switch (event.change) {
@@ -14917,7 +14915,7 @@ export class Game {
         }
 
         if (!this.remote) {
-            this.onWar(this.worldview.war, this.host.legends);
+            this.onWar(this.worldview.war, this.worldview.legends);
         }
     }
 
@@ -14929,7 +14927,7 @@ export class Game {
     // keeperOf: its rumour's teller at its home's guild, else a guild's receptionist: `guild`, this
     // is one), { thread, back: true }; or null
     #threadAsked(one, town, hall, guild = false) {
-        const legends = this.host.legends;
+        const legends = this.worldview.legends;
 
         for (const [id, thread] of Object.entries(legends?.threads ?? {})) {
             const keeper = keeperOf(id);
@@ -14962,7 +14960,7 @@ export class Game {
     // where: { words, name (its settlement's), at } (at null: any guild's)
     #takenBackBy(id) {
         const keeper = keeperOf(id);
-        const home = keeper.home ? this.world.plan?.places.find((place) => place.id === this.host.legends?.threads[id]?.home) : null;
+        const home = keeper.home ? this.world.plan?.places.find((place) => place.id === this.worldview.legends?.threads[id]?.home) : null;
 
         if (home) {
             return { words: `The ${keeper.calling ?? keeper.role} at the ${keeper.post ?? "guild"} in ${home.name} who told you of it will take you back on it, where it stood.`, name: home.name, at: home.at };
@@ -14974,8 +14972,8 @@ export class Game {
     // A thread's step's words, filled in as it is now (core/rare.js threadWords): its settlement's
     // name, and which way it is from where the thread was last
     #threadWordsOf(id) {
-        const thread = this.host.legends?.threads[id];
-        const def = this.host.legends?.stepOf(id);
+        const thread = this.worldview.legends?.threads[id];
+        const def = this.worldview.legends?.stepOf(id);
 
         if (!thread || !def) {
             return "";
@@ -15079,7 +15077,7 @@ export class Game {
         }
 
         if (!this.remote) {
-            this.onWar(this.worldview.war, this.host.legends);
+            this.onWar(this.worldview.war, this.worldview.legends);
         }
     }
 
@@ -15195,7 +15193,7 @@ export class Game {
         this.baitLook.set(baits, battle.time, groundAt);
 
         // (An ambush's signs near the player, till it springs: the dead's turned earth, the spiders' webs)
-        const laid = mine && this.mapId === "town" ? [...(this.host.ambushes?.values() ?? [])].filter((one) => !one.sprung && (one.style === "dead" || one.style === "spiders") && Math.hypot(one.heart[0] - mine.x, one.heart[1] - mine.y) <= AMBUSH_SIGNS).map((one) => ({ id: one.id, style: one.style, x: ox + one.heart[0], z: oz + one.heart[1] })) : [];
+        const laid = mine && this.mapId === "town" ? [...(this.worldview.ambushes?.values() ?? [])].filter((one) => !one.sprung && (one.style === "dead" || one.style === "spiders") && Math.hypot(one.heart[0] - mine.x, one.heart[1] - mine.y) <= AMBUSH_SIGNS).map((one) => ({ id: one.id, style: one.style, x: ox + one.heart[0], z: oz + one.heart[1] })) : [];
 
         this.ambushProps.set(laid, groundAt);
         this.ambushProps.update(battle.time / 1000);
@@ -15299,7 +15297,7 @@ export class Game {
     // Go and pick up something dropped on the ground: at once if the player's near it, or once
     // they've walked there
     #pickUp(id, { run = false } = {}) {
-        const dropped = this.host.ground.get(id);
+        const dropped = this.worldview.ground.get(id);
         const me = this.battle.actor(this.me);
 
         if (!dropped || !me || me.dead) {
@@ -15329,10 +15327,10 @@ export class Game {
 
         const [ox, oz] = this.originOf(me.map);
 
-        this.drops.sync(this.host.ground, { map: me.map, near: { x: ox + me.x, z: oz + me.y }, reach: DRAW_REACH, originOf: (map) => this.originOf(map), mine: this.me });
+        this.drops.sync(this.worldview.ground, { map: me.map, near: { x: ox + me.x, z: oz + me.y }, reach: DRAW_REACH, originOf: (map) => this.originOf(map), mine: this.me });
         this.drops.update(this.clock ?? 0);
 
-        const picking = this.picking && this.host.ground.get(this.picking);
+        const picking = this.picking && this.worldview.ground.get(this.picking);
 
         if (this.picking && !picking) {
             this.picking = null;
@@ -15365,7 +15363,7 @@ export class Game {
             return;
         }
 
-        for (const dropped of this.host.ground.values()) {
+        for (const dropped of this.worldview.ground.values()) {
             if (!this.snagTried.has(dropped.id) && snaggable(dropped, me, this.me, this.snagOnly)) {
                 this.snagTried.add(dropped.id);
                 this.#packCommand({ type: "pickUp", ground: dropped.id, ...(this.snagOnly && { only: this.snagOnly }) });
@@ -15375,7 +15373,7 @@ export class Game {
         // (Those gone forgotten, now and then)
         if (this.snagTried.size > 32) {
             for (const id of this.snagTried) {
-                if (!this.host.ground.has(id)) {
+                if (!this.worldview.ground.has(id)) {
                     this.snagTried.delete(id);
                 }
             }
@@ -15490,7 +15488,7 @@ export class Game {
     // pitched where their cards are kept while their threads are at them (campOf: their people's
     // tents round a fire, world/camps3d.js), struck once they're past
     #syncThreadCamps() {
-        const legends = this.host?.legends;
+        const legends = this.worldview?.legends;
         const wanted = new Map();
 
         for (const [id, thread] of Object.entries(legends?.threads ?? {})) {
@@ -15766,7 +15764,7 @@ export class Game {
     // the doors told of its insides, once the player comes to its door (#floorsWanted); its folk
     // once they go in (#doorstep)
     #prepare(building) {
-        const visit = { key: building.key, queue: [], maps: [], folk: [], door: building.entrance?.door ?? null, welcomed: false, bare: true, people: () => this.host.open.get(building.key) ?? [] };
+        const visit = { key: building.key, queue: [], maps: [], folk: [], door: building.entrance?.door ?? null, welcomed: false, bare: true, people: () => this.worldview.open.get(building.key) ?? [] };
 
         this.visits.set(building.key, visit);
 
@@ -16306,7 +16304,7 @@ export class Game {
         }
 
         this.doors?.update(dt, this.clock, { map: this.mapId, heading: player?.order?.type === "enter" ? player.order.link : null });
-        this.vaultDoors?.update(this.clock, { map: this.mapId, shut: (link) => Boolean(this.host.shutOf?.(link.id, this.mapId, this.me)) });
+        this.vaultDoors?.update(this.clock, { map: this.mapId, shut: (link) => Boolean(this.worldview.shutOf?.(link.id, this.mapId, this.me)) });
 
         const me = this.avatars.get(this.me)?.object.position;
 
@@ -16324,7 +16322,7 @@ export class Game {
     #lairsAloft() {
         const onGround = [...this.avatars.values()].filter((avatar) => this.#greatLairs().some(({ beast }) => beast === avatar.id));
 
-        return this.#greatLairs().filter((lair) => (this.host?.slain?.[lair.id] ?? -Infinity) <= this.battle.time && !onGround.some(({ id, object: { position } }) => id === lair.beast && Math.hypot(position.x - lair.at[0], position.z - lair.at[1]) < 250));
+        return this.#greatLairs().filter((lair) => (this.worldview?.slain?.[lair.id] ?? -Infinity) <= this.battle.time && !onGround.some(({ id, object: { position } }) => id === lair.beast && Math.hypot(position.x - lair.at[0], position.z - lair.at[1]) < 250));
     }
 
     // --- What happened in the battle ---
@@ -17354,7 +17352,7 @@ export class Game {
             case "turn":
                 // (The war kept as it goes; the journal's time left with it; and the player's time
                 // in towns, for the invasions to come: core/invasions.js clockOf)
-                this.onWar(this.worldview.war, this.host.legends);
+                this.onWar(this.worldview.war, this.worldview.legends);
                 this.onProgress(this.progress);
                 this.#keepFollowers();
 
@@ -17615,7 +17613,7 @@ export class Game {
             }
         }
 
-        this.onWar(war, this.host.legends);
+        this.onWar(war, this.worldview.legends);
         this.onStanding(this.standing);
 
         if (this.journal?.open) {
@@ -17737,7 +17735,7 @@ export class Game {
 
         // (One of the player's hired adventurers striking the kind of foe that last knocked them
         // down: a word about it, now and then, #bark)
-        const striker = event.by ? this.host.followers.get(event.by) : null;
+        const striker = event.by ? this.worldview.followers.get(event.by) : null;
         const nemesis = striker?.leader === this.me ? striker.record?.nemesis : null;
 
         if (nemesis && actor?.kind === "beast" && actor.wild?.creature === nemesis) {
@@ -18116,7 +18114,7 @@ export class Game {
             return;
         }
 
-        const nameOf = (id) => this.host.players.get(id)?.hero.name ?? "They";
+        const nameOf = (id) => this.worldview.players.get(id)?.hero.name ?? "They";
 
         if (event.change === "asked" && this.resistSummons) {
             this.#command({ type: "summoned", come: false });
@@ -18174,7 +18172,7 @@ export class Game {
         const { battle, hud, effects } = this;
         const point = new THREE.Vector3();
         // (A player's boons, bought by talking: a blessing, a keen edge)
-        const boonsOf = (actor) => this.host.players.get(actor.id)?.boons ?? [];
+        const boonsOf = (actor) => this.worldview.players.get(actor.id)?.boons ?? [];
 
         for (const id of this.ailed) {
             const actor = battle.actor(id);
@@ -18345,7 +18343,7 @@ export class Game {
         const actor = this.battle.actor(id);
         const said = `The ${actor.name.toLowerCase()} is slain!`;
 
-        if (notable(actor.wild, { master: Boolean(this.host?.wild?.get(id)?.master) })) {
+        if (notable(actor.wild, { master: Boolean(this.worldview?.wild?.get(id)?.master) })) {
             this.hud.message(said, 3);
 
             return;
@@ -18738,7 +18736,7 @@ export class Game {
             this.toggleParty();
         } else if (id === "readyCheck") {
             this.readyCheck();
-        } else if (id === "chat" && (event.target === document.body || event.target instanceof HTMLCanvasElement || event.target === document) && !this.partyPanel?.open && (this.hosting || this.remote) && this.host.partyFor(this.me)) {
+        } else if (id === "chat" && (event.target === document.body || event.target instanceof HTMLCanvasElement || event.target === document) && !this.partyPanel?.open && (this.hosting || this.remote) && this.worldview.partyFor(this.me)) {
             // (In a party of players, with nothing else to press: its chat, ready to type)
             event.preventDefault();
             this.toggleParty({ chat: true });
@@ -19003,7 +19001,7 @@ export class Game {
             }
 
             const enemy = this.battle.hostile(actor, player);
-            const talks = actor.neutral || actor.kind === "soldier" || actor.kind === "player" || (actor.kind === "follower" && this.host.followers.get(actor.id)?.leader === this.me);
+            const talks = actor.neutral || actor.kind === "soldier" || actor.kind === "player" || (actor.kind === "follower" && this.worldview.followers.get(actor.id)?.leader === this.me);
 
             if (!enemy && !talks) {
                 continue;
@@ -19165,7 +19163,7 @@ export class Game {
             }
 
             const enemy = this.battle.hostile(actor, player);
-            const provokes = actor.kind === "soldier" && !enemy && this.host.canFight(player, actor);
+            const provokes = actor.kind === "soldier" && !enemy && this.worldview.canFight(player, actor);
 
             kind = enemy ? "enemy" : provokes ? "provoke" : this.#ownUnit(actor.id) ? "unit" : "ally";
         }
@@ -19333,7 +19331,7 @@ export class Game {
         if (obstacle) {
             this.lastTap = { time, x: clientX, y: clientY, from: "view" };
             this.#walkTo(obstacle, { run });
-            this.hud.message(`Hold on ${OBSTACLE_WORDS[this.host.obstacles.get(obstacle)?.kind ?? "tree"].it} to clear ${OBSTACLE_WORDS[this.host.obstacles.get(obstacle)?.kind ?? "tree"].pronoun}, or go round.`, 2.5);
+            this.hud.message(`Hold on ${OBSTACLE_WORDS[this.worldview.obstacles.get(obstacle)?.kind ?? "tree"].it} to clear ${OBSTACLE_WORDS[this.worldview.obstacles.get(obstacle)?.kind ?? "tree"].pronoun}, or go round.`, 2.5);
 
             return;
         }
@@ -19455,7 +19453,7 @@ export class Game {
     // again as the player leaves it, or as it's closed), unless a great spell has it darker; and its
     // time left on the HUD (#riftChip)
     #riftSky(dt) {
-        const open = this.host?.hellRifts?.open ?? null;
+        const open = this.worldview?.hellRifts?.open ?? null;
         const me = this.battle.actor(this.me);
         const outdoors = me?.map === "town";
         const origin = this.originOf("town");
@@ -20251,7 +20249,7 @@ export class Game {
         // (What one of the player's own's told: core/host.js #orderUnit; holding fire, or at will
         // again if they are)
         if (unit) {
-            this.#orderUnit(target, unit === "stance" ? (this.host.stance(target).holdFire ? "free" : "hold") : unit);
+            this.#orderUnit(target, unit === "stance" ? (this.worldview.stance(target).holdFire ? "free" : "hold") : unit);
 
             return { ok: true };
         }
@@ -20443,14 +20441,14 @@ export class Game {
     #summonable() {
         const me = this.battle.actor(this.me);
 
-        return [...this.host.players.values()].filter(({ id }) => id !== this.me && this.battle.actor(id) && !this.battle.hostile(this.battle.actor(id), me));
+        return [...this.worldview.players.values()].filter(({ id }) => id !== this.me && this.battle.actor(id) && !this.battle.hostile(this.battle.actor(id), me));
     }
 
     // Summon: a creature of these parts, or another player (chosen), then cast
     // How long to camp, asked (once a camp can be made here): so many hours (the last chosen to
     // start with), till sundown (when the night's creatures come out) or till the morning
     #chooseCamp() {
-        const why = this.host.campRefusal(this.me);
+        const why = this.worldview.campRefusal(this.me);
 
         if (why) {
             this.hud.message(REFUSALS[why], 1.4);
@@ -20516,8 +20514,8 @@ export class Game {
             const mine = actor === player;
 
             const enemy = !mine && this.battle.hostile(actor, player);
-            const talks = actor.neutral || actor.kind === "soldier" || actor.kind === "player" || (actor.kind === "follower" && this.host.followers.get(actor.id)?.leader === this.me);
-            const provokes = actor.kind === "soldier" && !enemy && this.host.canFight(player, actor);
+            const talks = actor.neutral || actor.kind === "soldier" || actor.kind === "player" || (actor.kind === "follower" && this.worldview.followers.get(actor.id)?.leader === this.me);
+            const provokes = actor.kind === "soldier" && !enemy && this.worldview.canFight(player, actor);
 
             // (Anyone else who isn't an enemy, `allies`: to heal them)
             if (actor.dead || (mine && !withPlayer) || (!mine && !enemy && !(folk && talks) && !(soldiers && provokes) && !allies) || actor.map !== player.map || !this.avatars.has(actor.id)) {
@@ -20569,9 +20567,9 @@ export class Game {
         const friendly = open.kind === "ally";
         const slots = open.kind === "provoke" ? WHEELS.provoke[0] : (this.wheels[friendly ? "self" : open.kind]?.[open.side] ?? {});
         const unit = commands ? this.battle.actor(open.target) : null;
-        const waiting = commands && this.host.waiting(open.target);
-        const stance = commands ? this.host.stance(open.target) : null;
-        const ability = commands ? this.host.unitAbility(open.target) : null;
+        const waiting = commands && this.worldview.waiting(open.target);
+        const stance = commands ? this.worldview.stance(open.target) : null;
+        const ability = commands ? this.worldview.unitAbility(open.target) : null;
         const counts = {};
         const off = [];
         const learnt = [...this.progress.known(), ...this.progress.abilities()];
@@ -20618,8 +20616,8 @@ export class Game {
     // wheel (`unit`: their id), their ability's
     #cooldowns(slots, unit = null) {
         const shares = {};
-        const readyAt = this.host.players.get(this.me)?.readyAt ?? {};
-        const theirs = unit ? this.host.unitAbility(unit) : null;
+        const readyAt = this.worldview.players.get(this.me)?.readyAt ?? {};
+        const theirs = unit ? this.worldview.unitAbility(unit) : null;
 
         for (const [direction, key] of Object.entries(slots ?? {})) {
             const action = actionOf(key);
@@ -20908,11 +20906,11 @@ export class Game {
 
         const me = this.battle.actor(this.me);
         const evaluating = Boolean(me && this.battle.buffOf(me, "evaluate"));
-        const might = me ? this.host.mightFor(this.me) : 0;
+        const might = me ? this.worldview.mightFor(this.me) : 0;
 
         for (const id of this.hud.tracked.keys()) {
             const foe = this.battle.actor(id);
-            const fight = me && foe && !foe.dead && !STILL.has(foe.kind) && this.battle.hostile(foe, me) ? this.host.fightFor(this.me, id) : null;
+            const fight = me && foe && !foe.dead && !STILL.has(foe.kind) && this.battle.hostile(foe, me) ? this.worldview.fightFor(this.me, id) : null;
 
             this.hud.sizeUp(id, fight ? { look: fightLook(might - fight.power), power: evaluating ? fight.power : null, pack: fight.pack } : {});
         }
@@ -20923,7 +20921,7 @@ export class Game {
     #wielding(dt) {
         const wielders = [];
 
-        for (const id of this.host.players.keys()) {
+        for (const id of this.worldview.players.keys()) {
             const actor = this.battle.actor(id);
             const avatar = this.avatars.get(id);
 
@@ -21491,7 +21489,7 @@ export class Game {
         if (door) {
             // (A way in kept shut, a thread's lock or a hell's seal: what might open it said at once,
             // and not walked to: core/rare.js LOCKS)
-            const shut = this.host.shutOf?.(door.link.id, player.map, this.me);
+            const shut = this.worldview.shutOf?.(door.link.id, player.map, this.me);
 
             if (shut) {
                 this.hud.message(shut.hint, 4);
