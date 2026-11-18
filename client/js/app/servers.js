@@ -45,6 +45,14 @@ export const API_PATH = "/api/v1";
 export const PLAY_PATH = "/play";
 export const PLAY_PROTOCOL = "pellagos.play.1";
 
+/**
+ * The play socket that speaks bytes as well (server/play.js PLAY_BINARY; the scaling plan's
+ * 3-12): offered first, with PLAY_PROTOCOL for a server that hasn't it. The server answers
+ * with the one it speaks (the link's `spoken`).
+ */
+export const PLAY_BINARY = "pellagos.play.2";
+export const PLAY_OFFERED = Object.freeze([PLAY_BINARY, PLAY_PROTOCOL]);
+
 /** How long a call to a server's API may take (ms); and asking one of a server's addresses when there's another to try. */
 export const CALL_TIMEOUT = 10000;
 
@@ -583,7 +591,7 @@ export class ServerClient {
         let link = null;
 
         try {
-            link = await RelayLink.open(playOf(address), this.timing, PLAY_PROTOCOL);
+            link = await RelayLink.open(playOf(address), this.timing, PLAY_OFFERED);
 
             const nonce = newNonce();
             const [id, publicKey, signature] = await link.prove(nonce);
@@ -611,7 +619,7 @@ export class ServerClient {
         await this.reach();
 
         try {
-            link = await RelayLink.open(playOf(this.via), this.timing, PLAY_PROTOCOL);
+            link = await RelayLink.open(playOf(this.via), this.timing, PLAY_OFFERED);
         } catch {
             throw new ServerRefusal("unreachable");
         }
@@ -832,7 +840,7 @@ export class ServerClient {
         await this.reach();
 
         try {
-            link = await RelayLink.open(playOf(this.via), this.timing, PLAY_PROTOCOL);
+            link = await RelayLink.open(playOf(this.via), this.timing, PLAY_OFFERED);
         } catch {
             throw new ServerRefusal("unreachable");
         }

@@ -66,6 +66,8 @@ function connect(address, protocol) {
 
         try {
             socket = protocol ? new WebSocket(address, protocol) : new WebSocket(address);
+            // (Bytes, where the server speaks them, as a buffer: not a Blob, read a turn later)
+            socket.binaryType = "arraybuffer";
         } catch {
             reject(new Error("unreachable"));
 
@@ -145,6 +147,9 @@ export class RelayLink {
         /** Told how long the relay took to answer a ping (ms): the round trip over this game's own link. */
         this.onRtt = () => {};
 
+        /** Told a message of bytes (an ArrayBuffer), where the server speaks them (servers.js PLAY_BINARY). */
+        this.onBinary = () => {};
+
         this.#attach(socket);
     }
 
@@ -152,7 +157,14 @@ export class RelayLink {
         this.socket = socket;
 
         socket.addEventListener("message", ({ data }) => {
-            if (this.socket === socket) {
+            if (this.socket !== socket) {
+                return;
+            }
+
+            // (Bytes: as they are; anything else is a line, as ever)
+            if (data instanceof ArrayBuffer) {
+                this.onBinary(data);
+            } else {
                 this.#hear(String(data));
             }
         });
@@ -463,6 +475,18 @@ export class RelayLink {
     #send(text) {
         if (this.socket?.readyState === WebSocket.OPEN) {
             this.socket.send(text);
+        }
+    }
+
+    /** Which protocol the server answered with, of those offered ("" till it's open, or with none). */
+    get spoken() {
+        return this.socket?.protocol ?? "";
+    }
+
+    /** Send a message of bytes (an ArrayBuffer or a typed array), where the server speaks them: nothing's sent otherwise. */
+    sendBinary(bytes) {
+        if (this.socket?.readyState === WebSocket.OPEN && this.spoken === "pellagos.play.2") {
+            this.socket.send(bytes);
         }
     }
 

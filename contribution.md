@@ -655,6 +655,11 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
        rolled back without stranding a world (an older server refuses a newer save).
      - A change to the transport (the play socket, the relay, the links) is tested in both
        netcodes.
+     - The play socket speaks two protocols, `pellagos.play.1` (lines) and `pellagos.play.2` (lines
+       and bytes: docs/SERVER.md, *Bytes on the play socket*). A game offers both and takes the
+       one the server answers with. Never take the first away while a game that offers only it
+       can still be in use; a new kind of bytes gets a first byte of its own (`server/play.js`
+       `BINARY`), never one used before.
      - The client says what it speaks before a world asks it of anyone: a refusal's words ship
        at least one release before the first world that can give them.
 5. **Test it.** Add or update unit tests (`test/*.test.js`, `node:test`) for every change to the

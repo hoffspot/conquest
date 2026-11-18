@@ -104,7 +104,9 @@ function split(text) {
 
 /**
  * One end of a WebSocket, on a socket that's been upgraded: messages in and out as text. Frames
- * it can't make sense of, or too long, close it.
+ * it can't make sense of, or too long, close it. Where it's been agreed (`binary`: a play socket
+ * speaking pellagos.play.2, server/play.js), messages of bytes too (sendBinary, onBinary), never
+ * compressed: what they'll carry is packed already (generated/multiplayer_scaling_plan.md 3-12).
  */
 export class Socket {
     /**
@@ -117,11 +119,14 @@ export class Socket {
      * @param {boolean} [options.deflate] - Whether the handshake agreed to compressed messages
      *   (deflateOffered, DEFLATE_ACCEPTED).
      */
-    constructor(socket, head = Buffer.alloc(0), { limit = RELAY_LIMITS.message, backlog = RELAY_LIMITS.backlog, deflate = false } = {}) {
+    constructor(socket, head = Buffer.alloc(0), { limit = RELAY_LIMITS.message, backlog = RELAY_LIMITS.backlog, deflate = false, binary = false } = {}) {
         this.socket = socket;
         this.limit = limit;
         this.backlog = backlog;
         this.deflate = deflate;
+        /** Whether messages of bytes are spoken here (sendBinary, onBinary), or close it, as ever. */
+        this.binary = binary;
+        this.onBinary = () => {};
         this.buffer = head;
 
         /** What it's sent: messages, their bytes as text, and as they went (compressed or not). */
@@ -188,6 +193,31 @@ export class Socket {
         this.sent.bytes += data.length;
         this.sent.wire += (packed ?? data).length;
         this.#frame(OPCODES.text, packed ?? data, packed !== null);
+    }
+
+    /**
+     * Send a message of bytes (a Buffer, a typed array or an ArrayBuffer), as it is: never
+     * compressed, whatever its length (a text message over DEFLATE.over is; these are packed
+     * already). Nothing's sent where bytes aren't spoken (`binary`). One too slow to take what's
+     * sent is let go, as send's.
+     */
+    sendBinary(bytes) {
+        if (!this.open || !this.binary) {
+            return;
+        }
+
+        if (this.socket.writableLength > this.backlog) {
+            this.close(1008);
+
+            return;
+        }
+
+        const data = Buffer.isBuffer(bytes) ? bytes : bytes instanceof ArrayBuffer ? Buffer.from(bytes) : Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+        this.sent.messages++;
+        this.sent.bytes += data.length;
+        this.sent.wire += data.length;
+        this.#frame(OPCODES.binary, data);
     }
 
     // A message compressed as permessage-deflate has it: raw deflate, flushed, less its last four
@@ -276,8 +306,9 @@ export class Socket {
             const masked = (second & 0x80) !== 0;
 
             // (A frame marked compressed where that wasn't agreed, or that isn't a message's first;
-            // or marked with what means nothing here: not made sense of)
-            if ((first & 0x30) !== 0 || ((first & 0x40) !== 0 && (!this.deflate || opcode !== OPCODES.text))) {
+            // or marked with what means nothing here: not made sense of. A browser compresses the
+            // bytes it sends as it does its text, where both were agreed: read back as text's are)
+            if ((first & 0x30) !== 0 || ((first & 0x40) !== 0 && (!this.deflate || (opcode !== OPCODES.text && !(opcode === OPCODES.binary && this.binary))))) {
                 this.close(1002);
 
                 return;
@@ -337,15 +368,24 @@ export class Socket {
     #hear(opcode, fin, payload, packed = false) {
         switch (opcode) {
             case OPCODES.text:
+            case OPCODES.binary:
             case OPCODES.continuation:
-                if (opcode === OPCODES.text && this.parts.length) {
+                // (Bytes: only where they're spoken)
+                if (opcode === OPCODES.binary && !this.binary) {
+                    this.close(1003);
+
+                    return;
+                }
+
+                if (opcode !== OPCODES.continuation && this.parts.length) {
                     this.close(1002);
 
                     return;
                 }
 
-                if (opcode === OPCODES.text) {
+                if (opcode !== OPCODES.continuation) {
                     this.packed = packed;
+                    this.bytes = opcode === OPCODES.binary;
                 }
 
                 this.parts.push(payload);
@@ -369,7 +409,11 @@ export class Socket {
                         }
                     }
 
-                    this.onMessage(whole.toString("utf8"));
+                    if (this.bytes) {
+                        this.onBinary(whole);
+                    } else {
+                        this.onMessage(whole.toString("utf8"));
+                    }
                 }
 
                 break;
@@ -388,7 +432,6 @@ export class Socket {
                 break;
             }
             default:
-                // (Binary: not spoken here)
                 this.close(1003);
         }
     }

@@ -32,6 +32,16 @@ export const PLAY_PATH = "/play";
 export const PLAY_PROTOCOL = "pellagos.play.1";
 
 /**
+ * The play socket that speaks bytes as well (generated/multiplayer_scaling_plan.md 3-12): all of
+ * PLAY_PROTOCOL's, and messages of bytes either way (relay.js sendBinary, onBinary), for the
+ * frames a replicated world will send. A game that offers it is answered with it; one that
+ * offers only PLAY_PROTOCOL plays as ever. Till there are frames, the one message of bytes
+ * spoken is the tests' echo: one whose first byte is BINARY.echo comes back as it was sent.
+ */
+export const PLAY_BINARY = "pellagos.play.2";
+export const BINARY = Object.freeze({ echo: 0 });
+
+/**
  * Its limits: the longest message from a game (bytes: a world's snapshots only ever go the other
  * way; a character coming in is the longest, as a host takes it: core/netplay.js HEARD), how much may wait to go to one slow to take it, how long to enter a world, how long a
  * dropped link's place is kept, and how often each's asked whether it's still there (and let go
@@ -130,6 +140,17 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
             } else {
                 policy.on("refused", { why: "bad-request", address: place.address });
                 socket.close(1008);
+            }
+        };
+        // (Bytes, where they're spoken: the tests' echo, and nothing else yet)
+        socket.onBinary = (bytes) => {
+            counted.received += bytes.length;
+
+            if (bytes[0] !== BINARY.echo) {
+                policy.on("refused", { why: "bad-request", address: place.address });
+                socket.close(1008);
+            } else if (rate.allow(place)) {
+                socket.sendBinary(bytes);
             }
         };
         socket.onClose = () => {
@@ -310,7 +331,7 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
             throw error;
         }
 
-        if (String(request.headers.upgrade).toLowerCase() !== "websocket" || !key || !protocols.includes(PLAY_PROTOCOL)) {
+        if (String(request.headers.upgrade).toLowerCase() !== "websocket" || !key || !(protocols.includes(PLAY_PROTOCOL) || protocols.includes(PLAY_BINARY))) {
             refuse(400, "Bad Request");
 
             return;
@@ -323,14 +344,16 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
         }
 
         const accept = createHash("sha1").update(key + MAGIC).digest("base64");
+        // (Bytes too, for a game that offers them: PLAY_BINARY)
+        const spoken = protocols.includes(PLAY_BINARY) ? PLAY_BINARY : PLAY_PROTOCOL;
 
         // (Compressed, for a browser that offers it, unless the server's set not to: the world as a
         // player comes in is a sixth the size: server/relay.js DEFLATE)
         const deflate = server.settings?.get("compress") !== false && deflateOffered(request.headers);
 
-        raw.write(["HTTP/1.1 101 Switching Protocols", "Upgrade: websocket", "Connection: Upgrade", `Sec-WebSocket-Accept: ${accept}`, `Sec-WebSocket-Protocol: ${PLAY_PROTOCOL}`, ...(deflate ? [DEFLATE_ACCEPTED] : []), "", ""].join("\r\n"));
+        raw.write(["HTTP/1.1 101 Switching Protocols", "Upgrade: websocket", "Connection: Upgrade", `Sec-WebSocket-Accept: ${accept}`, `Sec-WebSocket-Protocol: ${spoken}`, ...(deflate ? [DEFLATE_ACCEPTED] : []), "", ""].join("\r\n"));
 
-        const socket = new Socket(raw, head, { limit: limits.message, backlog: limits.backlog, deflate });
+        const socket = new Socket(raw, head, { limit: limits.message, backlog: limits.backlog, deflate, binary: spoken === PLAY_BINARY });
 
         socket.address = address;
         socket.from = from;
@@ -383,6 +406,26 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
 
             counted.messages += sent.messages - messages;
             counted.bytes += sent.bytes - bytes;
+            counted.wire += sent.wire - wire;
+        },
+
+        /** Bytes a world sends a player's game (a frame: PLAY_BINARY), if its socket's linked and speaks them; counted as send's are. */
+        sendBinary(world, peer, bytes) {
+            const socket = places.get(placeKey(world, peer))?.socket;
+
+            if (!socket?.binary) {
+                return;
+            }
+
+            const { sent } = socket;
+            const { messages, bytes: had, wire } = sent;
+
+            socket.sendBinary(bytes);
+
+            const counted = trafficOf(world);
+
+            counted.messages += sent.messages - messages;
+            counted.bytes += sent.bytes - had;
             counted.wire += sent.wire - wire;
         },
 

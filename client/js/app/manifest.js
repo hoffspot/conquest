@@ -84,7 +84,7 @@ export const MANIFEST = Object.freeze([
             ["js/app/surroundings.js", 7756, "32c7226c5a"],
             ["js/app/talk.js", 4653, "2078b5bbab"],
             ["js/app/throng.js", 9107, "954d7cde7b"],
-            ["js/app/together.js", 22304, "b88b352c42"],
+            ["js/app/together.js", 23282, "89517195b0"],
             ["js/app/wheel.js", 36961, "73ba489695"],
             ["js/app/wheelsetup.js", 6409, "cabc4ef49c"],
             ["js/app/worldlink.js", 3446, "2847d5c85f"],
