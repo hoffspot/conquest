@@ -13,7 +13,7 @@ import { STEP_MS } from "../client/js/core/battle.js";
 import { LIMITS } from "../server/access/limits.js";
 import { SETTINGS } from "../server/storage/settings.js";
 import { WORLD_SETTINGS } from "../server/storage/worlds.js";
-import { judge, limitsFor, SERVER_SOAK, soakServer, stayed } from "../scripts/server-soak.js";
+import { judge, limitsFor, SERVER_SOAK, soakServer, stayed, viewsOf } from "../scripts/server-soak.js";
 
 const MB = 1048576;
 
@@ -112,6 +112,23 @@ describe("the server soak's players", () => {
         assert.deepEqual(Object.keys(SETTINGS).filter((key) => /limit|mostPlayers|socketsPer|^players/i.test(key)), ["playersAtOnce", "mostPlayersCeiling"]);
         assert.deepEqual([SETTINGS.mostPlayersCeiling.max, SETTINGS.mostPlayersCeiling.default], [8, 8]);
         assert.deepEqual([SETTINGS.playersAtOnce.max, SETTINGS.playersAtOnce.default], [LIMITS.players, LIMITS.players]);
+    });
+
+    it("plays with the server's views dark where that's asked, and says what they cost: frames made for every player, a step's time, each player's bytes a second", async () => {
+        const report = await soakServer({ seed: 2, minutes: 0.15, players: 0, thin: 3, hold: true, oneTown: true, replication: "dark", log: () => {} });
+        const { views } = report;
+
+        assert.deepEqual(report.failures, []);
+        assert.equal(report.options.replication, "dark");
+        assert.ok(views.frames > 0 && views.bytes > 0 && views.records > 0, JSON.stringify(views));
+        assert.ok(views.ms > 0 && views.ms < 50, `${views.ms} ms a step`);
+        assert.ok(views.known >= 1 && views.known <= 256, `${views.known} known of each`);
+        assert.ok(views.bytesASecond > 0 && views.bytesASecond <= 20 * 1024, `${views.bytesASecond} bytes a second each`);
+
+        // (And with nothing asked, no views are made and the report has none)
+        assert.equal(viewsOf({ passes: { "flush.views": { seconds: 0.001, calls: 100 } }, work: {} }, 3), null);
+        assert.equal(viewsOf({ passes: {}, work: { "views.frames": 5 } }, 3), null);
+        assert.deepEqual(viewsOf({ passes: { "flush.views": { seconds: 0.02, calls: 100 } }, work: { "views.frames": 200, "views.bytes": 6000, "views.records": 700, "views.known": 4000 } }, 2), { ms: 0.2, frames: 200, bytes: 6000, records: 700, known: 20, bytesASecond: 600 });
     });
 
     it("plays nine thin players in one world for a quarter of a minute: all in, none sent out, none sent the world again", async () => {

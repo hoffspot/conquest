@@ -420,7 +420,7 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
 
         const passes = server.metrics.passesOf(made.world);
 
-        return { seed, minutes, options: { players: count, thin, hold, fights, layout: oneTown ? "one-town" : "spread", tunnel, replication }, limits, players: reports, samples, histograms: server.metrics.histogramsOf(made.world), passes, views: viewsOf(passes, count + thin), judged, resyncs: sum("resyncs"), desyncs: sum("desyncs"), skips: sum("skips"), failures };
+        return { seed, minutes, options: { players: count, thin, hold, fights, layout: oneTown ? "one-town" : "spread", tunnel, ...(replication ? { replication } : {}) }, limits, players: reports, samples, histograms: server.metrics.histogramsOf(made.world), passes, views: viewsOf(passes, count + thin), judged, resyncs: sum("resyncs"), desyncs: sum("desyncs"), skips: sum("skips"), failures };
     } finally {
         for (const one of players) {
             one.stop();
