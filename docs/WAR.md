@@ -3807,6 +3807,15 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   also sent where its characters near the players stood and how they were going, for a copy to
   compare meanwhile:
   - **Which:** those within 160 m of any player, on that player's map; the nearest 64 at most.
+  - **How they're found** (`core/interest.js`; the scaling plan's `1-3`): the battle's characters
+    are kept by the 32 m square of ground they stand on, a grid for each map with only the
+    squares anyone's on kept. Each time it's asked, the grid is brought up to date (whoever's
+    crossed into another square is moved, whoever's gone is taken out), then each player's reach
+    is looked through by its squares. Going through everyone for every player came out the same
+    (`packMotion`'s `grid: false`, kept to set the two side by side: `test/interest.test.js`)
+    and took ten times as long with a hundred players spread over the land. The grid is the
+    authority's alone and nothing of the battle's: it changes no step, checksum or save. The
+    replicated views will ask the same grid who a player can see.
   - **Each, in 16 bytes:** its place among the battle's characters (the same in every copy); where
     it is and how fast it's going, to the centimetre; which way it faces; whether it's moving,
     running, fighting or dead; and how many corners are left on its way. All of it sent as

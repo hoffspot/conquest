@@ -17,6 +17,7 @@
 
 import { shareOf } from "./afflictions.js";
 import { cos, sin, TAU } from "./exact.js";
+import { interestOf } from "./interest.js";
 import { count } from "./probe.js";
 
 /**
@@ -40,8 +41,9 @@ export function motionOf(actor) {
     return {
         x: Math.round(actor.x * 100),
         y: Math.round(actor.y * 100),
-        vx: clamp16(Math.round(speed * sin(actor.facing))),
-        vy: clamp16(Math.round(speed * cos(actor.facing))),
+        // (Standing: going nowhere, whichever way it faces)
+        vx: speed === 0 ? 0 : clamp16(Math.round(speed * sin(actor.facing))),
+        vy: speed === 0 ? 0 : clamp16(Math.round(speed * cos(actor.facing))),
         heading: Math.round((actor.facing * 256) / TAU) & 255,
         flags: (moving ? FLAG.moving : 0) | (actor.running ? FLAG.running : 0) | (fighting ? FLAG.fighting : 0) | (actor.dead ? FLAG.dead : 0) | (Math.min(actor.path.length, 15) << 4),
     };
@@ -50,34 +52,86 @@ export function motionOf(actor) {
 /**
  * The characters of a host's battle within `reach` of any of its players (on that player's map),
  * the nearest first, `most` of them at most, packed: a Uint8Array.
+ *
+ * Those near are found by the squares of ground round each player (core/interest.js: the scaling
+ * plan's 1-3), not by going through everyone for every player. `grid: false` goes through
+ * everyone, as it once did: the same bytes either way (test/interest.test.js), kept to set the
+ * two side by side.
  */
-export function packMotion(host, { reach = MOTION.reach, most = MOTION.most } = {}) {
+export function packMotion(host, { reach = MOTION.reach, most = MOTION.most, grid = true } = {}) {
     const { actors } = host.battle;
     const players = [...host.players.keys()].map((id) => host.battle.actor(id)).filter(Boolean);
     const near = [];
 
-    count("motion.pairs", Math.min(actors.length, 65536) * players.length);
+    if (grid) {
+        const interest = interestOf(host.battle);
+        const found = new Map();
+        let pairs = 0;
 
-    for (let index = 0; index < actors.length && index < 65536; index++) {
-        const actor = actors[index];
-        let nearest = Infinity;
+        // (Each one found once, however many players they're near: the nearest of those kept)
+        const visit = (index, apart) => {
+            const had = found.get(index);
+
+            if (had) {
+                had.nearest = Math.min(had.nearest, apart);
+            } else if (index < 65536) {
+                const one = { index, nearest: apart };
+
+                found.set(index, one);
+                near.push(one);
+            }
+        };
+
+        interest.refresh(actors);
 
         for (const player of players) {
-            if (player.map === actor.map) {
-                const [dx, dy] = [actor.x - player.x, actor.y - player.y];
-
-                nearest = Math.min(nearest, dx * dx + dy * dy);
-            }
+            pairs += interest.near(player.map, player.x, player.y, reach, visit);
         }
 
-        if (nearest <= reach * reach) {
-            near.push({ index, nearest });
+        count("motion.pairs", pairs);
+    } else {
+        count("motion.pairs", Math.min(actors.length, 65536) * players.length);
+
+        for (let index = 0; index < actors.length && index < 65536; index++) {
+            const actor = actors[index];
+            let nearest = Infinity;
+
+            for (const player of players) {
+                if (player.map === actor.map) {
+                    const [dx, dy] = [actor.x - player.x, actor.y - player.y];
+
+                    nearest = Math.min(nearest, dx * dx + dy * dy);
+                }
+            }
+
+            if (nearest <= reach * reach) {
+                near.push({ index, nearest });
+            }
         }
     }
 
-    near.sort((a, b) => a.nearest - b.nearest || a.index - b.index);
+    // The nearest `most` of them, in order. With more near than go in it, those further than the
+    // `most`th nearest are left out before the rest are put in order: how far off each is, as
+    // numbers alone, is put in order far sooner than they are (the same ones chosen either way)
+    let few = near;
 
-    const chosen = near.slice(0, most);
+    if (grid && most >= 1 && near.length > most) {
+        const apart = new Float64Array(near.length);
+
+        for (let k = 0; k < near.length; k++) {
+            apart[k] = near[k].nearest;
+        }
+
+        apart.sort();
+
+        const furthest = apart[Math.floor(most) - 1];
+
+        few = near.filter(({ nearest }) => nearest <= furthest);
+    }
+
+    few.sort((a, b) => a.nearest - b.nearest || a.index - b.index);
+
+    const chosen = few.slice(0, most);
     const bytes = new Uint8Array(chosen.length * MOTION.size);
     const view = new DataView(bytes.buffer);
 

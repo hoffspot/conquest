@@ -647,7 +647,11 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
        (`Host.widening`, in `test/spots.test.js`), and so has one whose old form is a rule the
        owner has since changed, on by their ruling and kept only to set the two side by side
        (`Battle.idling`, in `test/idling.test.js`; `Host.peopling`, in
-       `test/peopling.test.js`).
+       `test/peopling.test.js`). Two more kinds have none, by the owner's ruling of 18 November
+       2026: a static switch that's on for everyone and is there only for the tests (and the
+       game's stepping, `Game.advance`) to turn off (`Battle.counting`, `Battle.farWaits`); and a
+       protocol a game offers beside the one before it (`pellagos.play.2`), which is how old and
+       new games and servers go on together, and is never taken away by a date.
      - A change to what's replicated changes lockstep's op and the view's schema in the same
        pull request, with a test of each.
      - **No pull request for replication bumps `SNAPSHOT_VERSION`.** The save is the same

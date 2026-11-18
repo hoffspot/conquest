@@ -119,8 +119,8 @@ export const FLUSH_PASSES = Object.freeze(["flush.quiet", "flush.checksum", "flu
  * light at night (`light.actors`: the soldiers, and everyone only while a Light's lasting on someone, where it was everyone each step; and the lights measured against players' places: `light.pairs`); and for each pass that measures the world against the players,
  * how many of the world's things times how many players' places (`lookAround.pairs`, buildings;
  * `spotting.pairs`, what's to be found; `muster.pairs`, towns and works; `townsfolk.pairs`, the
- * settlements whose folk are out; `wilds.pairs`, the wild's creatures; `motion.pairs`, everyone in
- * the battle, as where they stand is packed); the wild's creatures gone through for the packs'
+ * settlements whose folk are out; `wilds.pairs`, the wild's creatures; `motion.pairs`, those
+ * looked at in the squares round each player as where they stand is packed: core/interest.js); the wild's creatures gone through for the packs'
  * members (`packs.wild`: once a look for them all, where it was once for each pack) and those in
  * the battle gone through for the bodies about a place (`bodies.actors`, in `bodies.asks`
  * askings: those its index has near, while it's up to date, where it was everyone); those in the
