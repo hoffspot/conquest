@@ -497,7 +497,7 @@ test("a newcomer with no character follows a world's invite link: makes a charac
     expect(server.access.world(made.world).players().map(({ role }) => role)).toEqual(["player"]);
 });
 
-test("the server's own address shows its worlds on the title: one open to anyone joined with a tap, no key or link, choosing which of theirs visits it", async ({ page }) => {
+test("the server's own address shows its worlds on the title: one open to anyone joined with a tap, no key or link, choosing which of theirs visits it; its play socket speaks bytes, 1,500 echoed whole", async ({ page }) => {
     await ready(page, save("Ivo", "human", "sword"));
 
     const made = await server.createWorld({ name: "Openfield", seed: 43, race: "human", heroes: "brought", settings: { open: true } });
@@ -529,6 +529,29 @@ test("the server's own address shows its worlds on the title: one open to anyone
 
     expect(access.players().map(({ via }) => via)).toEqual([access.door().id]);
     expect(await page.evaluate((world) => Boolean(JSON.parse(localStorage.getItem("pellagos.servers")).servers.find((one) => one.worlds?.[world])?.worlds[world].ticket), made.world)).toBe(true);
+
+    // (The game's own link to the world speaks bytes with this server (pellagos.play.2; the scaling
+    // plan's 3-12): 1,500 of them, the tests' echo, come back as they went, as a buffer)
+    const echoed = await page.evaluate(async () => {
+        const { link } = window.pellagos.together;
+        const bytes = new Uint8Array(1500).map((_, k) => (k * 31 + 7) & 255);
+
+        bytes[0] = 0;
+
+        // (Half a minute for it: none back fails here, not at the test's eleven minutes)
+        const back = await new Promise((resolve) => {
+            link.onBinary = resolve;
+            setTimeout(() => resolve(new ArrayBuffer(0)), 30000);
+            link.sendBinary(bytes);
+        });
+        const heard = new Uint8Array(back);
+
+        return { spoken: link.spoken, buffer: back instanceof ArrayBuffer, length: heard.length, same: heard.every((byte, k) => byte === bytes[k]) };
+    });
+
+    expect(echoed).toEqual({ spoken: "pellagos.play.2", buffer: true, length: 1500, same: true });
+    // (And its lines go on as ever: still in the world)
+    expect(await page.evaluate(() => Boolean(window.pellagos.inWorld))).toBe(true);
 });
 
 test("back into a world on a server after the game's reloaded: straight back in, each stage of the way shown as it's come to, as the same character where they stood; a stage that can't be got past says why, to try again; Cancel stops it and lets the world go", async ({ page }) => {

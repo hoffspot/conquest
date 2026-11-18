@@ -345,5 +345,5 @@
     "worlds.spec.js › a world on this device brought to a server (Host on a Server, a world from this device) with a character who's been in it: told what comes with it; refused a key that makes no worlds; then a world of the server's, in its land, its invite link given, its owner going in as that character; deleted by its owner from the World panel, its name typed": 52.1,
     "worlds.spec.js › a world that takes copies: a character on this device copied in once, told first what a copy is, and one from a file, told what was changed; each the world's own, never taken home; a world whose characters are its own: one made there taken home, out of it for good": 79.5,
     "worlds.spec.js › back into a world on a server after the game's reloaded: straight back in, each stage of the way shown as it's come to, as the same character where they stood; a stage that can't be got past says why, to try again; Cancel stops it and lets the world go": 78.5,
-    "worlds.spec.js › the server's own address shows its worlds on the title: one open to anyone joined with a tap, no key or link, choosing which of theirs visits it": 46.3
+    "worlds.spec.js › the server's own address shows its worlds on the title: one open to anyone joined with a tap, no key or link, choosing which of theirs visits it; its play socket speaks bytes, 1,500 echoed whole": 46.3
 }

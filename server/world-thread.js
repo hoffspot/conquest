@@ -22,10 +22,10 @@ export class WorldThread {
      *     whatever the world's says), and { mostPlayers }, taken in place of both, from a server
      *     opened with one (world-server.js open's `limits`); none, on any server that's run as one.
      */
-    constructor(stored, { onSend = () => {}, onClose = () => {}, onState = () => {}, onJournal = () => {}, onExit = () => {} } = {}, { mostPlayers = null, ceiling = null } = {}) {
+    constructor(stored, { onSend = () => {}, onClose = () => {}, onState = () => {}, onJournal = () => {}, onExit = () => {}, onBinary = null } = {}, { mostPlayers = null, ceiling = null } = {}) {
         this.stored = stored;
         this.id = stored.id;
-        Object.assign(this, { onSend, onClose, onState, onJournal, onExit });
+        Object.assign(this, { onSend, onClose, onState, onJournal, onExit, onBinary });
 
         /** How it last said it was (world-worker.js report), and whether its thread's ended. */
         this.state = null;
@@ -74,6 +74,11 @@ export class WorldThread {
                 for (const peer of message.peers ?? [message.peer]) {
                     this.onSend(peer, message.text);
                 }
+
+                break;
+            case "binary":
+                // (A frame for one player's game, its bytes handed over, not copied: 3-12)
+                this.onBinary?.(message.peer, Buffer.from(message.buffer));
 
                 break;
             case "close":

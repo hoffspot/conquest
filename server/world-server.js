@@ -184,6 +184,7 @@ export class WorldServer {
             // as it stands when they're started; or, opened with one in place of their own setting's, that)
             spawn: (stored, hooks) => new WorldThread(stored, hooks, { mostPlayers: this.limits.mostPlayers ?? null, ceiling: this.settings.get("mostPlayersCeiling") }),
             onSend: (world, peer, text) => this.play?.send(world, peer, text),
+            onBinary: (world, peer, bytes) => this.play?.sendBinary(world, peer, bytes),
             onClose: (world, peer, reason) => this.play?.kicked(world, peer, reason),
             // (A world stored again with players still in it: its thread ended unasked. They're told)
             onChange: (world) => {

@@ -12,6 +12,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
+import zlib from "node:zlib";
 import { isGuid } from "../client/js/core/guid.js";
 import { NET_VERSION } from "../client/js/core/netplay.js";
 import { newPlayerSecret, playerIdOf, proofOf, publicKeyOf } from "../client/js/core/player.js";
@@ -21,7 +22,7 @@ import { MADE_PER_HOUR } from "../server/api.js";
 import { newToken } from "../server/access/tokens.js";
 import { guard, hostsOf, originsOf, Refusal } from "../server/guards.js";
 import { parseText } from "../server/metrics.js";
-import { PLAY_LIMITS, PLAY_PROTOCOL } from "../server/play.js";
+import { BINARY, PLAY_BINARY, PLAY_LIMITS, PLAY_PROTOCOL } from "../server/play.js";
 import { RECONNECTING, Socket } from "../server/relay.js";
 import { REMEMBERED } from "../server/storage/visitors.js";
 import { WorldServer } from "../server/world-server.js";
@@ -100,11 +101,19 @@ function raw(server, { method = "GET", route = "/api/v1/status", headers = {}, b
  * A player's game in Node on the play socket: { lines, messages (the world's, decoded), send(line),
  * say(message) (to the world), welcome(), close(code) }.
  */
-async function connect(server) {
-    const socket = new WebSocket(`ws://127.0.0.1:${server.port}/play`, PLAY_PROTOCOL);
-    const game = { lines: [], messages: [], socket, closed: null };
+async function connect(server, protocols = PLAY_PROTOCOL) {
+    const socket = new WebSocket(`ws://127.0.0.1:${server.port}/play`, protocols);
+    const game = { lines: [], messages: [], frames: [], socket, closed: null };
 
+    socket.binaryType = "arraybuffer";
     socket.onmessage = ({ data }) => {
+        // (Bytes, where they're spoken: kept apart)
+        if (typeof data !== "string") {
+            game.frames.push(Buffer.from(data));
+
+            return;
+        }
+
         game.lines.push(data);
 
         if (data.startsWith("data\n")) {
@@ -134,8 +143,8 @@ async function connect(server) {
 const ENTERING = 60000;
 
 // Into a world by its session, hello'd with a hero (a slot, or "new"), and ready: the game, once welcomed
-async function play(server, world, session, { hero = "new", character = { hero: HERO } } = {}) {
-    const game = await connect(server);
+async function play(server, world, session, { hero = "new", character = { hero: HERO }, protocols = PLAY_PROTOCOL } = {}) {
+    const game = await connect(server, protocols);
 
     game.send(`enter ${world} ${session}`);
     await until(() => game.line("entered") || game.line("closed"), "entered", ENTERING);
@@ -550,6 +559,47 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         assert.match(await readFile(path.join(server.worlds.get(made.world).folder, "journal.log"), "utf8"), /Taken offline by [^:]+: nobody may come in till it's brought back online\.[\s\S]*its characters: visiting[\s\S]*Brought back online/);
     });
 
+    it("speaks bytes where a game asks for them (pellagos.play.2): 1,500 of them echoed whole, a world's sent on; pellagos.play.1 as ever, bytes closing it", async () => {
+        const made = await server.call("POST", "/worlds", { auth: `Key ${server.adminKey}`, body: { name: "Bytewick", race: "human", seed: 5 } });
+        const entered = await server.call("POST", "/enter", { body: { world: made.json.world, key: made.json.playerKey, net: NET_VERSION } });
+        const game = await play(server, made.json.world, entered.json.session, { protocols: [PLAY_BINARY, PLAY_PROTOCOL] });
+
+        assert.equal(game.socket.protocol, PLAY_BINARY, "the newer of the two offered");
+        assert.ok(game.message("welcome"), "and its lines as ever");
+
+        // (The tests' echo: its first byte says so, the rest whatever)
+        const bytes = Buffer.from(Array.from({ length: 1500 }, (_, k) => (k * 31 + 7) & 255));
+
+        bytes[0] = BINARY.echo;
+        game.socket.send(bytes);
+        await until(() => game.frames.length, "the echo");
+        assert.equal(game.frames[0].length, 1500);
+        assert.ok(game.frames[0].equals(bytes), "every byte as it went");
+
+        // (A world's own bytes for this player: handed from its thread to the socket, as its lines are)
+        const peer = game.line("entered").split(" ")[1];
+        const frame = new Uint8Array(1500).map((_, k) => (k * 13) & 255);
+        const copy = Buffer.from(frame);
+
+        server.registry.entries.get(made.json.world).thread.thread.emit("message", { type: "binary", peer, buffer: frame.buffer });
+        await until(() => game.frames.length > 1, "the world's frame");
+        assert.ok(game.frames[1].equals(copy));
+        assert.equal(game.closed, null);
+
+        // (Bytes that aren't the echo: nothing reads them yet)
+        game.socket.send(Buffer.from([200, 1, 2]));
+        await until(() => game.closed, "closed");
+        assert.equal(game.closed, 1008);
+
+        // (A game that offers only the first protocol gets it, and none of this)
+        const old = await connect(server);
+
+        assert.equal(old.socket.protocol, PLAY_PROTOCOL);
+        old.socket.send(bytes);
+        await until(() => old.closed, "closed");
+        assert.equal(old.closed, 1003);
+    });
+
     it("trades a short code once for the world and its key", async () => {
         const owner = await server.call("POST", "/enter", { body: { world: world.world, key: world.ownerKey } });
         const key = await server.call("POST", `/worlds/${world.world}/keys`, { auth: `Bearer ${owner.json.session}`, body: { label: "Table", role: "player" } });
@@ -847,6 +897,54 @@ describe("the hand-written WebSocket frames, fuzzed (server/relay.js Socket)", (
 
         return Buffer.concat([header, mask, masked]);
     }
+
+    it("takes and sends messages of bytes where they're spoken, never compressed, and closes on them where they aren't", () => {
+        const bytes = Buffer.from(Array.from({ length: 1500 }, (_, k) => (k * 17 + 3) & 255));
+
+        // (As a browser sends them where compression's agreed: compressed, marked so (RSV1))
+        const deflated = zlib.deflateRawSync(bytes, { finishFlush: zlib.constants.Z_SYNC_FLUSH });
+        const packed = deflated.subarray(0, deflated.length - 4);
+
+        // (Spoken, on a socket that compresses its text: whole, in two pieces, and compressed)
+        for (const frames of [[frame(0x2, bytes)], [frame(0x2, bytes.subarray(0, 700), { fin: false }), frame(0x0, bytes.subarray(700))], [frame(0x42, packed)]]) {
+            const raw = fake();
+            const socket = new Socket(raw, Buffer.alloc(0), { limit: 64 * 1024, deflate: true, binary: true });
+            const heard = [];
+            const lines = [];
+
+            socket.onBinary = (message) => heard.push(message);
+            socket.onMessage = (text) => lines.push(text);
+            frames.forEach((one) => raw.feed(one));
+            assert.equal(heard.length, 1);
+            assert.ok(Buffer.from(heard[0]).equals(bytes));
+            assert.deepEqual(lines, []);
+
+            socket.sendBinary(bytes);
+
+            const sent = Buffer.concat(raw.written);
+
+            assert.equal(sent[0], 0x82, "one binary frame, not compressed (no RSV1)");
+            assert.equal(sent[1], 126, "unmasked, its length in two bytes");
+            assert.equal(sent.readUInt16BE(2), 1500);
+            assert.ok(sent.subarray(4).equals(bytes));
+            assert.deepEqual(socket.sent, { messages: 1, bytes: 1500, wire: 1500 });
+            assert.ok(socket.open);
+        }
+
+        // (Not spoken: closed, can't be taken; and none sent)
+        const raw = fake();
+        const socket = new Socket(raw, Buffer.alloc(0), { limit: 64 * 1024 });
+        let heard = 0;
+
+        socket.onBinary = () => heard++;
+        socket.onMessage = () => heard++;
+        socket.sendBinary(bytes);
+        assert.deepEqual(raw.written, []);
+        raw.feed(frame(0x2, bytes));
+        assert.equal(heard, 0);
+        assert.equal(socket.open, false);
+        assert.equal(Buffer.concat(raw.written).readUInt16BE(2), 1003);
+    });
 
     it("reads whole messages however they're split, and closes on frames that break the rules, never throwing", () => {
         // (A message split into pieces at every byte)

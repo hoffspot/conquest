@@ -105,6 +105,27 @@ is out of the world, their hero kept as on any exit. The game itself, started ag
 hour after a crash or a reload, goes straight back in as the same hero (docs/GAME.md, *Back into a
 world*).
 
+**Bytes on the play socket** (server/play.js `PLAY_BINARY`, server/relay.js `Socket.sendBinary`;
+the scaling plan's `3-12`). The play socket speaks two protocols:
+
+- `pellagos.play.1`: lines of text, as ever. A message of bytes closes it (1003).
+- `pellagos.play.2`: the same lines, and messages of bytes beside them.
+
+A game offers both, the newer first (app/servers.js `PLAY_OFFERED`), and the server answers with
+the one it speaks; a game or a server that knows only the first goes on as before. Bytes are never
+compressed (a text message over 1 KB is): what they'll carry is packed already.
+
+- **The server's end:** `socket.onBinary`, `socket.sendBinary(bytes)`. A world's thread hands the
+  supervisor bytes for one player's game as a transferred buffer (`{ type: "binary", peer,
+  buffer }`: world-thread.js), sent on by `play.sendBinary(world, peer, bytes)` and counted with
+  the world's traffic as its lines are.
+- **The game's end:** the link's `onBinary` (an `ArrayBuffer`), `sendBinary(bytes)` and `spoken`
+  (app/together.js `RelayLink`).
+- **What uses them today:** only the tests' echo. A player in a world who sends bytes whose first
+  is `BINARY.echo` (0) gets them back, within the same rate limit as their commands; any other
+  first byte is refused (1008). Nothing in play sends bytes yet: the replicated views will
+  (`3-13` onward), each kind with a first byte of its own.
+
 Their **code** is their secret key written out (nine groups of six letters and digits, the last
 two catching a mistyped one), to carry them to another device: the game's **You** panel shows it,
 copies it, saves it as a file, or shows it as a code to scan, and takes one from another device.

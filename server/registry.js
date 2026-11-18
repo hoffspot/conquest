@@ -65,8 +65,9 @@ export class Registry {
      * @param {function} [options.onState] - Told how a world says it is, each time it says (world, state: world-worker.js report).
      * @param {function} [options.onJournal] - Told each line a world's thread puts in its journal (world, text).
      */
-    constructor({ store, settings, spawn = (stored, hooks) => new WorldThread(stored, hooks), awake = keepAwake, onSend = () => {}, onClose = () => {}, onChange = () => {}, onState = () => {}, onJournal = () => {} }) {
-        Object.assign(this, { store, settings, spawn, awake, onSend, onClose, onChange, onState, onJournal });
+    constructor({ store, settings, spawn = (stored, hooks) => new WorldThread(stored, hooks), awake = keepAwake, onSend = () => {}, onClose = () => {}, onChange = () => {}, onState = () => {}, onJournal = () => {}, onBinary = null }) {
+        // (onBinary: bytes a world sends a player's game (world, peer, bytes): a frame, the scaling plan's 3-12)
+        Object.assign(this, { store, settings, spawn, awake, onSend, onClose, onChange, onState, onJournal, onBinary });
 
         /** Each world it's had to do with, by id: { id, stored, life, thread, opening, stopping, timer, waiters }. */
         this.entries = new Map();
@@ -149,6 +150,7 @@ export class Registry {
         entry.life = "loading";
         entry.thread = this.spawn(entry.stored, {
             onSend: (peer, text) => this.onSend(id, peer, text),
+            onBinary: (peer, bytes) => this.onBinary?.(id, peer, bytes),
             onClose: (peer, reason) => this.onClose(id, peer, reason),
             onState: (state) => {
                 this.#state(entry, state);
