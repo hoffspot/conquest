@@ -3802,6 +3802,28 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   out, once what came before has been played. One that doesn't match (a browser whose sums come
   out a hair different) asks for the world again and carries on from it (`Host.adopt`,
   `game.rehost`): within a fifth of a second of going astray.
+- **A view's frames** (`core/view.js`; the scaling plan's `3-13`). The replicated views' wire, built
+  and not yet used: nothing makes or sends a frame till the feed does (`3-14` onward). A frame
+  tells one player's game where those near its hero are and how they're doing:
+  - **A frame:** its first byte is `VIEW_VERSION`; then the world's step, the frame's origin (a
+    corner of a 64 m square, 320 m south-west of the hero, so everyone within 192 m is within a
+    uint16 of centimetres of it), who's left the player's known set, and the records.
+  - **A record:** one character the player knows of, by its index among those (a byte: 256 at the
+    most), a mask, and only the fields that have changed since that player was last told of it:
+    its place to the centimetre, its facing to a 256th of a turn, how it's going (moving,
+    running, fighting, dead) and how fast, its health to a 255th (0 only with none left), and
+    its target's index. A walker is 6 bytes, 7 as it turns.
+  - **A place is where it is, never how far it's moved:** a record means the same whatever was
+    sent before, so one that's dropped is made up for by the next.
+  - **Once a step:** `ViewState` keeps each character quantised in typed arrays by slot, with the
+    step each field last changed in. A character's read once a step however many players know
+    of it, and only those someone knows of are read.
+  - **Under a budget:** a frame takes 640 bytes unless told otherwise (20 a second: 12.8 KB/s)
+    and never more than 1,500. With more to tell than fits, those longest untold go first, so
+    256 all moving are each told of again within 4 steps. With nothing to tell there's no frame:
+    a town standing still costs no bytes.
+  - **Read back** by `decodeFrame`, which gives null for bytes that aren't a whole frame of its
+    version and never throws on them.
 - **The motion stream** (`core/motion.js`, `MOTION`; off: `Hosting` `sendsPlaces`). Until
   `NET_VERSION` 224 the sum was said every 100 steps, five seconds, and every 4 steps the host
   also sent where its characters near the players stood and how they were going, for a copy to
