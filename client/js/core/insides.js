@@ -1569,6 +1569,29 @@ const NAMES = Object.freeze({ swordsmith: "the swordsmith's", armorer: "the armo
 const ORIGINS = Object.freeze({ x: 10200, step: 100, across: 60 });
 
 /**
+ * Which column of ORIGINS a building's floors are drawn in: its slot, its own by what it is in
+ * the world's plan, so the same whichever buildings were made before it, in a world made again
+ * and in any copy of it (generated/multiplayer_scaling_plan.md 3-11: a game told of a world by
+ * its server makes an inside as its hero goes in, and knows no order). A settlement's building
+ * has its place's number in the plan times `each`, and its own among its place's landmarks
+ * (placeSlot); a site's the sites' block's first and its site's number in the plan (siteSlot). A
+ * building with none (more than `each` to a place, more places or sites than there's room for,
+ * or one added with no word of where it is) is drawn after `most` of them, in the order such
+ * are made, as every building was.
+ */
+export const INSIDE_SLOTS = Object.freeze({ each: 48, places: 320, sites: 1024, most: 48 * 320 + 1024 });
+
+/** A settlement's building's slot: its place's number in the plan and its own among the place's landmarks; null with no room for it. */
+export function placeSlot(place, ordinal) {
+    return Number.isInteger(place) && Number.isInteger(ordinal) && place >= 0 && place < INSIDE_SLOTS.places && ordinal >= 0 && ordinal < INSIDE_SLOTS.each ? place * INSIDE_SLOTS.each + ordinal : null;
+}
+
+/** A site's building's slot, by its site's number in the plan; null with no room for it. */
+export function siteSlot(site) {
+    return Number.isInteger(site) && site >= 0 && site < INSIDE_SLOTS.sites ? INSIDE_SLOTS.each * INSIDE_SLOTS.places + site : null;
+}
+
+/**
  * Every building that can be gone into, by key (`${place}:${piece id}`): its front door among the
  * world's links from the moment it's known (`add`), its floors and folk made the first time
  * they're wanted (`make`, `ensure`). Changes the world's `maps` and `links` in place, so the battle
@@ -1582,7 +1605,8 @@ export class Interiors {
         /** Each building: { key, kind, name, piece, place, people, seed, entrance, made, maps (ids), folk }. */
         this.buildings = new Map();
 
-        // Which building each map is in, and how many have been given a place to be drawn
+        // Which building each map is in, and how many with no slot of their own have been given
+        // a place to be drawn (INSIDE_SLOTS)
         this.byMap = new Map();
         this.placed = 0;
 
@@ -1629,7 +1653,7 @@ export class Interiors {
      * front door joins the world's links; its folk of the people `people` (a RACES id: whose
      * the place is). Returns it (null if it can't be gone into).
      */
-    add(piece, { origin = 0, place = "home", name = null, people = "human" } = {}) {
+    add(piece, { origin = 0, place = "home", name = null, people = "human", slot = null } = {}) {
         if (!ENTERABLE.includes(piece.name)) {
             return null;
         }
@@ -1653,6 +1677,8 @@ export class Interiors {
             place,
             people: people ?? "human",
             seed: piece.seed ?? 1,
+            // (Where its floors are drawn: INSIDE_SLOTS; a site's by its site's number in the plan)
+            slot: slot ?? (place === "site" ? this.#siteSlot(piece.id) : null),
             // (Its middle, in the world: metres)
             at: [ox + piece.x, oy + piece.y],
             entrance,
@@ -1710,6 +1736,7 @@ export class Interiors {
             place: "site",
             site: site.id,
             siteKind: site.kind,
+            slot: this.#siteSlot(site.id),
             people: site.race ?? "human",
             seed: site.seed ?? 1,
             // (Where it stands in the world, for its way in: the ground before it)
@@ -1817,6 +1844,13 @@ export class Interiors {
         return Boolean(this.world.maps[mapId]);
     }
 
+    // A site's slot, by its number in the world's plan (siteSlot); null with no plan, or not in it
+    #siteSlot(id) {
+        const number = this.world.plan?.sites?.findIndex((site) => site.id === id) ?? -1;
+
+        return number >= 0 ? siteSlot(number) : null;
+    }
+
     /** Make a building's floors and folk (once): its maps among the world's, its door's inside end, its stairs. */
     make(key) {
         const building = this.buildings.get(key);
@@ -1845,7 +1879,8 @@ export class Interiors {
 
         const kind = KINDS[building.kind];
         const floors = kind.rooms(building);
-        const column = this.placed++;
+        // (Its own slot's column; with none, the next after them all, in the order such are made)
+        const column = building.slot ?? INSIDE_SLOTS.most + this.placed++;
         const origin = [ORIGINS.x + (column % ORIGINS.across) * ORIGINS.step, Math.floor(column / ORIGINS.across) * ORIGINS.step * 2];
         const maps = floors.map((floor, k) => {
             const map = readPlan(`${key}/${floor.suffix}`, floor.name, floor.rows, { ground: floor.ground });

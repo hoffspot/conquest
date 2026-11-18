@@ -565,7 +565,7 @@ describe("the stash at a guild's chest (host.js #strongroom)", () => {
             }
         };
 
-        assert.equal(NET_VERSION, 233, "229 the stash's, 230 junk's (core/progress.js isJunk), 231 crafting's (docs/CRAFTING.md), 232 mercenaries never lost (docs/WAR.md), 233 a player's far way waiting (docs/WORLD.md)");
+        assert.equal(NET_VERSION, 234, "229 the stash's, 230 junk's (core/progress.js isJunk), 231 crafting's (docs/CRAFTING.md), 232 mercenaries never lost (docs/WAR.md), 233 a player's far way waiting (docs/WORLD.md), 234 insides drawn by their slots (insides.js INSIDE_SLOTS)");
         joining.onWelcome = ({ seed, race, snapshot }) => joining.attach(Host.restore(buildWorld({ seed, race }), snapshot));
         joining.hello({ hero: { ...HERO, name: "Bryn", race: "human" }, progress: { gold: 10500, pack: [stack("potion", 3), stack("meal", 2)] } });
         deliver();
