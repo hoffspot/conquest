@@ -476,7 +476,17 @@ made the first time they're wanted (`ensure`, `make`): when the game gets them r
 player comes near, or when anyone (the player, or the orc after them) goes through its door. They
 join `world.maps` and `world.links` in place (so the battle and the doors see them at once), each
 building at a place of its own past the world's edge (from 10.2 km east, 100 metres apart), and
-are kept.
+are kept. That place is the building's own by what it is in the world's plan, its slot
+(`INSIDE_SLOTS`, `placeSlot`, `siteSlot`): a settlement's building's by its place's number in
+the plan and its own among the place's landmarks (48 to a place, 320 places), a site's by its
+site's number (1,024 after them), sixty slots to a row. So it's the same whichever buildings
+were made before it, in a world made again and in every copy of it, and a game told of a world
+by its server can make an inside as its hero goes in, knowing no order
+(generated/multiplayer_scaling_plan.md 3-11). It was the next free place in the order buildings
+were made, which only a copy that made them all in the host's order could know. A building with
+no slot (more to a place than there's room for, or one added with no word of where it is) is
+still placed so, after all the slots. `NET_VERSION` 234: two versions would draw an inside in
+different places.
 
 - **The door** (`ENTRANCES`, `entranceOf`) is where the art builds it: so far in from the front
   of the lot, so far along it and so wide, for each kind (a tavern's in the middle, 1.8 metres

@@ -37,7 +37,7 @@ import { LAGOON, lagoonDepths, lagoonReach } from "./lagoons.js";
 import { PEOPLE_TOWNS } from "./setpieces/town.js";
 import { Sites } from "./sites.js";
 import { Trails, TRAILS } from "./trails.js";
-import { Interiors } from "./insides.js";
+import { Interiors, placeSlot } from "./insides.js";
 import { WENCHES } from "./lore/taverns.js";
 import { cliffsOff, featuresOf } from "./wilds.js";
 import { archesOf, archSquares, roomOf } from "./arches.js";
@@ -890,9 +890,14 @@ export class Overworld {
 
     // A settlement's buildings that can be gone into, added to the interiors
     #enter(settlement) {
+        // (Each drawn in a slot of its own by its place's number in the plan and its own among
+        // its place's landmarks, whichever were made before it: insides.js INSIDE_SLOTS)
+        const place = this.plan?.places.findIndex(({ id }) => id === settlement.place.id) ?? -1;
+        let ordinal = 0;
+
         for (const piece of settlement.town.pieces) {
             if (piece.kind === "landmark") {
-                this.interiors?.add(piece, { origin: settlement.at, place: settlement.place.id, people: settlement.place.race });
+                this.interiors?.add(piece, { origin: settlement.at, place: settlement.place.id, people: settlement.place.race, slot: placeSlot(place, ordinal++) });
             }
         }
     }
@@ -2777,10 +2782,16 @@ export function buildWorld({ seed = 1, race = "human", plan = planWorld(seed) } 
         interiors.adopt({ key: "home:tavern", kind: "tavern", name: WENCHES.name, tavern: WENCHES, maps: ["taproom", "upstairs"], folk: town.folk, piece, at: piece ? [ox + piece.x, oy + piece.y] : null, people: start.race });
     }
 
+    // (Each drawn in a slot of its own, the home town's place's in the plan: INSIDE_SLOTS)
+    const home = world.plan?.places.findIndex(({ id }) => id === start.id) ?? -1;
+    let ordinal = 0;
+
     for (const piece of town.town.pieces) {
         if (piece.kind === "landmark" && piece.tavern !== WENCHES) {
-            interiors.add(piece, { origin: world.origin, place: "home", people: start.race });
+            interiors.add(piece, { origin: world.origin, place: "home", people: start.race, slot: placeSlot(home, ordinal) });
         }
+
+        ordinal += piece.kind === "landmark" ? 1 : 0;
     }
 
     world.interiors = interiors;
