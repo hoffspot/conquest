@@ -3824,6 +3824,29 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     a town standing still costs no bytes.
   - **Read back** by `decodeFrame`, which gives null for bytes that aren't a whole frame of its
     version and never throws on them.
+- **The view feed** (`core/viewfeed.js`, `Hosting` `views`; the scaling plan's `3-14`). Who each
+  player's game knows of, and their frames made each step. It runs **dark**: where the world
+  server's `replication` setting is dark (docs/SERVER.md), the frames are made, counted and let
+  go of beside lockstep. Off, as it is unless that's set, nothing's made. It reads the battle and
+  writes nothing to it: the same sums and the same sendings with it dark as with it off.
+  - **A player's known set** (`KNOWN`): someone comes into it within 160 m of the hero, on its
+    map, and leaves beyond 192 m, so no one flickers at the edge. It's looked at again every 5
+    steps, each player on a step of their own, by the interest grid (`core/interest.js`), never
+    through everyone.
+  - **256 at the most.** Past that, those pinned stay (the hero, whom it's aiming at, whoever's
+    aiming at it, however far off), then those hostile to the hero before anyone else, the
+    nearer first: no one a player's fighting goes unseen for the crowd about them.
+  - **Indexes:** each one known has an index of the player's own (the hero's is 0). One who
+    leaves is told of in the next frame, whatever the budget, and their index goes to whoever
+    comes next.
+  - **Each step:** those a player knows of are quantised (once, however many players know of
+    them) and a frame's made of what's changed since that player was last told, within the
+    budget. Someone aiming at a character the player didn't know of is told of again once they
+    do.
+  - **Counted** (`core/probe.js`): the pass `flush.views`, and `views.frames`, `views.bytes`,
+    `views.records` and `views.known`.
+  - **Not yet:** who each index is (a record says how someone is, not who), the party's,
+    company's and quests' pins, and anything sent or read by a game.
 - **The motion stream** (`core/motion.js`, `MOTION`; off: `Hosting` `sendsPlaces`). Until
   `NET_VERSION` 224 the sum was said every 100 steps, five seconds, and every 4 steps the host
   also sent where its characters near the players stood and how they were going, for a copy to

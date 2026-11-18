@@ -163,6 +163,13 @@ const metrics = new WorldMetrics({ clock });
 
 install(metrics.probes);
 
+// The view feed (core/viewfeed.js; the scaling plan's 3-14): dark where the server's `replication`
+// setting is, so each player's frames are made and counted beside lockstep and never sent; off
+// otherwise ("on" sends nothing yet, and makes nothing). Followed as the setting changes
+const replicate = (mode) => (hosting.views.mode = mode === "dark" ? "dark" : "off");
+
+replicate(workerData.replication);
+
 keeper.onSave = (ms, ok) => metrics.saved(ms, ok);
 
 // (What a step made for itself is told with a late one: the ground's chunks, the navigation's
@@ -576,6 +583,10 @@ parentPort.on("message", async (message) => {
             look();
             break;
         }
+        case "replication":
+            replicate(message.mode);
+
+            break;
         case "save":
             await keeper.save(message.why);
             post({ type: "saved", id: message.id, ok: !keeper.failed });

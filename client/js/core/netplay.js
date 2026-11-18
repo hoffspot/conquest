@@ -120,6 +120,7 @@ import { BANES, MENDING, MERCENARY, pickOf, RENOWN, wearable } from "./followers
 import { levelOf } from "./gear.js";
 import { QUALITIES, thingOf } from "./progress.js";
 import { compareMotion, MOTION, packMotion, unpackMotion } from "./motion.js";
+import { ViewFeed } from "./viewfeed.js";
 import { count, lap } from "./probe.js";
 import { selfOf } from "./selfstate.js";
 import { STARTING_WEAPONS } from "./weapons.js";
@@ -1712,6 +1713,13 @@ export class Hosting {
         /** Its two parts: who's in and what passes between them and the host; and the world as it's sent them. */
         this.session = new Session(this, clock);
         this.feed = new OpsFeed(this);
+
+        /**
+         * The view feed (core/viewfeed.js; the scaling plan's 3-14): off unless whoever runs the
+         * world turns it on (`views.mode`). Dark, it makes each player's frames beside all this,
+         * counts them and lets them go: nothing of it is sent, and nothing here changes for it.
+         */
+        this.views = new ViewFeed(this);
     }
 
     /** The host's step, as its sendings carry it. */
@@ -1774,6 +1782,8 @@ export class Hosting {
 
         lap("flush.selves");
         this.session.selves(step);
+        lap("flush.views");
+        this.views.flush(step);
         lap("flush.worlds");
         this.feed.answer();
         this.session.admit();
@@ -1785,6 +1795,7 @@ export class Hosting {
     stop() {
         this.session.stop();
         this.feed.stop();
+        this.views.stop();
     }
 }
 

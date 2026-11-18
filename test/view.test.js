@@ -46,7 +46,7 @@ class Known {
             one.slot = this.state.touch(battle, one.actor, step);
         }
 
-        const indexOf = (slot) => this.known.find((one) => one.slot === slot)?.index ?? NONE;
+        const indexOf = (actor) => this.known.find((one) => one.actor === actor)?.index ?? NONE;
         const { bytes, told } = encodeFrame(this.state, { step, origin, known: this.known, indexOf, ...options });
 
         if (!bytes) {
@@ -80,7 +80,7 @@ class Known {
         return new Map(this.known.map(({ index, slot }) => {
             const aimed = this.state.target[slot];
 
-            return [index, { x: this.state.x[slot], y: this.state.y[slot], heading: this.state.heading[slot], going: this.state.going[slot], speed: this.state.speed[slot], health: this.state.health[slot], target: aimed < 0 ? NONE : this.known.find((one) => one.slot === aimed)?.index ?? NONE }];
+            return [index, { x: this.state.x[slot], y: this.state.y[slot], heading: this.state.heading[slot], going: this.state.going[slot], speed: this.state.speed[slot], health: this.state.health[slot], target: aimed ? (this.known.find((one) => one.actor === aimed)?.index ?? NONE) : NONE }];
         }));
     }
 }
@@ -149,7 +149,7 @@ describe("a view's frames (core/view.js)", () => {
 
         assert.equal(state.slotOf(ann), slot);
         assert.equal(state.slotOf(bea), -1);
-        assert.deepEqual([state.x[slot], state.y[slot], state.health[slot], state.target[slot]], [1000, 1000, 255, -1]);
+        assert.deepEqual([state.x[slot], state.y[slot], state.health[slot], state.target[slot]], [1000, 1000, 255, null]);
         assert.deepEqual(Object.values(state.changed).map((changed) => changed[slot]), [7, 7, 7, 7, 7]);
 
         // (Asked again in the step: not read again, whatever's become of them meanwhile)
@@ -168,15 +168,15 @@ describe("a view's frames (core/view.js)", () => {
         state.touch(battle, ann, 9);
         assert.deepEqual(Object.values(state.changed).map((changed) => changed[slot]), [8, 7, 7, 7, 7]);
 
-        // (Walking, hurt, and aiming at someone: each marked; their target given a slot of its own)
+        // (Walking, hurt, and aiming at someone: each marked; no one given a slot for being aimed at)
         Object.assign(ann, { progress: 0.5, running: true, hp: 10, target: bea.id });
         state.touch(battle, ann, 10);
         assert.deepEqual(Object.values(state.changed).map((changed) => changed[slot]), [8, 7, 10, 10, 10]);
         assert.equal(state.going[slot], GOING.moving | GOING.running | GOING.fighting);
         assert.equal(state.speed[slot], 28);
         assert.equal(state.health[slot], 128);
-        assert.equal(state.target[slot], state.slotOf(bea));
-        assert.ok(state.slotOf(bea) >= 0);
+        assert.equal(state.target[slot], bea);
+        assert.equal(state.slotOf(bea), -1);
 
         // (Dead: no health, not moving, whatever else it says)
         Object.assign(ann, { dead: true, hp: 3 });
@@ -188,6 +188,7 @@ describe("a view's frames (core/view.js)", () => {
         // (More than there was room for: room made, nothing lost)
         const third = state.touch(battle, cat, 11);
 
+        state.touch(battle, bea, 11);
         assert.equal(state.size, 3);
         assert.ok(state.room >= 3);
         assert.equal(state.x[slot], 1100);
@@ -202,7 +203,7 @@ describe("a view's frames (core/view.js)", () => {
         const again = state.touch(battle, dan, 20);
 
         assert.equal(again, slot);
-        assert.deepEqual([state.x[again], state.y[again], state.health[again], state.going[again], state.target[again]], [5000, 6000, 255, 0, -1]);
+        assert.deepEqual([state.x[again], state.y[again], state.health[again], state.going[again], state.target[again]], [5000, 6000, 255, 0, null]);
         assert.deepEqual(Object.values(state.changed).map((changed) => changed[again]), [20, 20, 20, 20, 20]);
     });
 

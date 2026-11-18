@@ -111,14 +111,20 @@ export class ViewState {
             return made;
         };
 
-        /** Where each is (cm, from its map's nought), which way it faces, how it's going, how fast, its health, its target's slot (-1: none). */
+        /** Where each is (cm, from its map's nought), which way it faces, how it's going, how fast, its health. */
         this.x = grown(Int32Array, this.x);
         this.y = grown(Int32Array, this.y);
         this.heading = grown(Uint8Array, this.heading);
         this.going = grown(Uint8Array, this.going);
         this.speed = grown(Uint8Array, this.speed);
         this.health = grown(Uint8Array, this.health);
-        this.target = grown(Int32Array, this.target);
+
+        /**
+         * Whom each is aiming at (the character itself, or null), by slot: who that is among
+         * those a player knows of is for whoever makes that player's frame (encodeFrame indexOf).
+         * Kept as it is, not as a slot: no one's given a slot for being aimed at.
+         */
+        this.target ??= [];
 
         // (The step each was last quantised in, and 1 more: 0 is never)
         this.seen = grown(Uint32Array, this.seen);
@@ -152,7 +158,7 @@ export class ViewState {
 
             this.#slots.set(actor, slot);
             this.seen[slot] = 0;
-            this.target[slot] = -1;
+            this.target[slot] = null;
 
             for (const field of CHANGES) {
                 this.changed[field][slot] = step;
@@ -177,13 +183,12 @@ export class ViewState {
         const first = this.seen[slot] === 0;
         const moving = actor.progress !== null && !actor.dead;
         const fighting = Boolean(actor.attack) || actor.target !== null || actor.order?.type === "engage";
-        const aimed = actor.target === null || actor.target === undefined ? null : battle.actor(actor.target);
+        const target = actor.target === null || actor.target === undefined ? null : (battle.actor(actor.target) ?? null);
         const [x, y] = [cmOf(actor.x), cmOf(actor.y)];
         const heading = turnOf(actor.facing);
         const going = (moving ? GOING.moving : 0) | (actor.running ? GOING.running : 0) | (fighting ? GOING.fighting : 0) | (actor.dead ? GOING.dead : 0);
         const speed = moving ? speedOf(actor.pace * shareOf(actor, "speed")) : 0;
         const health = actor.dead ? 0 : healthOf(actor.hp, actor.maxHp);
-        const target = aimed ? this.#slot(aimed, step) : -1;
 
         if (first || this.x[slot] !== x || this.y[slot] !== y) {
             this.x[slot] = x;
@@ -224,6 +229,7 @@ export class ViewState {
         if (slot !== undefined) {
             this.#slots.delete(actor);
             this.#free.push(slot);
+            this.target[slot] = null;
         }
     }
 }
@@ -245,8 +251,8 @@ function sizeOf(mask) {
  * @param {{ index: number, slot: number, sent: number }[]} [frame.known] - Those the player
  *     knows of: each one's index among them, its slot, and the step it was last told of in (-1:
  *     never). Only what's changed since then is told.
- * @param {(slot: number) => number} [frame.indexOf] - A slot's index among those the player
- *     knows of (NONE if it isn't one): for targets.
+ * @param {(actor: object) => number} [frame.indexOf] - A character's index among those the
+ *     player knows of (NONE if it isn't one): for targets.
  * @param {number} [frame.budget] - How many bytes it may take (no more than VIEW.frame). With
  *     more to tell than fits, those longest untold go first (then by index), and the rest wait:
  *     no one who's changing is left out for good.
@@ -352,7 +358,7 @@ export function encodeFrame(state, { step, origin, leaves = [], known = [], inde
         if (mask & FIELD.target) {
             const aimed = state.target[slot];
 
-            view.setUint8(at++, aimed < 0 ? NONE : indexOf(aimed));
+            view.setUint8(at++, aimed ? indexOf(aimed) : NONE);
         }
     }
 

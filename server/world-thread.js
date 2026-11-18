@@ -22,7 +22,7 @@ export class WorldThread {
      *     whatever the world's says), and { mostPlayers }, taken in place of both, from a server
      *     opened with one (world-server.js open's `limits`); none, on any server that's run as one.
      */
-    constructor(stored, { onSend = () => {}, onClose = () => {}, onState = () => {}, onJournal = () => {}, onExit = () => {}, onBinary = null } = {}, { mostPlayers = null, ceiling = null } = {}) {
+    constructor(stored, { onSend = () => {}, onClose = () => {}, onState = () => {}, onJournal = () => {}, onExit = () => {}, onBinary = null } = {}, { mostPlayers = null, ceiling = null, replication = null } = {}) {
         this.stored = stored;
         this.id = stored.id;
         Object.assign(this, { onSend, onClose, onState, onJournal, onExit, onBinary });
@@ -38,7 +38,7 @@ export class WorldThread {
         });
         this.opened.catch(() => {});
 
-        this.thread = new Worker(new URL("./world-worker.js", import.meta.url), { workerData: { folder: stored.folder, ...(mostPlayers ? { mostPlayers } : {}), ...(ceiling ? { ceiling } : {}) } });
+        this.thread = new Worker(new URL("./world-worker.js", import.meta.url), { workerData: { folder: stored.folder, ...(mostPlayers ? { mostPlayers } : {}), ...(ceiling ? { ceiling } : {}), ...(replication ? { replication } : {}) } });
         this.thread.on("message", (message) => this.#heard(message));
         this.thread.on("error", (error) => {
             this.error = error;
@@ -155,6 +155,14 @@ export class WorldThread {
      */
     meta(changes) {
         this.#post({ type: "meta", changes });
+    }
+
+    /**
+     * The server's `replication` setting as it stands now ("off", "dark" or "on"), followed at
+     * once: dark, the world's view feed makes and counts each player's frames; else it makes none.
+     */
+    replicate(mode) {
+        this.#post({ type: "replication", mode });
     }
 
     /** The world saved, now (`why`). Returns { ok } once it's on the disk. */

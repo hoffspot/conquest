@@ -93,7 +93,7 @@ export const BATTLE_PASSES = Object.freeze([
  * packed and sent, where that's sent; each player's own hero told them; and the world again for
  * whoever's asked.
  */
-export const FLUSH_PASSES = Object.freeze(["flush.quiet", "flush.checksum", "flush.ops", "flush.motion", "flush.selves", "flush.worlds"]);
+export const FLUSH_PASSES = Object.freeze(["flush.quiet", "flush.checksum", "flush.ops", "flush.motion", "flush.selves", "flush.views", "flush.worlds"]);
 
 /**
  * The work counted, by name: `steps` played; the battle's index of where everyone stands made
@@ -169,6 +169,11 @@ export const COUNTERS = Object.freeze([
     "bodies.actors",
     "messengers.actors",
     "motion.pairs",
+    // (The view feed, where it's run: frames made, their bytes and records, and how many were known of, each player each step: core/viewfeed.js)
+    "views.frames",
+    "views.bytes",
+    "views.records",
+    "views.known",
     "checksums",
     "snapshots",
     "sends",

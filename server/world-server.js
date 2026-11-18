@@ -182,7 +182,7 @@ export class WorldServer {
             ...(awake ? { awake } : {}),
             // (Its worlds' threads told the most players they take: no more than the server's ceiling
             // as it stands when they're started; or, opened with one in place of their own setting's, that)
-            spawn: (stored, hooks) => new WorldThread(stored, hooks, { mostPlayers: this.limits.mostPlayers ?? null, ceiling: this.settings.get("mostPlayersCeiling") }),
+            spawn: (stored, hooks) => new WorldThread(stored, hooks, { mostPlayers: this.limits.mostPlayers ?? null, ceiling: this.settings.get("mostPlayersCeiling"), replication: this.settings.get("replication") }),
             onSend: (world, peer, text) => this.play?.send(world, peer, text),
             onBinary: (world, peer, bytes) => this.play?.sendBinary(world, peer, bytes),
             onClose: (world, peer, reason) => this.play?.kicked(world, peer, reason),
