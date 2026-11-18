@@ -2313,7 +2313,7 @@ export class Game {
     // The torches carried at night (world/carried.js): by the soldiers with a hand free, out in
     // the world, as the rules have it (core/light.js carriesTorch), each burning in their hand
     #torchesCarried() {
-        const dark = torchesLit(elapsedOf(this.host.war));
+        const dark = torchesLit(elapsedOf(this.worldview.war));
         const carriers = (this.carriers ??= []);
 
         carriers.length = 0;
@@ -2351,7 +2351,7 @@ export class Game {
     // The time of day the world's clock has (core/daytime.js: the war's, the same for every
     // player), outdoors and in: the sky, the sun or the moon, the daylight at the windows
     #daytime() {
-        const elapsed = elapsedOf(this.host.war);
+        const elapsed = elapsedOf(this.worldview.war);
         const time = timeOfDay(elapsed);
 
         this.view.setTimeOfDay(time, moonPhase(elapsed));
@@ -2932,7 +2932,7 @@ export class Game {
 
         // A soldier: as their people's are dressed, carrying what they fight with
         if (actor.kind === "soldier") {
-            const soldier = this.host.soldiers.get(actor.id);
+            const soldier = this.worldview.soldiers.get(actor.id);
             const look = soldierLook(soldier);
             const character = yield* this.#built(actor, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(hairDetail, FOLK_HAIR), merge: true });
 
@@ -3007,7 +3007,7 @@ export class Game {
         }
 
         if (actor.kind === "fort" || actor.kind === "stakes") {
-            const out = this.host.fortsOut.get(actor.id);
+            const out = this.worldview.fortsOut.get(actor.id);
 
             return this.#register(actor.id, new FortAvatar(actor.kind === "stakes" ? "stakes" : (out?.kind ?? "tower"), out?.realm), { wounds: false });
         }
@@ -3205,7 +3205,7 @@ export class Game {
     // bearers' own (#crowdKind)
     #bearsStandard(id) {
         const avatar = this.avatars.get(id);
-        const soldier = this.host.soldiers.get(id);
+        const soldier = this.worldview.soldiers.get(id);
 
         if (!avatar || !soldier) {
             return;
@@ -3363,7 +3363,7 @@ export class Game {
     // with what its works yields or with supplies (art/kits/wagon.js), a step at a time (the ox's
     // body sculpted in steps the first time)
     *#addingWagon(actor) {
-        const { load = null, people = "human", seed = 1 } = this.host.wagons.get(actor.id) ?? {};
+        const { load = null, people = "human", seed = 1 } = this.worldview.wagons.get(actor.id) ?? {};
         const avatar = yield* dressingCreature(this.kit, "ox", { seed });
 
         if (this.avatars.has(actor.id) || !this.battle.actor(actor.id)) {
@@ -4313,7 +4313,7 @@ export class Game {
     // about, a journey or the way to a portal, given up for it). The least, while the game's
     // drawing less than the quality chosen to keep up, or its frames come well behind the `beat`
     #budget(now, interval, work, beat) {
-        if (this.host.invasions.length) {
+        if (this.worldview.invasions.length) {
             this.invasionBudget.hold();
 
             return;
@@ -5841,7 +5841,7 @@ export class Game {
     // Whether someone's a soldier the marshal draws, near the player (`me`) or far: alive, on
     // their map, not a siege engine's
     #soldierOut(actor, me) {
-        return actor?.kind === "soldier" && !actor.engine && !actor.dead && actor.map === me.map && this.host.soldiers.has(actor.id);
+        return actor?.kind === "soldier" && !actor.engine && !actor.dead && actor.map === me.map && this.worldview.soldiers.has(actor.id);
     }
 
     // How many kinds of soldiers' figures look to be made while the game loads (#figuresFirst): of
@@ -5915,7 +5915,7 @@ export class Game {
     // standard-bearer their standard), and what its figure's made from (world/crowd.js
     // makingTemplate)
     #crowdKind(actor) {
-        const { people = "human", sex = "m", weapon = actor.weapon, banner = false } = this.host.soldiers.get(actor.id) ?? {};
+        const { people = "human", sex = "m", weapon = actor.weapon, banner = false } = this.worldview.soldiers.get(actor.id) ?? {};
         const key = `${people}:${sex}:${weapon}${banner ? ":standard" : ""}`;
 
         return {
@@ -6523,7 +6523,7 @@ export class Game {
     #modelsHere() {
         const actor = this.battle.actor(this.me);
 
-        return actor?.map === "town" && this.world.plan ? modelsMet(this.world.plan, [actor.x, actor.y], this.world.start?.at ?? [0, 0], torchesLit(elapsedOf(this.host.war))) : [];
+        return actor?.map === "town" && this.world.plan ? modelsMet(this.world.plan, [actor.x, actor.y], this.world.start?.at ?? [0, 0], torchesLit(elapsedOf(this.worldview.war))) : [];
     }
 
     // The kinds an open hell rift near the player pours out and guards its altar with
@@ -7599,7 +7599,7 @@ export class Game {
         const far = ({ at }) => Math.hypot(at[0] - place.at[0], at[1] - place.at[1]);
         const town = [...plan.places].sort((a, b) => far(a) - far(b))[0];
 
-        this.memory.heard = [...(this.memory.heard ?? []), { id, town: town.id, turn: this.host.war?.turn ?? 0, ...(hunter ? { hunter: true } : { note: true }) }];
+        this.memory.heard = [...(this.memory.heard ?? []), { id, town: town.id, turn: this.worldview.war?.turn ?? 0, ...(hunter ? { hunter: true } : { note: true }) }];
         this.#keepTalks();
         this.hud.message(hunter ? `${hunter} tells you of ${this.#placeCalled(id) ?? "somewhere"} near ${town.name}. It's in your journal, and on your map.` : `In their hand, a note: it tells of ${this.#placeCalled(id) ?? "somewhere"} near ${town.name}. It's in your journal, and on your map.`, 4.5);
         this.sound?.play("quill", { delay: 0.6 });
@@ -7990,7 +7990,7 @@ export class Game {
      * WORKS_RIMS) }].
      */
     worksIcons() {
-        const war = this.host?.war;
+        const war = this.worldview?.war;
 
         if (!war?.works) {
             return [];
@@ -8056,7 +8056,7 @@ export class Game {
      * read uncovered them (core/host.js #tableRead).
      */
     fortIcons() {
-        const war = this.host?.war;
+        const war = this.worldview?.war;
 
         if (!war?.forts) {
             return [];
@@ -8096,7 +8096,7 @@ export class Game {
         // (Its icon on the maps as it is now)
         this.#marksStale();
 
-        const works = this.host?.war?.workAt(id);
+        const works = this.worldview?.war?.workAt(id);
         const me = this.battle.actor(this.me);
         const ours = by === this.self?.realm;
 
@@ -8121,7 +8121,7 @@ export class Game {
     // A barracks cleared, its captain and guardsmen put down (docs/WAR.md M16): told to the player
     // if it was their people's doing, or they're in it: the town theirs now, or why it isn't
     #barracksCleared({ town: id, by, how, people }) {
-        const town = this.host?.war?.town(id);
+        const town = this.worldview?.war?.town(id);
         const me = this.battle.actor(this.me);
         const inside = me && this.host?.quartered.get(id)?.map === me.map;
 
@@ -8129,7 +8129,7 @@ export class Game {
             return;
         }
 
-        const stage = STAGES[this.host.war.stage];
+        const stage = STAGES[this.worldview.war.stage];
         const said = {
             taken: `${town.name} is taken! The last of its garrison put to the sword, the ${peopleOf(by)} hold it now.`,
             garrison: `${town.name}'s barracks is cleared. The town's the ${peopleOf(by)}' once the rest of its garrison is put down too.`,
@@ -8148,7 +8148,7 @@ export class Game {
     // player told, if it's their people's seat, or their people's who put its garrison down (not in
     // its barracks: that's said there)
     #lastStand({ town: id, people, by, ruler, title, ids, guards = [] }) {
-        const town = this.host?.war?.town(id);
+        const town = this.worldview?.war?.town(id);
         const me = this.battle.actor(this.me);
 
         this.enlisting.push(...ids, ...guards);
@@ -8164,7 +8164,7 @@ export class Game {
     // A town taken by the player's people, the last of its garrison put down near them (not in its
     // barracks: that's said there): the player told
     #townTaken({ town: id, by, people }) {
-        const town = this.host?.war?.town(id);
+        const town = this.worldview?.war?.town(id);
         const me = this.battle.actor(this.me);
 
         // (Further off: a crier cries it)
@@ -8173,7 +8173,7 @@ export class Game {
         }
 
         // (A seat: given back to its people, to rule from under their conquerors)
-        const seat = town.owner === people && this.host.war.realm(people)?.seat === id;
+        const seat = town.owner === people && this.worldview.war.realm(people)?.seat === id;
 
         this.hud.message(seat ? `${town.name} has fallen! Its ruler and the captain of its guard put to the sword, the ${peopleOf(people)} serve the ${peopleOf(by)} now.` : `${town.name} is taken! The last of its garrison put to the sword, the ${peopleOf(by)} hold it now.`, 5);
         this.sound?.play("wake");
@@ -8363,7 +8363,7 @@ export class Game {
 
     placeIcons() {
         const plan = this.world.plan;
-        const war = this.host?.war;
+        const war = this.worldview?.war;
 
         if (!plan?.sites || !war) {
             return [];
@@ -9118,7 +9118,7 @@ export class Game {
 
     /** Where the requests the player carries take them (for the world map): [{ x, z, label }]. */
     requestMarks() {
-        const war = this.host.war;
+        const war = this.worldview.war;
 
         // (And the war missions carried: where what each is about is now, core/missions.js)
         const missions = (this.standing.missions ?? []).filter(({ state, target }) => state === "open" && target?.at).map(({ title, target }) => ({ x: target.at[0], z: target.at[1], label: title, war: true }));
@@ -10234,7 +10234,7 @@ export class Game {
     // and whether the war's gone on past where they last listened ({ rolled }). And what's said of
     // the country round about (#hearsayOf). Null for anyone else, or with no war
     #crierOf(npc, out, names) {
-        const war = this.host.war;
+        const war = this.worldview.war;
         const at = out && this.#crierAt(out);
 
         if (npc.role !== "crier" || !war || !at) {
@@ -10299,7 +10299,7 @@ export class Game {
 
                 told++;
                 names.hearsay = rumourWord(plan, place, town);
-                this.memory.heard = [...heard(), { id: place.id, town: town.id, turn: this.host.war?.turn ?? 0 }];
+                this.memory.heard = [...heard(), { id: place.id, town: town.id, turn: this.worldview.war?.turn ?? 0 }];
                 this.#keepTalks();
                 this.sound?.play("quill");
             },
@@ -10325,7 +10325,7 @@ export class Game {
     }
 
     #crierNews(at) {
-        return newsSince(this.host.war, at, this.memory.news ?? null, { realm: this.self?.realm });
+        return newsSince(this.worldview.war, at, this.memory.news ?? null, { realm: this.self?.realm });
     }
 
     // The criers out near the player (docs/GAME.md *The crier*): each one within CALLING.near
@@ -10336,7 +10336,7 @@ export class Game {
     // now and then from where he is, to bring them to him (BELL). Every HEARD_EVERY seconds
     #cryOut() {
         const player = this.battle.actor(this.me);
-        const war = this.host.war;
+        const war = this.worldview.war;
         const now = this.clock;
         const near = (this.battle.actors ?? [])
             .filter((one) => CRIER.test(one.id) && one.map === this.mapId && player && !player.dead && player.map === one.map)
@@ -10362,7 +10362,7 @@ export class Game {
             this.cryRandom ??= createRandom(Math.floor(Math.random() * 2 ** 31));
 
             const state = this.crierCalls.get(nearest.one.id) ?? {};
-            const invasion = this.host.invasions.find(({ place, broke }) => broke === null && `crier:${place}` === nearest.one.id);
+            const invasion = this.worldview.invasions.find(({ place, broke }) => broke === null && `crier:${place}` === nearest.one.id);
             // (A hell rift open in the wilds: his news before any other's, which way it is from him)
             const rift = this.host.hellRifts?.open;
             const headline = rift ? riftCry(nearest.one, rift) : (unheard.at(-1)?.words ?? null);
@@ -10413,7 +10413,7 @@ export class Game {
     #invasion(event) {
         const band = bandOf(event.band);
         const behemoth = event.band === BEHEMOTH.id;
-        const invasion = this.host.invasions.find(({ id }) => id === event.id);
+        const invasion = this.worldview.invasions.find(({ id }) => id === event.id);
         const me = this.battle.actor(this.me);
         const near = this.progress.invasion.place === event.place || Boolean(invasion && me?.map === "town" && Math.hypot(me.x - invasion.middle[0], me.y - invasion.middle[1]) <= invasion.edge + INVASION.out + INVASION.away);
 
@@ -10605,9 +10605,9 @@ export class Game {
         // (Whose: the player's enemies' or not, and what they're called; a storm's, by the army's
         // people: host.js #stormCommand)
         const one = side ? [side.commander, ...side.bodies.map(({ formation }) => formation)].map((each) => this.battle.actor(each) ?? this.battle.actors.find((actor) => !actor.dead && actor.formation?.id === each)).find(Boolean) : null;
-        const people = side?.people ?? (event.storm ? (this.host?.war?.force(event.side)?.realm ?? null) : null);
-        const hostile = one ? this.battle.hostile(one, me) : people ? Boolean(this.host?.war?.hostile(people, this.self?.realm)) : true;
-        const invasion = event.invasion ? this.host.invasions.find(({ id }) => id === event.invasion) : null;
+        const people = side?.people ?? (event.storm ? (this.worldview?.war?.force(event.side)?.realm ?? null) : null);
+        const hostile = one ? this.battle.hostile(one, me) : people ? Boolean(this.worldview?.war?.hostile(people, this.self?.realm)) : true;
+        const invasion = event.invasion ? this.worldview.invasions.find(({ id }) => id === event.invasion) : null;
         const whose = invasion && side ? (side.key === "invaders" ? `the ${bandOf(invasion.band).many}'` : `${invasion.name}'s`) : `the ${ADJECTIVES[people] ?? people ?? "enemy"}`;
         const Whose = `${whose[0].toUpperCase()}${whose.slice(1)}`;
         const part = BATTLE_TOLD.parts[event.part] ?? event.part;
@@ -10687,7 +10687,7 @@ export class Game {
     #invadedHere() {
         const me = this.battle.actor(this.me);
 
-        return Boolean(me?.map === "town") && this.host.invasions.some(({ broke, middle, edge }) => broke === null && Math.hypot(me.x - middle[0], me.y - middle[1]) <= edge + INVASION.out + INVASION.away);
+        return Boolean(me?.map === "town") && this.worldview.invasions.some(({ broke, middle, edge }) => broke === null && Math.hypot(me.x - middle[0], me.y - middle[1]) <= edge + INVASION.out + INVASION.away);
     }
 
     // A town's crier crying out (an invasion's), if he's out and the player's within his bell's
@@ -10715,7 +10715,7 @@ export class Game {
     // {rumour3}, newest first (the latest again, where there's less to tell), and {rumourRuler},
     // what's said of one of the rulers the town's people know of. None, with no war
     #rumours(building) {
-        const war = this.host.war;
+        const war = this.worldview.war;
         const place = building?.place === "home" ? this.world.start : this.world.plan?.places.find(({ id }) => id === building?.place);
         const at = place?.at ?? this.world.start?.at;
 
@@ -10770,7 +10770,7 @@ export class Game {
             return;
         }
 
-        this.memory.heard = [...heard, { id: near.site.id, town: place.id, turn: this.host.war?.turn ?? 0, hell: near.band }];
+        this.memory.heard = [...heard, { id: near.site.id, town: place.id, turn: this.worldview.war?.turn ?? 0, hell: near.band }];
         this.#keepTalks();
         this.sound?.play("quill");
     }
@@ -10778,7 +10778,7 @@ export class Game {
     // Which settlement a building's in (its id: insides.js townOf; a manor's, a watchtower's, a
     // castle's keep's out in the land, the nearest town of its people's)
     #townOf(building) {
-        return townOf(building, { plan: this.world.plan, war: this.host.war, start: this.world.start });
+        return townOf(building, { plan: this.world.plan, war: this.worldview.war, start: this.world.start });
     }
 
     // What one of the officials of a town hall or keep (or those about them) can tell of, and
@@ -10788,7 +10788,7 @@ export class Game {
     // conditions (`check`), and what's done by talking to them (`effect`: sent to the host, and
     // the talk's words, `names`, filled in from what came of it)
     #officialOf(npc, building, names) {
-        const war = this.host.war;
+        const war = this.worldview.war;
         const town = building && war ? war.town(this.#townOf(building)) : null;
 
         if (!town || !["reeve", "clerk", "petitioner", "ruler", "steward", "councillor", "sentry", "receptionist"].includes(npc.role)) {
@@ -10952,7 +10952,7 @@ export class Game {
     // map, one chosen counselled (host.js #official, war.js counsel's `build`), and the ruler's
     // words (`names.planned`) as it went
     #openPlans(npc, names) {
-        const view = buildingView(this.host.war, this.self.realm);
+        const view = buildingView(this.worldview.war, this.self.realm);
 
         if (!view) {
             return;
@@ -10985,8 +10985,8 @@ export class Game {
     // their words' {town}, {holder}, {ruler}, {age}, {foes}), how their people stand with the
     // player's (their `stance`: "own", "allied" or "neutral"), and their title
     #soldierWords(npc) {
-        const war = this.host.war;
-        const soldier = this.host.soldiers.get(npc.id);
+        const war = this.worldview.war;
+        const soldier = this.worldview.soldiers.get(npc.id);
         const town = war?.town(soldier?.town);
         const realm = war?.realm(war.liege(npc.team));
         const mine = this.self.realm;
@@ -10994,7 +10994,7 @@ export class Game {
         const foes = war ? war.enemiesOf(war.liege(npc.team)).map((id) => `the ${peopleOf(id)}`) : [];
         const stance = npc.team === mine || relation === "vassal" || relation === "overlord" ? "own" : relation === "allied" ? "allied" : "neutral";
 
-        const met = soldier?.envoy ? this.host.envoys.get(soldier.envoy) : null;
+        const met = soldier?.envoy ? this.worldview.envoys.get(soldier.envoy) : null;
 
         return {
             title: met ? (soldier.part === "envoy" ? `Envoy to the ${peopleOf(met.to)}` : `Escort to the envoy to the ${peopleOf(met.to)}`) : town ? `Of the guard of ${town.name}` : "",
@@ -11215,7 +11215,7 @@ export class Game {
             return;
         }
 
-        const time = timeOfDay(elapsedOf(this.host.war));
+        const time = timeOfDay(elapsedOf(this.worldview.war));
         const interior = this.interiors.get(this.mapId);
         const overworld = this.world.maps?.town;
         let facts = { place: this.#soundOf(this.mapId), time };
@@ -11228,7 +11228,7 @@ export class Game {
             facts.forge = interior.forge ? { ...interior.forge, far: far(interior.forge) } : null;
         } else if (overworld?.biomeAt) {
             this.surroundings ??= new Surroundings(overworld);
-            facts = { ...facts, ...this.surroundings.at(me.x, me.z, { height: me.y, lights: this.nearLights ?? [], lit: torchesLit(elapsedOf(this.host.war)), works: this.#works() }) };
+            facts = { ...facts, ...this.surroundings.at(me.x, me.z, { height: me.y, lights: this.nearLights ?? [], lit: torchesLit(elapsedOf(this.worldview.war)), works: this.#works() }) };
 
             // (Whose lands these are, as first claimed, for their music: straight away as the
             // game starts, then once they've been in them LAND_HEARD; in the wild between, it
@@ -11581,7 +11581,7 @@ export class Game {
         }
 
         // (Woken at sunrise or sunset: whichever the time's nearer)
-        const morning = timeOfDay(elapsedOf(this.host.war)) < (DAY.rises + DAY.sets) / 2;
+        const morning = timeOfDay(elapsedOf(this.worldview.war)) < (DAY.rises + DAY.sets) / 2;
         const who = mine ? "You sleep" : `${this.battle.actor(id)?.name ?? "Your host"} sleeps`;
         const how = where === "camp" ? " by the fire" : "";
 
@@ -11590,7 +11590,7 @@ export class Game {
         const long = hours ? ` for ${hours} hour${hours === 1 ? "" : "s"}` : ` till ${until === "sundown" ? "sundown" : until === "morning" || morning ? "the sun's up" : "evening"}`;
 
         this.hud.message(passed ? `${who}${how}${long}, ${Math.round(passed / 60000)} minutes gone.` : together ? `You rest${how}.` : `You rest${how}: the time's the host's to pass.`, 3.5);
-        this.onWar?.(this.host.war, this.host.legends);
+        this.onWar?.(this.worldview.war, this.host.legends);
     }
 
     // A player marked away (core/host.js AFK: no command for a while), or back: "AFK" by their
@@ -12780,7 +12780,7 @@ export class Game {
                     away: Boolean(player.away),
                     resting: Boolean(player.resting),
                     dead: Boolean(actor?.dead),
-                    hostile: id !== this.me && Boolean(host.war?.hostile(this.self.realm, player.realm)),
+                    hostile: id !== this.me && Boolean(this.worldview.war?.hostile(this.self.realm, player.realm)),
                     blocked: id !== this.me && this.isBlocked(id),
                     can,
                 };
@@ -12799,7 +12799,7 @@ export class Game {
         let place;
 
         if (actor.map === "town") {
-            const named = [...(this.host.war?.towns ?? []), ...(this.world.plan ? placesOf(this.world.plan).filter(({ name }) => name) : [])];
+            const named = [...(this.worldview.war?.towns ?? []), ...(this.world.plan ? placesOf(this.world.plan).filter(({ name }) => name) : [])];
             let nearest = null;
             let best = PLAYERS_TAB.near;
 
@@ -12938,7 +12938,7 @@ export class Game {
         }
 
         if (place && !(this.memory.heard ?? []).some((one) => one.id === place.id)) {
-            this.memory.heard = [...(this.memory.heard ?? []), { id: place.id, town: shrine, turn: this.host.war?.turn ?? 0, shrine: god }];
+            this.memory.heard = [...(this.memory.heard ?? []), { id: place.id, town: shrine, turn: this.worldview.war?.turn ?? 0, shrine: god }];
             this.#keepTalks();
         }
 
@@ -13044,8 +13044,8 @@ export class Game {
     #moonlit() {
         const me = this.battle.actor(this.me);
         const plan = this.world.plan;
-        const night = daylight(timeOfDay(elapsedOf(this.host.war))) < 0.2;
-        const tonight = phaseOfNight(elapsedOf(this.host.war));
+        const night = daylight(timeOfDay(elapsedOf(this.worldview.war))) < 0.2;
+        const tonight = phaseOfNight(elapsedOf(this.worldview.war));
         const near = plan && me && me.map === "town" && night && tonight !== NEW_MOON ? ringsOf(plan).filter(({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y) <= MoonGates.SEEN) : [];
 
         if (near.length || this.moonGates.shown.size) {
@@ -13822,7 +13822,7 @@ export class Game {
     }
 
     #showJournal() {
-        const war = this.host.war;
+        const war = this.worldview.war;
         const standing = this.standing;
         const rank = standing.rank();
         const { points, from, to } = standing.toNext();
@@ -14063,8 +14063,8 @@ export class Game {
             return null;
         }
 
-        const tonight = phaseOfNight(elapsedOf(this.host.war));
-        const trial = tonight === FULL_MOON ? trialOf(plan, nightOf(elapsedOf(this.host.war))) : null;
+        const tonight = phaseOfNight(elapsedOf(this.worldview.war));
+        const trial = tonight === FULL_MOON ? trialOf(plan, nightOf(elapsedOf(this.worldview.war))) : null;
         const far = (ring) => (at ? Math.hypot(ring.at[0] - at[0], ring.at[1] - at[1]) : 0);
         const rings = ringsOf(plan)
             .filter(({ site }) => this.explored.rings.has(site.id))
@@ -14115,7 +14115,7 @@ export class Game {
     // another, or fallen, and how near they are to rising; ruling the continent; or another's
     // ruling it. Null if none of these
     #fateLine(realm) {
-        const war = this.host.war;
+        const war = this.worldview.war;
         const people = (id) => `the ${peopleOf(id)}`;
         const oppressor = war.oppressor(realm.id);
         const rising = `${Math.round(((realm.unrest ?? 0) / RISING.ready) * 100)}% of the way to rising`;
@@ -14142,7 +14142,7 @@ export class Game {
     others() {
         return [...this.host.players.values()]
             .filter(({ id }) => id !== this.me)
-            .map((player) => ({ id: player.id, name: player.hero.name, people: peopleOf(player.realm), hostile: Boolean(this.host.war?.hostile(this.self.realm, player.realm)) }));
+            .map((player) => ({ id: player.id, name: player.hero.name, people: peopleOf(player.realm), hostile: Boolean(this.worldview.war?.hostile(this.self.realm, player.realm)) }));
     }
 
     /**
@@ -14860,7 +14860,7 @@ export class Game {
         }
 
         if (!this.remote) {
-            this.onWar(this.host.war, this.host.legends);
+            this.onWar(this.worldview.war, this.host.legends);
         }
     }
 
@@ -14917,7 +14917,7 @@ export class Game {
         }
 
         if (!this.remote) {
-            this.onWar(this.host.war, this.host.legends);
+            this.onWar(this.worldview.war, this.host.legends);
         }
     }
 
@@ -15079,7 +15079,7 @@ export class Game {
         }
 
         if (!this.remote) {
-            this.onWar(this.host.war, this.host.legends);
+            this.onWar(this.worldview.war, this.host.legends);
         }
     }
 
@@ -15168,7 +15168,7 @@ export class Game {
         this.#tauntMarks();
 
         // (Eyes in the dark: a hunting beast's, out beyond the light, at night)
-        const light = daylight(timeOfDay(elapsedOf(this.host.war)));
+        const light = daylight(timeOfDay(elapsedOf(this.worldview.war)));
         const lit = this.mapId === battle.lightMap ? battle.light : null;
         const eyes = [];
 
@@ -15443,7 +15443,7 @@ export class Game {
 
     // Where a supply wagon is (its id: host.js supplies), [x, y] metres; or null, gone
     #wagonAt(id) {
-        const wagon = this.battle.actor(this.host.supplies?.get(id)?.wagon);
+        const wagon = this.battle.actor(this.worldview.supplies?.get(id)?.wagon);
 
         return wagon ? [wagon.x, wagon.y] : null;
     }
@@ -15477,9 +15477,9 @@ export class Game {
 
     // The houses burnt in every place now, and how far on each is: Map(place, Map(index, stage))
     #burntPlaces() {
-        const now = elapsedOf(this.host.war);
+        const now = elapsedOf(this.worldview.war);
 
-        return new Map([...new Set((this.host.burnt ?? []).map(({ place }) => place))].map((place) => [place, burntIn(this.host.burnt, place, now)]));
+        return new Map([...new Set((this.worldview.burnt ?? []).map(({ place }) => place))].map((place) => [place, burntIn(this.worldview.burnt, place, now)]));
     }
 
     // The houses the Behemoth of the Rift burnt drawn as they are now (core/burnt.js): where any
@@ -15567,7 +15567,7 @@ export class Game {
     }
 
     #syncForts() {
-        const war = this.host?.war;
+        const war = this.worldview?.war;
         const me = this.battle.actor(this.me);
 
         if (!war?.forts || !me || !this.forts3d) {
@@ -15601,7 +15601,7 @@ export class Game {
     // camp's once it's built, broken open where it's breached, with fresh stakes ready by a breach
     // while its people have the wood to mend it (war.js PALISADE)
     #syncStockades() {
-        const war = this.host?.war;
+        const war = this.worldview?.war;
         const me = this.battle.actor(this.me);
 
         if (!war?.camps || !me || !this.stockades) {
@@ -15726,7 +15726,7 @@ export class Game {
     // #meetConvoy, #watchConvoys, #convoyFell): its wagons emptied once its goods are in; said, if
     // it's near the player, or it's their people's, or theirs who fell on it
     #convoyed({ convoy: id, people, over, by = null, wagons = [], cargo = null }) {
-        const met = this.host.convoys.get(id);
+        const met = this.worldview.convoys.get(id);
         const me = this.battle.actor(this.me);
         const mine = this.self?.realm;
         const near = Boolean(met) && me?.map === "town" && Math.hypot(me.x - met.at[0], me.y - met.at[1]) <= CONVOY_NEAR.far;
@@ -15742,7 +15742,7 @@ export class Game {
             return;
         }
 
-        const war = this.host.war;
+        const war = this.worldview.war;
         const [load, amount] = Object.entries(cargo ?? met.cargo ?? {})[0] ?? [null, 0];
         const works = war?.workAt(met.works);
         const town = war?.town(met.to)?.name ?? "their seat";
@@ -17354,7 +17354,7 @@ export class Game {
             case "turn":
                 // (The war kept as it goes; the journal's time left with it; and the player's time
                 // in towns, for the invasions to come: core/invasions.js clockOf)
-                this.onWar(this.host.war, this.host.legends);
+                this.onWar(this.worldview.war, this.host.legends);
                 this.onProgress(this.progress);
                 this.#keepFollowers();
 
@@ -17601,7 +17601,7 @@ export class Game {
     // A turn of the war for the player's people (docs/WAR.md M10: host.js #fate): told in the
     // fate panel, or in a word (ready to rise); the war kept, and the journal as it is now
     #fate({ fate, realm, by, town }) {
-        const war = this.host.war;
+        const war = this.worldview.war;
         const own = `the ${peopleOf(realm)}`;
         const them = by ? `the ${peopleOf(by)}` : "their overlords";
 
@@ -19009,7 +19009,7 @@ export class Game {
                 continue;
             }
 
-            const fights = enemy || this.host.invader(actor.id);
+            const fights = enemy || this.worldview.invader(actor.id);
 
             things.push({ key: `actor:${actor.id}`, x: actor.x, z: actor.y, reach: fights ? PAD_REACH.foe : PAD_REACH.talk, kind: fights ? "attack" : actor.kind === "player" ? "trade" : "talk", actor });
         }
@@ -19303,7 +19303,7 @@ export class Game {
         // Someone to talk to (one of the folk, a soldier who isn't an enemy, nor one of an
         // invasion's raiders, leaving the player be till they strike one): go up to them; another
         // player (not an enemy): trade with them
-        if (who && me && !this.battle.hostile(who, me) && !this.host.invader(who.id)) {
+        if (who && me && !this.battle.hostile(who, me) && !this.worldview.invader(who.id)) {
             this.lastTap = { time, x: clientX, y: clientY, from: "view" };
 
             if (who.kind === "player") {
@@ -19396,7 +19396,7 @@ export class Game {
      * unhurt (the debug overlay's): host.js "burn".
      */
     burn(stage = "burning", count = null) {
-        const now = elapsedOf(this.host.war);
+        const now = elapsedOf(this.worldview.war);
         const agos = Array.from({ length: 4 * 60 + 1 }, (_, k) => k * (DAY.length / 60)).filter((ago) => stageOf(now - ago, now) === stage);
         const ago = stage === "burning" ? 0 : (agos[Math.floor(agos.length / 2)] ?? 0);
 
@@ -19622,7 +19622,7 @@ export class Game {
         const who = found === me ? null : found;
 
         if (who) {
-            return me && !this.battle.hostile(who, me) && !this.host.invader(who.id) ? "talk" : "attack";
+            return me && !this.battle.hostile(who, me) && !this.worldview.invader(who.id) ? "talk" : "attack";
         }
 
         if (this.drops?.at(clientX, clientY, (point) => this.view.toScreen(point)) || this.#lecternAt(clientX, clientY) || this.#signAt(clientX, clientY) || this.#shrineAt(clientX, clientY) || this.#obstacleAt(clientX, clientY) || this.#strongroomAt(clientX, clientY)) {
@@ -19954,7 +19954,7 @@ export class Game {
         const me = this.battle.actor(this.me);
         const table = warTableOn(this.world.maps?.[this.mapId]);
         const building = this.world.interiors?.of(this.mapId);
-        const war = this.host.war;
+        const war = this.worldview.war;
         const town = building && war ? war.town(this.#townOf(building)) : null;
 
         if (!me || me.dead || !table || !town || !atWarTable(table, me.x, me.y)) {
@@ -19971,7 +19971,7 @@ export class Game {
             return { ok: false, reason };
         }
 
-        const refresh = () => battleMapView(this.host.war, this.self.realm, { explored: this.explored, rank: this.standing.rank() });
+        const refresh = () => battleMapView(this.worldview.war, this.self.realm, { explored: this.explored, rank: this.standing.rank() });
         const view = refresh();
 
         // (Read: what its scouts see, and where their side's towns, works and forts stand,
@@ -19990,7 +19990,7 @@ export class Game {
      */
     atTable({ orders = null, realm = null, counsel = null }, then = null) {
         return this.#command({ type: "table", orders, realm, counsel }, (result) => {
-            then?.(result?.ok ? heededText({ orders, counsel }, this.host.war) : (REFUSALS[result?.reason] ?? REFUSALS.command), Boolean(result?.ok));
+            then?.(result?.ok ? heededText({ orders, counsel }, this.worldview.war) : (REFUSALS[result?.reason] ?? REFUSALS.command), Boolean(result?.ok));
         });
     }
 
@@ -20459,7 +20459,7 @@ export class Game {
             return { ok: false, reason: why };
         }
 
-        const elapsed = elapsedOf(this.host.war);
+        const elapsed = elapsedOf(this.worldview.war);
 
         this.hud.chooseCamp({ hours: this.campHours ?? 8, least: CAMP_HOURS.least, most: CAMP_HOURS.most, sundown: campFor(elapsed, "sundown") / HOUR, morning: campFor(elapsed, "morning") / HOUR }, (until) => {
             if (until === undefined) {

@@ -4,6 +4,10 @@
 // first supplier, LocalView, wraps the Host a solo, hosting or lockstep game has, and is there
 // for good: such a game reads its own world through it.
 //
+// Its second group (3-4), war and news, is read at once, as the world has it or as it was last
+// told: the war whole (its towns, realms, turn and news are small, and a mirror of it is kept
+// as the war itself is), the invasions, what's burnt, and who's out on the war's business.
+//
 // Its first group (3-3): shops, talk, hires and trades. A talk's facts and a shop's are *asked
 // for* as the talk or the shop opens, and may come later (a promise: a server's answer); what
 // comes is a handle whose reads are then at once, each as the world has it now (the local
@@ -16,6 +20,17 @@ export const VIEW = Object.freeze({
     talk: "What a talk needs of the world, asked as it opens (may come later): who they are to the director, their hire, their shop's special, what a messenger says; and, read at once whenever asked, those of the player's mending, a stable's offer and who's hired.",
     shop: "A shop's stock, asked as it opens (may come later): read at once whenever its wares are drawn, as they stand.",
     trade: "The trade the player's in with another player, if any: read at once, as last known.",
+    // The second group (3-4), war and news: each read at once, as last known
+    war: "The war (core/war/war.js War): who holds each town and works, the realms, its turn and its news; what the war table, the criers and the clock read.",
+    invasions: "The invasions going ([{ town, ... }]).",
+    invader: "Whether a character is one of an invasion's (an id, or an actor).",
+    burnt: "The settlements burnt down (a Set of their ids).",
+    soldiers: "The towns' soldiers out, by id (a Map): whose they are, their part and their banner.",
+    fortsOut: "The fortifications' garrisons out, by id (a Map).",
+    envoys: "The envoys on the roads, by id (a Map).",
+    convoys: "The convoys on the roads, by id (a Map).",
+    supplies: "The supply wagons on the roads, by id (a Map).",
+    wagons: "The wagons drawn, by id (a Map).",
 });
 
 /** Do `then` with a value once it's there: at once, or when its promise settles. */
@@ -67,7 +82,50 @@ export class LocalView {
     trade(me) {
         return [...(this.host.trades?.values() ?? [])].find((trade) => trade.open && (trade.from === me || trade.to === me)) ?? null;
     }
+
+    get war() {
+        return this.host.war;
+    }
+
+    get invasions() {
+        return this.host.invasions;
+    }
+
+    invader(who) {
+        return this.host.invader(who);
+    }
+
+    get burnt() {
+        return this.host.burnt;
+    }
+
+    get soldiers() {
+        return this.host.soldiers;
+    }
+
+    get fortsOut() {
+        return this.host.fortsOut;
+    }
+
+    get envoys() {
+        return this.host.envoys;
+    }
+
+    get convoys() {
+        return this.host.convoys;
+    }
+
+    get supplies() {
+        return this.host.supplies;
+    }
+
+    get wagons() {
+        return this.host.wagons;
+    }
 }
+
+// What's read at once of a view, whoever supplies it (VIEW's, but what's asked for: talk, shop)
+const AT_ONCE = Object.freeze(["war", "invasions", "burnt", "soldiers", "fortsOut", "envoys", "convoys", "supplies", "wagons"]);
 
 /**
  * A view whose answers come a moment later, as a server's would: what's asked for (talk, shop) is
@@ -90,4 +148,16 @@ export class DeferredView {
     trade(me) {
         return this.view.trade(me);
     }
+
+    invader(who) {
+        return this.view.invader(who);
+    }
+}
+
+for (const name of AT_ONCE) {
+    Object.defineProperty(DeferredView.prototype, name, {
+        get() {
+            return this.view[name];
+        },
+    });
 }

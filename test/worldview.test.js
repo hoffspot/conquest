@@ -34,8 +34,8 @@ describe("the world view's first group: shops, talk, hires and trades (core/worl
     it("names what it's asked, each implemented by both suppliers and nothing more", () => {
         const own = (kind) => Object.getOwnPropertyNames(kind.prototype).filter((name) => name !== "constructor");
 
-        assert.deepEqual(own(LocalView), Object.keys(VIEW));
-        assert.deepEqual(own(DeferredView), Object.keys(VIEW));
+        assert.deepEqual(own(LocalView).sort(), Object.keys(VIEW).sort());
+        assert.deepEqual(own(DeferredView).sort(), Object.keys(VIEW).sort());
 
         for (const [name, words] of Object.entries(VIEW)) {
             assert.ok(words.length > 20, name);
@@ -89,6 +89,28 @@ describe("the world view's first group: shops, talk, hires and trades (core/worl
         assert.equal(told.hired("someone"), false);
         host.hired.add("someone");
         assert.equal(told.hired("someone"), true);
+    });
+
+    it("reads the war and its news at once from either, as the world has them: the war itself, the invasions, what's burnt, who's out (3-4)", () => {
+        const host = hosted();
+        const [local, deferred] = [new LocalView(host), new DeferredView(new LocalView(host))];
+
+        for (const view of [local, deferred]) {
+            assert.equal(view.war, host.war);
+            assert.equal(view.invasions, host.invasions);
+            assert.equal(view.burnt, host.burnt);
+
+            for (const name of ["soldiers", "fortsOut", "envoys", "convoys", "supplies", "wagons"]) {
+                assert.equal(view[name], host[name], name);
+                assert.ok(host[name] instanceof Map, name);
+            }
+
+            assert.equal(view.invader("no one"), host.invader("no one"));
+        }
+
+        const game = readFileSync(new URL("../client/js/app/game.js", import.meta.url), "utf8");
+
+        assert.deepEqual([...game.matchAll(/\bhost\??\.(war|invasions|invader|burnt|soldiers|fortsOut|envoys|convoys|supplies|wagons)\b/g)].map(([, name]) => name), []);
     });
 
     it("is the game's only way to the group's reads: none of them reached on its Host (app/game.js)", () => {
