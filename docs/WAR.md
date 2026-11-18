@@ -3676,7 +3676,14 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   before its answer isn't opened (`talkAsked`, `shopAsked`). `DeferredView` answers a moment
   later, as a server would: `test/worldview.test.js` holds both suppliers to the same answers
   and fails for a read of the group on the `Host` from `app/game.js`, and a browser test opens
-  a talk and a shop through it.
+  a talk and a shop through it. Its other groups (3-4 to 3-8, `READS`) are read at once, as the
+  world has them or as it was last told: war and news (the war whole, the invasions, what's
+  burnt, who's out on its business), party and roster, followers and the hero's own, the
+  director's props (caches, finds, strangers, obstacles, what's dropped, treasures, what's open
+  or shut), and the rest (legends, dungeons, hell's rifts, the rules, the folk out of doors).
+  Each is the `Host`'s own of the same name, which a server's supplier will keep a mirror of.
+  The game now reaches its `Host` only as its world's authority (`battle`, `command`, `join`,
+  `populate`, `soon`), which the same test holds it to.
 - **One authority.** The host's game is the world's one authority. Everything done to its world
   it records as it's done (`host.recorder`), and sends every tenth of a second: each step it's
   moved on, each command anyone gives, each player come or gone.

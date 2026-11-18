@@ -9,7 +9,7 @@ import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
-import { after, DeferredView, LocalView, VIEW } from "../client/js/core/worldview.js";
+import { after, DeferredView, LocalView, READS, VIEW } from "../client/js/core/worldview.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 
@@ -31,13 +31,16 @@ function hosted() {
 const plain = (told) => JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(told).map(([name, value]) => [name, typeof value === "function" ? (name === "hired" ? "asked by id" : value()) : value]))));
 
 describe("the world view's first group: shops, talk, hires and trades (core/worldview.js)", () => {
-    it("names what it's asked, each implemented by both suppliers and nothing more", () => {
+    it("names what it's asked for (VIEW) and what's read at once by group (READS), each once, and both suppliers have every one", () => {
+        const names = [...Object.keys(VIEW), ...Object.values(READS).flatMap(({ state, asks }) => [...state, ...asks])];
         const own = (kind) => Object.getOwnPropertyNames(kind.prototype).filter((name) => name !== "constructor");
 
-        assert.deepEqual(own(LocalView), Object.keys(VIEW));
-        assert.deepEqual(own(DeferredView), Object.keys(VIEW));
+        assert.equal(new Set(names).size, names.length);
+        assert.deepEqual(Object.keys(READS), ["war", "party", "company", "props", "rest"]);
+        assert.deepEqual(own(LocalView).sort(), [...names].sort());
+        assert.deepEqual(own(DeferredView).sort(), [...names].sort());
 
-        for (const [name, words] of Object.entries(VIEW)) {
+        for (const [name, words] of [...Object.entries(VIEW), ...Object.entries(READS).map(([group, { words: said }]) => [group, said])]) {
             assert.ok(words.length > 20, name);
         }
     });
@@ -89,6 +92,43 @@ describe("the world view's first group: shops, talk, hires and trades (core/worl
         assert.equal(told.hired("someone"), false);
         host.hired.add("someone");
         assert.equal(told.hired("someone"), true);
+    });
+
+    it("reads every group at once from either supplier as the Host has it: its state the Host's own, what it's asked answered by the Host (3-4 to 3-8)", () => {
+        const host = hosted();
+        const [local, deferred] = [new LocalView(host), new DeferredView(new LocalView(host))];
+
+        for (const [group, { state, asks }] of Object.entries(READS)) {
+            for (const name of state) {
+                assert.ok(name in host, `${group}: the Host has ${name}`);
+                assert.equal(local[name], host[name], name);
+                assert.equal(deferred[name], host[name], name);
+            }
+
+            for (const name of asks) {
+                assert.equal(typeof host[name], "function", `${group}: the Host answers ${name}`);
+                assert.equal(typeof local[name], "function", name);
+                assert.equal(typeof deferred[name], "function", name);
+            }
+        }
+
+        // (Asked as the Host is, by either)
+        for (const view of [local, deferred]) {
+            assert.equal(view.invader("no one"), host.invader("no one"));
+            assert.deepEqual(view.partyFor(HOST_PLAYER), host.partyFor(HOST_PLAYER));
+            assert.deepEqual(view.mendingOf(HOST_PLAYER), host.mendingOf(HOST_PLAYER));
+            assert.equal(view.mightFor(HOST_PLAYER), host.mightFor(HOST_PLAYER));
+            assert.equal(view.players.get(HOST_PLAYER), host.players.get(HOST_PLAYER));
+        }
+    });
+
+    it("leaves the game nothing to read on its Host: only what a world of its own is told, as its authority (app/game.js)", () => {
+        const game = readFileSync(new URL("../client/js/app/game.js", import.meta.url), "utf8");
+        const reached = [...new Set([...game.matchAll(/(?<![\w/])host\??\.([A-Za-z_$][\w$]*)/g)].map(([, name]) => name))].filter((name) => name !== "js").sort();
+
+        // (Its battle, commands, players come and its people put in, and what to make ahead: the
+        // authority's, not reads of the world's rules)
+        assert.deepEqual(reached, ["battle", "command", "join", "populate", "soon"]);
     });
 
     it("is the game's only way to the group's reads: none of them reached on its Host (app/game.js)", () => {
