@@ -323,6 +323,10 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_PORT=8096 \
 - `E2E_PORT` picks the port for the test server, so it doesn't clash with a game you're running
   (the default is 8095).
 - `rm -rf test-results` first, if an earlier run left its pictures and traces there.
+- `e2e/blinkers.spec.js` plays the game with `?blinkers` (core/blinkers.js: it knows no one
+  further off its hero than 192 m, as a replicated world's game will; the scaling plan's 3-9),
+  alone and joined to another's world, and fails for any error of the page's or in its debug
+  log. A change to how the game handles what the world tells it should pass it.
 - Every spec opens the game with `playing` (`e2e/fixtures.js`), and the game's drawn cheaply
   unless the test says otherwise: at Low without shadows (kept as the game's settings before the
   page loads, where the test keeps none of its own), looking down on the player once it's

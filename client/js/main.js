@@ -21,6 +21,8 @@
 // with the code in it (&at= the server it's looked for on).
 
 import { ASSETS } from "./app/assets.js";
+import { Game } from "./app/game.js";
+import { BLINKERS } from "./core/blinkers.js";
 import { Backdrop } from "./app/backdrop.js";
 import { Crest } from "./app/crest.js";
 import { mappedOf, releaseOf } from "./app/catalog.js";
@@ -54,6 +56,12 @@ const canvas = document.querySelector("#view");
 const $ = (selector) => document.querySelector(selector);
 
 const settings = loadSettings();
+
+// (For the tests, `?blinkers` or `?blinkers=120`: the game knows no one further off its hero
+// than that many metres, 192 unless said: core/blinkers.js, the scaling plan's 3-9)
+if (params.has("blinkers")) {
+    Game.blinkers = Number(params.get("blinkers")) > 0 ? Number(params.get("blinkers")) : BLINKERS.radius;
+}
 
 // (The quick start asked to draw at a level, `?play&quality=low`, `medium` or `high`: drawn so
 // this once, whatever's chosen in Game options, and not kept unless it's chosen there)

@@ -39,6 +39,7 @@ import { AFFLICTIONS } from "../core/afflictions.js";
 import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
 import { cheering, greetingOf, isEmote } from "../core/emotes.js";
 import { carriesTorch, playerSight, sightAt, torchesLit } from "../core/light.js";
+import { blinkered } from "../core/blinkers.js";
 import { aloftShare, Battle, BOMBS, LOCK_REACH, SIGHT, sitting, STEP_MS, TALK_REACH, WAIT_BEYOND } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
 import { FINDS, foodFor, FRESH, HEALING_DRAUGHTS, OBSTACLES, STRANGERS } from "../core/director.js";
@@ -1317,6 +1318,13 @@ export class Game {
     #begin = null;
 
     /**
+     * For the tests (generated/multiplayer_scaling_plan.md 3-9): how far off its hero a game
+     * knows anyone (metres), its battle read through blinkers (core/blinkers.js), or null: all
+     * of it, as ever. A game opened with `?blinkers` (or `?blinkers=120`) has them (main.js).
+     */
+    static blinkers = null;
+
+    /**
      * @param {object} options
      * @param {import("../world/view.js").View} options.view
      * @param {object} options.kit - The character kit (characters/kit.js).
@@ -1571,7 +1579,7 @@ export class Game {
             this.host.populate();
         }
 
-        this.battle = this.host.battle;
+        this.battle = Game.blinkers ? blinkered(this.host.battle, () => this.me, { radius: Game.blinkers }) : this.host.battle;
         this.avatars = new Map();
         this.previous = new Map();
         // (Those in view who can be drawn in full this frame, the crowd biggest on the screen, if
@@ -7440,7 +7448,7 @@ export class Game {
             markers: this.mapId === "town" ? this.markers : [],
             // (The fresh tracks they've come upon, the way they lead: #freshTrails)
             trails: this.mapId === "town" ? this.#freshTrails() : [],
-            party: party.map(({ id, name, colour, x, z, map }) => (map === this.mapId ? { id, name, colour, x: this.battle.actor(id).x, z: this.battle.actor(id).y } : { id, name, colour, x, z })),
+            party: party.map(({ id, name, colour, x, z, map }) => (map === this.mapId && this.battle.actor(id) ? { id, name, colour, x: this.battle.actor(id).x, z: this.battle.actor(id).y } : { id, name, colour, x, z })),
             // (The battles near: battleView)
             battles: this.mapId === "town" ? this.battleView() : { arrows: [], commanders: [] },
         });
@@ -11151,7 +11159,7 @@ export class Game {
     #rest({ id, role, rest }, avatar) {
         const how = ROLES[role]?.rests[rest];
 
-        if (!how || this.battle.actor(id).map !== this.mapId) {
+        if (!how || this.battle.actor(id)?.map !== this.mapId) {
             return;
         }
 
@@ -14151,7 +14159,7 @@ export class Game {
      * to life getting up; and the player's taken to the map they're on, if it's another.
      */
     rehost() {
-        this.battle = this.host.battle;
+        this.battle = Game.blinkers ? blinkered(this.host.battle, () => this.me, { radius: Game.blinkers }) : this.host.battle;
 
         for (const actor of this.battle.actors) {
             const avatar = this.avatars.get(actor.id);
@@ -16691,7 +16699,7 @@ export class Game {
                     // (One of the player's own drawing a foe off them: told, now and then)
                     if (this.showEnmity && event.from === this.me && !event.cried && this.battle.actor(event.by)?.leader === this.me && this.clock - this.drawnOffAt >= DRAWN_OFF_EVERY) {
                         this.drawnOffAt = this.clock;
-                        hud.message(`${this.battle.actor(event.by).name} draws the ${(this.battle.actor(event.id).name ?? "foe").toLowerCase()} off you.`, 2.5);
+                        hud.message(`${this.battle.actor(event.by)?.name ?? "Someone"} draws the ${(this.battle.actor(event.id)?.name ?? "foe").toLowerCase()} off you.`, 2.5);
                     }
 
                     break;

@@ -32,7 +32,7 @@
                     "three/addons/utils/BufferGeometryUtils.js": "./vendor/three-r186/addons/utils/BufferGeometryUtils.js?h=aba9507c8d",
                     "three/addons/utils/SkeletonUtils.js": "./vendor/three-r186/addons/utils/SkeletonUtils.js?h=6c660e1682",
                     "three/addons/utils/WorkerPool.js": "./vendor/three-r186/addons/utils/WorkerPool.js?h=d46dc565a8",
-                    "./js/app/assets.js": "./js/app/assets.js?h=fb40bc5045",
+                    "./js/app/assets.js": "./js/app/assets.js?h=1e89f794de",
                     "./js/app/backdrop.js": "./js/app/backdrop.js?h=c9aa55b56c",
                     "./js/app/battlemap.js": "./js/app/battlemap.js?h=7d6695a2ef",
                     "./js/app/bestiary.js": "./js/app/bestiary.js?h=3f8049c082",
@@ -57,7 +57,7 @@
                     "./js/app/forecast.js": "./js/app/forecast.js?h=43b94ad719",
                     "./js/app/frames.js": "./js/app/frames.js?h=623012b1ec",
                     "./js/app/fullscreen.js": "./js/app/fullscreen.js?h=34493b7fd9",
-                    "./js/app/game.js": "./js/app/game.js?h=c9e83b80d4",
+                    "./js/app/game.js": "./js/app/game.js?h=4b5e6606c7",
                     "./js/app/gamepad.js": "./js/app/gamepad.js?h=c86c402b16",
                     "./js/app/gearinfo.js": "./js/app/gearinfo.js?h=ed47b458d6",
                     "./js/app/governor.js": "./js/app/governor.js?h=3ad846f3f9",
@@ -72,7 +72,7 @@
                     "./js/app/journey.js": "./js/app/journey.js?h=c089c49e7e",
                     "./js/app/keys.js": "./js/app/keys.js?h=315fab9ef7",
                     "./js/app/loader.js": "./js/app/loader.js?h=37d37bbdf1",
-                    "./js/app/manifest.js": "./js/app/manifest.js?h=d6b258a6d1",
+                    "./js/app/manifest.js": "./js/app/manifest.js?h=ec9f881c02",
                     "./js/app/mapicons.js": "./js/app/mapicons.js?h=70ac2aa422",
                     "./js/app/memoryguard.js": "./js/app/memoryguard.js?h=927481090c",
                     "./js/app/minimap.js": "./js/app/minimap.js?h=74b29b46c7",
@@ -204,6 +204,7 @@
                     "./js/core/arches.js": "./js/core/arches.js?h=c074d59168",
                     "./js/core/battle.js": "./js/core/battle.js?h=5a4f60ca51",
                     "./js/core/bestiary.js": "./js/core/bestiary.js?h=20dfa4c8ea",
+                    "./js/core/blinkers.js": "./js/core/blinkers.js?h=55ed53cfc9",
                     "./js/core/burnt.js": "./js/core/burnt.js?h=a94738f753",
                     "./js/core/caches.js": "./js/core/caches.js?h=4ec406d34c",
                     "./js/core/crafting.js": "./js/core/crafting.js?h=d5474327f6",
@@ -345,7 +346,7 @@
                     "./js/core/worldplan/terrain.js": "./js/core/worldplan/terrain.js?h=d0b35d7867",
                     "./js/core/worldview.js": "./js/core/worldview.js?h=4fa5c6e029",
                     "./js/core/writings.js": "./js/core/writings.js?h=aea4ce4f29",
-                    "./js/main.js": "./js/main.js?h=c73216ff51",
+                    "./js/main.js": "./js/main.js?h=603f564162",
                     "./js/world/ailments3d.js": "./js/world/ailments3d.js?h=1d60de08f8",
                     "./js/world/art/engine/atlas.js": "./js/world/art/engine/atlas.js?h=5086c15ffa",
                     "./js/world/art/engine/corners.js": "./js/world/art/engine/corners.js?h=cdfc8fe165",
@@ -525,7 +526,9 @@
                 }
             }
         </script>
-        <link rel="modulepreload" href="js/app/assets.js?h=fb40bc5045">
+        <link rel="modulepreload" href="js/app/assets.js?h=1e89f794de">
+        <link rel="modulepreload" href="js/app/game.js?h=4b5e6606c7">
+        <link rel="modulepreload" href="js/core/blinkers.js?h=55ed53cfc9">
         <link rel="modulepreload" href="js/app/backdrop.js?h=c9aa55b56c">
         <link rel="modulepreload" href="js/app/crest.js?h=032fda00b4">
         <link rel="modulepreload" href="js/app/catalog.js?h=e7d7150a22">
@@ -536,7 +539,7 @@
         <link rel="modulepreload" href="js/app/graphicsnotes.js?h=176c9a2e15">
         <link rel="modulepreload" href="js/app/homescreen.js?h=8245ee2219">
         <link rel="modulepreload" href="js/app/loader.js?h=37d37bbdf1">
-        <link rel="modulepreload" href="js/app/manifest.js?h=d6b258a6d1">
+        <link rel="modulepreload" href="js/app/manifest.js?h=ec9f881c02">
         <link rel="modulepreload" href="js/app/multiplayer.js?h=41f9f53ecd">
         <link rel="modulepreload" href="js/app/pointer.js?h=a4c31cdac5">
         <link rel="modulepreload" href="js/app/rejoin.js?h=01b5ba37d3">
@@ -553,52 +556,438 @@
         <link rel="modulepreload" href="js/core/steps.js?h=ea932948d4">
         <link rel="modulepreload" href="js/core/weapons.js?h=85cc8a6624">
         <link rel="modulepreload" href="js/world/release.js?h=731979adb0">
-        <link rel="modulepreload" href="js/core/invasions.js?h=cefe318543">
-        <link rel="modulepreload" href="js/core/rare.js?h=8efa957302">
-        <link rel="modulepreload" href="js/app/pacing.js?h=a056ae14c6">
-        <link rel="modulepreload" href="js/core/guid.js?h=2ddfcb272c">
-        <link rel="modulepreload" href="js/core/spells.js?h=f2ba78a368">
-        <link rel="modulepreload" href="js/app/journal.js?h=b5e541ebb7">
-        <link rel="modulepreload" href="js/core/wire.js?h=8ad2adaaf6">
-        <link rel="modulepreload" href="js/app/press.js?h=1c72a211da">
-        <link rel="modulepreload" href="js/app/padkeys.js?h=23bfc976e9">
+        <link rel="modulepreload" href="vendor/three-r186/three.module.min.js?h=f6079427ef">
+        <link rel="modulepreload" href="js/characters/actions.js?h=e0d02818ba">
+        <link rel="modulepreload" href="js/characters/character.js?h=d2c6ec7683">
+        <link rel="modulepreload" href="js/characters/folk.js?h=f0e2019bfa">
+        <link rel="modulepreload" href="js/characters/folkcrowd.js?h=6582096a35">
+        <link rel="modulepreload" href="js/characters/kit.js?h=6854254947">
+        <link rel="modulepreload" href="js/characters/soldiers.js?h=1b89f8a7a1">
+        <link rel="modulepreload" href="js/characters/presets.js?h=65b80ae26c">
+        <link rel="modulepreload" href="js/beasts/beast.js?h=a8e881f808">
+        <link rel="modulepreload" href="js/beasts/model.js?h=6d59672af3">
+        <link rel="modulepreload" href="js/beasts/herd.js?h=29bb8c0f9e">
+        <link rel="modulepreload" href="js/beasts/sculpt.js?h=91982f8125">
+        <link rel="modulepreload" href="js/app/memoryguard.js?h=927481090c">
+        <link rel="modulepreload" href="js/beasts/looks.js?h=74e3341d6a">
+        <link rel="modulepreload" href="js/core/afflictions.js?h=8d6965bc3b">
         <link rel="modulepreload" href="js/core/daytime.js?h=6c6b6e7859">
+        <link rel="modulepreload" href="js/core/emotes.js?h=640d29dcd1">
+        <link rel="modulepreload" href="js/core/light.js?h=e62cb4840a">
+        <link rel="modulepreload" href="js/core/battle.js?h=5a4f60ca51">
+        <link rel="modulepreload" href="js/core/caches.js?h=4ec406d34c">
         <link rel="modulepreload" href="js/core/director.js?h=5a1dc349e1">
-        <link rel="modulepreload" href="js/core/exact.js?h=acb08af9ec">
+        <link rel="modulepreload" href="js/core/ways.js?h=c26ef5a476">
+        <link rel="modulepreload" href="js/core/rare.js?h=8efa957302">
+        <link rel="modulepreload" href="js/core/creatures.js?h=bec6a1cea4">
+        <link rel="modulepreload" href="js/core/lore/bestiary.js?h=eb9be77976">
+        <link rel="modulepreload" href="js/core/tracks.js?h=c39355a281">
+        <link rel="modulepreload" href="js/core/dens.js?h=76cbd46e07">
+        <link rel="modulepreload" href="js/core/bestiary.js?h=20dfa4c8ea">
+        <link rel="modulepreload" href="js/app/bestiary.js?h=3f8049c082">
+        <link rel="modulepreload" href="js/core/insides.js?h=84211394c6">
+        <link rel="modulepreload" href="js/core/scenery.js?h=2658c258a9">
+        <link rel="modulepreload" href="js/core/places.js?h=53b20200d6">
+        <link rel="modulepreload" href="js/core/worldplan/plan.js?h=4c268e9427">
+        <link rel="modulepreload" href="js/core/portals.js?h=e05e814777">
+        <link rel="modulepreload" href="js/core/strongroom.js?h=81fe2e6a77">
+        <link rel="modulepreload" href="js/core/wartable.js?h=9136801e6e">
+        <link rel="modulepreload" href="js/core/worldview.js?h=4fa5c6e029">
+        <link rel="modulepreload" href="js/core/writings.js?h=aea4ce4f29">
+        <link rel="modulepreload" href="js/audio/ambience.js?h=7f1291690f">
+        <link rel="modulepreload" href="js/audio/footing.js?h=372e8d2a40">
+        <link rel="modulepreload" href="js/audio/handling.js?h=931e4f0a21">
+        <link rel="modulepreload" href="js/audio/sound.js?h=2ec559e1cd">
+        <link rel="modulepreload" href="js/app/mapicons.js?h=70ac2aa422">
+        <link rel="modulepreload" href="js/app/building.js?h=99d08e6837">
+        <link rel="modulepreload" href="js/app/battlemap.js?h=7d6695a2ef">
+        <link rel="modulepreload" href="js/core/war/armies.js?h=365228f2c5">
+        <link rel="modulepreload" href="js/core/war/forts.js?h=e322539893">
+        <link rel="modulepreload" href="js/core/war/stockade.js?h=3dbee1b273">
+        <link rel="modulepreload" href="js/app/steering.js?h=4a19c11cf0">
+        <link rel="modulepreload" href="js/app/surroundings.js?h=32c7226c5a">
+        <link rel="modulepreload" href="js/core/dialogue.js?h=2af7938935">
+        <link rel="modulepreload" href="js/core/host.js?h=2a696e72a6">
+        <link rel="modulepreload" href="js/characters/liveries.js?h=f25290eeaf">
         <link rel="modulepreload" href="js/core/gear.js?h=b050bcac58">
         <link rel="modulepreload" href="js/core/legendary.js?h=2490be9e30">
-        <link rel="modulepreload" href="js/core/random.js?h=916ec0468e">
-        <link rel="modulepreload" href="js/app/frames.js?h=623012b1ec">
-        <link rel="modulepreload" href="js/core/caches.js?h=4ec406d34c">
-        <link rel="modulepreload" href="js/core/creatures.js?h=bec6a1cea4">
-        <link rel="modulepreload" href="js/core/places.js?h=53b20200d6">
+        <link rel="modulepreload" href="js/core/might.js?h=d7b783536d">
         <link rel="modulepreload" href="js/core/progress.js?h=e11157d14c">
         <link rel="modulepreload" href="js/core/treasure.js?h=101ecc81e2">
-        <link rel="modulepreload" href="js/core/materials.js?h=c8e8d8fb19">
+        <link rel="modulepreload" href="js/core/stock.js?h=a1499547b3">
+        <link rel="modulepreload" href="js/core/guid.js?h=2ddfcb272c">
+        <link rel="modulepreload" href="js/core/netplay.js?h=0427ff3c7a">
+        <link rel="modulepreload" href="js/core/runner.js?h=2611d28575">
+        <link rel="modulepreload" href="js/core/standing.js?h=3f8f492034">
+        <link rel="modulepreload" href="js/core/missions.js?h=9cfd0bb356">
         <link rel="modulepreload" href="js/core/war/peoples.js?h=ea5dbe09ff">
+        <link rel="modulepreload" href="js/core/war/news.js?h=fe33cd1a3b">
+        <link rel="modulepreload" href="js/core/crying.js?h=834d1efe9b">
+        <link rel="modulepreload" href="js/core/invasions.js?h=cefe318543">
+        <link rel="modulepreload" href="js/core/burnt.js?h=a94738f753">
+        <link rel="modulepreload" href="js/core/random.js?h=916ec0468e">
+        <link rel="modulepreload" href="js/core/cultword.js?h=be56ad53c8">
+        <link rel="modulepreload" href="js/core/rumours.js?h=9077fc6618">
+        <link rel="modulepreload" href="js/core/war/war.js?h=102973f1e7">
+        <link rel="modulepreload" href="js/core/lore/gods.js?h=f56a9730af">
+        <link rel="modulepreload" href="js/core/shrines.js?h=bde1c2b65a">
+        <link rel="modulepreload" href="js/core/rings.js?h=21b8abe487">
+        <link rel="modulepreload" href="js/world/moongates3d.js?h=5545ea6a65">
+        <link rel="modulepreload" href="js/core/roles.js?h=b2ef8feb4a">
+        <link rel="modulepreload" href="js/core/grid.js?h=04891a8840">
+        <link rel="modulepreload" href="js/core/journey.js?h=5aebf9d099">
+        <link rel="modulepreload" href="js/core/navigation.js?h=c7ac10c253">
+        <link rel="modulepreload" href="js/core/navigation/recast.js?h=03e9022679">
+        <link rel="modulepreload" href="js/core/overworld.js?h=269ae1b5f0">
+        <link rel="modulepreload" href="js/core/terrain/height.js?h=cad9220743">
+        <link rel="modulepreload" href="js/core/setpieces/pieces.js?h=ae4af3d5f0">
+        <link rel="modulepreload" href="js/core/smartcast.js?h=13b9918c66">
+        <link rel="modulepreload" href="js/core/spells.js?h=f2ba78a368">
+        <link rel="modulepreload" href="js/core/prismatic.js?h=6f6e67827f">
+        <link rel="modulepreload" href="js/core/variety.js?h=b76cb33e16">
+        <link rel="modulepreload" href="js/world/avatar.js?h=fc8dd19249">
+        <link rel="modulepreload" href="js/world/scroll3d.js?h=a9ee00358d">
+        <link rel="modulepreload" href="js/world/crowd.js?h=0124d50e45">
+        <link rel="modulepreload" href="js/world/gpumemory.js?h=5230725ae5">
+        <link rel="modulepreload" href="js/world/navbaker.js?h=7d7ee96b57">
+        <link rel="modulepreload" href="js/world/nearfade.js?h=5d4813003e">
+        <link rel="modulepreload" href="js/world/banners3d.js?h=8c99fa46ed">
+        <link rel="modulepreload" href="js/world/camps3d.js?h=b7508b2b86">
+        <link rel="modulepreload" href="js/world/forts3d.js?h=fe98aabe5d">
+        <link rel="modulepreload" href="js/world/hellrift3d.js?h=99e8fc9da6">
+        <link rel="modulepreload" href="js/core/hellrift.js?h=39cd1f4f73">
+        <link rel="modulepreload" href="js/world/siege3d.js?h=0dfefc879c">
+        <link rel="modulepreload" href="js/world/stockades3d.js?h=af54d09403">
+        <link rel="modulepreload" href="js/world/contacts.js?h=95e4fe025e">
+        <link rel="modulepreload" href="js/world/tracks3d.js?h=7a73286bc0">
+        <link rel="modulepreload" href="js/world/signs3d.js?h=c155f79bcc">
+        <link rel="modulepreload" href="js/world/dens3d.js?h=9b6249538d">
+        <link rel="modulepreload" href="js/world/finds3d.js?h=d8adcac898">
+        <link rel="modulepreload" href="js/world/wild3d.js?h=9fd1f05f9c">
+        <link rel="modulepreload" href="js/core/wary.js?h=4c9a7b0ca4">
+        <link rel="modulepreload" href="js/core/ambush.js?h=d983c74f5a">
+        <link rel="modulepreload" href="js/world/obstacles3d.js?h=43307c2fc4">
+        <link rel="modulepreload" href="js/world/flyers3d.js?h=60c7c0c1ac">
+        <link rel="modulepreload" href="js/world/drops3d.js?h=e0530332e2">
+        <link rel="modulepreload" href="js/world/ailments3d.js?h=1d60de08f8">
+        <link rel="modulepreload" href="js/world/effects.js?h=357e5e174d">
+        <link rel="modulepreload" href="js/world/spellfx.js?h=072c047ed3">
+        <link rel="modulepreload" href="js/world/mounts3d.js?h=fee6c24df7">
+        <link rel="modulepreload" href="js/core/mounts.js?h=1f3cdc31bd">
+        <link rel="modulepreload" href="js/world/squares.js?h=61dec905d8">
+        <link rel="modulepreload" href="js/world/view.js?h=56501b7ace">
+        <link rel="modulepreload" href="js/world/dungeons3d.js?h=b1021726a4">
+        <link rel="modulepreload" href="js/world/keepkit.js?h=07361a785f">
+        <link rel="modulepreload" href="js/world/silhouette.js?h=b3dc9d1342">
+        <link rel="modulepreload" href="js/world/wounds.js?h=b7356b2c2f">
+        <link rel="modulepreload" href="js/world/chunks3d.js?h=63ff2e8f69">
+        <link rel="modulepreload" href="js/world/grass.js?h=5ebd8bb541">
+        <link rel="modulepreload" href="js/world/motes.js?h=bad998298d">
+        <link rel="modulepreload" href="js/world/trickles.js?h=a6b891b721">
+        <link rel="modulepreload" href="js/world/fire.js?h=b7206b53ea">
+        <link rel="modulepreload" href="js/world/lights.js?h=eac30d23d2">
+        <link rel="modulepreload" href="js/world/carried.js?h=0d900dbb4d">
+        <link rel="modulepreload" href="js/world/globes.js?h=a27b034513">
+        <link rel="modulepreload" href="js/world/pin3d.js?h=f610592f13">
+        <link rel="modulepreload" href="js/world/treasure3d.js?h=211774903e">
+        <link rel="modulepreload" href="js/world/smoke.js?h=4a6fbf14c5">
+        <link rel="modulepreload" href="js/world/far/far.js?h=438767fb8a">
+        <link rel="modulepreload" href="js/world/far/levels.js?h=495ca94b99">
+        <link rel="modulepreload" href="js/world/far/silhouettes.js?h=a27d5990d0">
+        <link rel="modulepreload" href="js/world/far/volcano.js?h=5c5ce00b98">
+        <link rel="modulepreload" href="js/world/landmark3d.js?h=65fb5f49ea">
+        <link rel="modulepreload" href="js/world/look.js?h=4c31c408f5">
+        <link rel="modulepreload" href="js/world/ground.js?h=60472be3cb">
+        <link rel="modulepreload" href="js/world/town3d.js?h=7995ba0af7">
+        <link rel="modulepreload" href="js/world/art/kits/kithouse.js?h=facbab4b6a">
+        <link rel="modulepreload" href="js/world/art/kits/kitshop.js?h=c67c47f84e">
+        <link rel="modulepreload" href="js/world/kithouses3d.js?h=43b468a212">
+        <link rel="modulepreload" href="js/world/art/engine/atlas.js?h=5086c15ffa">
+        <link rel="modulepreload" href="js/world/interiors3d.js?h=7d916e029d">
+        <link rel="modulepreload" href="js/core/interiors.js?h=4f10d36337">
+        <link rel="modulepreload" href="js/core/dungeons/themes.js?h=a1232a4ef3">
+        <link rel="modulepreload" href="js/world/art/kits/signs.js?h=1041c8b09e">
+        <link rel="modulepreload" href="js/world/art/kits/trees.js?h=2529a2f8f0">
+        <link rel="modulepreload" href="js/world/veil.js?h=c988416ae5">
+        <link rel="modulepreload" href="js/world/art/kits/wagon.js?h=29063a71dc">
+        <link rel="modulepreload" href="js/app/minimap.js?h=74b29b46c7">
+        <link rel="modulepreload" href="js/app/camera.js?h=c96d110528">
+        <link rel="modulepreload" href="js/app/doors.js?h=7367740e5d">
+        <link rel="modulepreload" href="js/world/vault3d.js?h=efeb06255f">
+        <link rel="modulepreload" href="js/app/readying.js?h=bc26d0c358">
+        <link rel="modulepreload" href="js/app/fate.js?h=862fcbe9db">
+        <link rel="modulepreload" href="js/app/hud.js?h=073af1e9f1">
+        <link rel="modulepreload" href="js/app/icons.js?h=13d5005cf0">
+        <link rel="modulepreload" href="js/app/journal.js?h=b5e541ebb7">
+        <link rel="modulepreload" href="js/app/reader.js?h=a5f95519c9">
+        <link rel="modulepreload" href="js/app/journey.js?h=c089c49e7e">
+        <link rel="modulepreload" href="js/app/spellbook.js?h=9de312df7f">
+        <link rel="modulepreload" href="js/app/partypanel.js?h=d3d9f9b074">
+        <link rel="modulepreload" href="js/app/pack.js?h=f3ecb61405">
+        <link rel="modulepreload" href="js/app/governor.js?h=3ad846f3f9">
+        <link rel="modulepreload" href="js/app/budget.js?h=c4120529d7">
+        <link rel="modulepreload" href="js/app/throng.js?h=954d7cde7b">
+        <link rel="modulepreload" href="js/app/precedence.js?h=457777616e">
+        <link rel="modulepreload" href="js/app/pacing.js?h=a056ae14c6">
+        <link rel="modulepreload" href="js/app/forecast.js?h=43b94ad719">
+        <link rel="modulepreload" href="js/app/clocks.js?h=a8e80104a4">
+        <link rel="modulepreload" href="js/app/fight.js?h=b35ab3d88c">
+        <link rel="modulepreload" href="js/app/gearinfo.js?h=ed47b458d6">
+        <link rel="modulepreload" href="js/app/craftinfo.js?h=e4e686580b">
+        <link rel="modulepreload" href="js/core/crafting.js?h=d5474327f6">
+        <link rel="modulepreload" href="js/core/recipes.js?h=8de4a0546e">
+        <link rel="modulepreload" href="js/core/materials.js?h=c8e8d8fb19">
+        <link rel="modulepreload" href="js/app/talk.js?h=2078b5bbab">
+        <link rel="modulepreload" href="js/app/press.js?h=1c72a211da">
+        <link rel="modulepreload" href="js/app/quickbar.js?h=7e20ba2a2d">
+        <link rel="modulepreload" href="js/app/sigil.js?h=a028905f7e">
+        <link rel="modulepreload" href="js/app/charge.js?h=193e705eb1">
+        <link rel="modulepreload" href="js/world/legendaries.js?h=6b1744bd30">
+        <link rel="modulepreload" href="js/app/worldlink.js?h=2847d5c85f">
+        <link rel="modulepreload" href="js/app/wheel.js?h=73ba489695">
+        <link rel="modulepreload" href="js/core/followers.js?h=cf546acc99">
+        <link rel="modulepreload" href="js/core/engagement.js?h=26e9a873f7">
+        <link rel="modulepreload" href="js/core/wire.js?h=8ad2adaaf6">
+        <link rel="modulepreload" href="js/app/padkeys.js?h=23bfc976e9">
+        <link rel="modulepreload" href="vendor/three-r186/three.core.min.js?h=c001a388ab">
+        <link rel="modulepreload" href="js/characters/clip-keys.js?h=6b15879487">
+        <link rel="modulepreload" href="js/characters/equipment.js?h=1d7c31ef84">
+        <link rel="modulepreload" href="js/characters/grip.js?h=a7c1a02a31">
+        <link rel="modulepreload" href="js/characters/grounding.js?h=dd14d15e6b">
+        <link rel="modulepreload" href="js/characters/locomotion.js?h=d4c08ea475">
+        <link rel="modulepreload" href="js/characters/ragdoll.js?h=d8541d019b">
+        <link rel="modulepreload" href="js/characters/rig.js?h=3de74f0e64">
+        <link rel="modulepreload" href="js/characters/drapes.js?h=cf5cc2be29">
+        <link rel="modulepreload" href="js/characters/garments.js?h=63facd8161">
+        <link rel="modulepreload" href="js/characters/hair.js?h=69ab221020">
+        <link rel="modulepreload" href="js/characters/items.js?h=284f15b487">
+        <link rel="modulepreload" href="js/characters/surfaces.js?h=a0ee0af6e7">
+        <link rel="modulepreload" href="js/characters/lod.js?h=8b98af330d">
+        <link rel="modulepreload" href="js/characters/skin.js?h=6f6ffd2c3e">
+        <link rel="modulepreload" href="js/characters/expressions.js?h=0209ad6e0c">
+        <link rel="modulepreload" href="js/characters/gaze.js?h=35101f8f78">
+        <link rel="modulepreload" href="js/characters/lashes.js?h=9658491b20">
+        <link rel="modulepreload" href="js/characters/mouth.js?h=f0b93df701">
+        <link rel="modulepreload" href="js/characters/pictures.js?h=aa2d800ebc">
+        <link rel="modulepreload" href="js/characters/wardrobe.js?h=d2a2b98542">
+        <link rel="modulepreload" href="js/world/shadowpasses.js?h=de6605e28c">
+        <link rel="modulepreload" href="js/characters/dress.js?h=56ebf0a8f8">
+        <link rel="modulepreload" href="js/characters/peoples.js?h=3169403ddd">
+        <link rel="modulepreload" href="js/characters/body.js?h=90c65bce10">
+        <link rel="modulepreload" href="js/characters/skins.js?h=c9075ab577">
+        <link rel="modulepreload" href="js/beasts/arachnid.js?h=c27e6a3596">
+        <link rel="modulepreload" href="js/beasts/biped.js?h=b06e1517f9">
+        <link rel="modulepreload" href="js/beasts/blob.js?h=42ae79565a">
+        <link rel="modulepreload" href="js/beasts/champions.js?h=2ef08b69fd">
+        <link rel="modulepreload" href="js/beasts/flyers.js?h=e078f59e77">
+        <link rel="modulepreload" href="js/beasts/quadruped.js?h=100100a893">
+        <link rel="modulepreload" href="js/beasts/serpent.js?h=7f7b7568fc">
+        <link rel="modulepreload" href="js/beasts/spectre.js?h=45ff6e93e7">
+        <link rel="modulepreload" href="js/beasts/shapes.js?h=b351ff8766">
+        <link rel="modulepreload" href="vendor/three-r186/addons/utils/SkeletonUtils.js?h=6c660e1682">
+        <link rel="modulepreload" href="js/world/art/engine/models.js?h=8e3e3fdee3">
+        <link rel="modulepreload" href="js/world/boulder.js?h=d0bf1c62d8">
+        <link rel="modulepreload" href="js/beasts/beam.js?h=28ee06efb8">
+        <link rel="modulepreload" href="js/beasts/breath.js?h=2a3df6aed7">
+        <link rel="modulepreload" href="js/core/exact.js?h=acb08af9ec">
+        <link rel="modulepreload" href="js/core/near.js?h=e7fe07145e">
+        <link rel="modulepreload" href="js/core/formation.js?h=74ea6ea444">
+        <link rel="modulepreload" href="js/core/probe.js?h=49f475fc98">
         <link rel="modulepreload" href="js/core/goods.js?h=51f5692a70">
         <link rel="modulepreload" href="js/core/spoils.js?h=099edf622a">
-        <link rel="modulepreload" href="js/core/worldplan/plan.js?h=4c268e9427">
-        <link rel="modulepreload" href="js/core/near.js?h=e7fe07145e">
-        <link rel="modulepreload" href="js/core/afflictions.js?h=8d6965bc3b">
-        <link rel="modulepreload" href="js/core/bestiary.js?h=20dfa4c8ea">
-        <link rel="modulepreload" href="js/core/recipes.js?h=8de4a0546e">
-        <link rel="modulepreload" href="js/core/mounts.js?h=1f3cdc31bd">
-        <link rel="modulepreload" href="js/core/journey.js?h=5aebf9d099">
+        <link rel="modulepreload" href="js/core/terrain/flats.js?h=55c9fe4704">
+        <link rel="modulepreload" href="js/core/dungeons/build.js?h=9a7d8251ad">
+        <link rel="modulepreload" href="js/core/names.js?h=b6e65bca40">
+        <link rel="modulepreload" href="js/core/setpieces/town.js?h=4050c645c0">
         <link rel="modulepreload" href="js/core/worldplan/races.js?h=0a706bb24d">
+        <link rel="modulepreload" href="js/core/scenery/bellhaven.walk.js?h=9e01fa5891">
+        <link rel="modulepreload" href="js/core/walk.js?h=3f405eb5df">
+        <link rel="modulepreload" href="js/core/terrain/scenes.js?h=b72fe4b35c">
         <link rel="modulepreload" href="js/core/worldplan/settle.js?h=5f257e9df8">
         <link rel="modulepreload" href="js/core/worldplan/terrain.js?h=d0b35d7867">
         <link rel="modulepreload" href="js/core/terrain/waters.js?h=822dbcdb87">
-        <link rel="modulepreload" href="js/core/terrain/height.js?h=cad9220743">
+        <link rel="modulepreload" href="js/audio/instruments.js?h=4fe1c7f3cf">
+        <link rel="modulepreload" href="js/audio/recorded.js?h=aff4a4adad">
+        <link rel="modulepreload" href="js/audio/scores.js?h=f7ac06d0b5">
+        <link rel="modulepreload" href="js/audio/synth.js?h=4891d2cd49">
+        <link rel="modulepreload" href="js/core/war/supply.js?h=804a6ddf9a">
+        <link rel="modulepreload" href="js/core/dungeons/play.js?h=9d59431a72">
+        <link rel="modulepreload" href="js/core/explored.js?h=f889126dc2">
+        <link rel="modulepreload" href="js/core/sighting.js?h=6fcd04b565">
+        <link rel="modulepreload" href="js/core/settlements.js?h=3875509d1d">
+        <link rel="modulepreload" href="js/core/fights.js?h=44c400c286">
+        <link rel="modulepreload" href="js/core/keptactor.js?h=5617ec94c7">
+        <link rel="modulepreload" href="js/core/hurry.js?h=3563c756d4">
+        <link rel="modulepreload" href="js/core/war/muster.js?h=90a9625f87">
+        <link rel="modulepreload" href="js/core/townsfolk.js?h=4559662011">
+        <link rel="modulepreload" href="js/core/strength.js?h=fa79419c50">
+        <link rel="modulepreload" href="js/core/motion.js?h=8d9ef62c30">
+        <link rel="modulepreload" href="js/core/selfstate.js?h=9a39c1c966">
+        <link rel="modulepreload" href="js/core/war/roads.js?h=a68b8783d6">
+        <link rel="modulepreload" href="js/core/sites.js?h=ac09b63811">
         <link rel="modulepreload" href="js/core/worldplan/queue.js?h=9cdef56d5f">
-        <link rel="modulepreload" href="js/core/dungeons/themes.js?h=a1232a4ef3">
-        <link rel="modulepreload" href="js/core/setpieces/pieces.js?h=ae4af3d5f0">
+        <link rel="modulepreload" href="js/core/navigation/bake.js?h=50db1b83f8">
+        <link rel="modulepreload" href="js/core/navigation/settings.js?h=5140abd58d">
+        <link rel="modulepreload" href="js/core/navigation/squares.js?h=e757cacef2">
+        <link rel="modulepreload" href="js/core/navigation/tiles.js?h=f3d4f32ede">
+        <link rel="modulepreload" href="js/core/navigation/walk.js?h=53daf90e1d">
+        <link rel="modulepreload" href="js/core/fields.js?h=0e98bf51ec">
+        <link rel="modulepreload" href="js/core/lonetrees.js?h=5923dfe87c">
+        <link rel="modulepreload" href="js/core/noise.js?h=bcaaa4faa1">
+        <link rel="modulepreload" href="js/core/signposts.js?h=34bc828d85">
+        <link rel="modulepreload" href="js/core/lagoons.js?h=974efa9b62">
+        <link rel="modulepreload" href="js/core/trails.js?h=eec83447d4">
+        <link rel="modulepreload" href="js/core/lore/taverns.js?h=4bb660c617">
+        <link rel="modulepreload" href="js/core/wilds.js?h=559849ef83">
+        <link rel="modulepreload" href="js/core/arches.js?h=c074d59168">
+        <link rel="modulepreload" href="js/core/aqueducts.js?h=6e70aed948">
+        <link rel="modulepreload" href="js/core/terrain/ground.js?h=4e3fe6cf1f">
+        <link rel="modulepreload" href="js/core/terrain/ways.js?h=12b905b7fd">
         <link rel="modulepreload" href="js/core/terrain/curve.js?h=30bcf52cea">
-        <link rel="modulepreload" href="js/core/terrain/scenes.js?h=b72fe4b35c">
+        <link rel="modulepreload" href="js/core/setpieces/standing.js?h=1ac5ca845d">
+        <link rel="modulepreload" href="js/core/world.js?h=69b8adca90">
         <link rel="modulepreload" href="js/core/terrain/simplex.js?h=80c32ba391">
+        <link rel="modulepreload" href="js/world/figurestore.js?h=f5fec3c137">
+        <link rel="modulepreload" href="js/world/cloth.js?h=ef317f9209">
+        <link rel="modulepreload" href="js/world/art/engine/solid.js?h=081338cd88">
+        <link rel="modulepreload" href="js/world/art/kits/props.js?h=a7ed3f6d5e">
+        <link rel="modulepreload" href="js/world/art/peoples/camp.js?h=36bb7ca79a">
+        <link rel="modulepreload" href="js/world/art/peoples/kit.js?h=2bcb54fee6">
+        <link rel="modulepreload" href="js/world/art/kits/forts.js?h=609bc05120">
+        <link rel="modulepreload" href="js/world/art/kits/torches.js?h=51c3721e59">
+        <link rel="modulepreload" href="js/world/far/shapes.js?h=4d1a02957a">
+        <link rel="modulepreload" href="vendor/three-r186/addons/utils/BufferGeometryUtils.js?h=aba9507c8d">
+        <link rel="modulepreload" href="js/world/art/kits/rocks.js?h=54b3e4828a">
+        <link rel="modulepreload" href="js/world/art/engine/painters.js?h=d96013473a">
+        <link rel="modulepreload" href="js/world/gold3d.js?h=ca1068877f">
+        <link rel="modulepreload" href="js/characters/riding.js?h=1d2b906f00">
+        <link rel="modulepreload" href="js/world/daytime.js?h=8f3fa195a5">
+        <link rel="modulepreload" href="js/world/environment.js?h=c97f06487c">
+        <link rel="modulepreload" href="js/world/fog.js?h=b0fc79e544">
+        <link rel="modulepreload" href="js/world/gputimer.js?h=d845792eea">
+        <link rel="modulepreload" href="js/world/landmarkdress.js?h=35dd0376f8">
+        <link rel="modulepreload" href="js/world/roomlight.js?h=3179630446">
+        <link rel="modulepreload" href="js/world/sending.js?h=8903cc7b4e">
+        <link rel="modulepreload" href="js/world/shadows.js?h=2b6c8a10c0">
+        <link rel="modulepreload" href="js/world/sky.js?h=019933a7e1">
+        <link rel="modulepreload" href="js/world/sun.js?h=1dc73f314c">
+        <link rel="modulepreload" href="js/world/water.js?h=c938d22f42">
+        <link rel="modulepreload" href="js/world/dungeonpictures.js?h=4d99e37871">
+        <link rel="modulepreload" href="js/world/caverns.js?h=b443dd54fe">
+        <link rel="modulepreload" href="js/core/dungeons/air.js?h=c16efe3a4e">
+        <link rel="modulepreload" href="js/world/art/engine/materials.js?h=bc133fe211">
+        <link rel="modulepreload" href="js/world/canopy.js?h=90dca6c06c">
+        <link rel="modulepreload" href="js/world/art/kits/wilds.js?h=b3adf6ccd7">
+        <link rel="modulepreload" href="js/world/art/kits/cliffs.js?h=78c9883bd6">
+        <link rel="modulepreload" href="js/world/art/kits/arches.js?h=1d3e660f90">
+        <link rel="modulepreload" href="js/world/art/kits/aqueducts.js?h=e7e2303f77">
+        <link rel="modulepreload" href="js/world/art/kits/bridges.js?h=c079d4b5ee">
+        <link rel="modulepreload" href="js/world/art/kits/bushes.js?h=520b5bc019">
+        <link rel="modulepreload" href="js/world/art/kits/hedges.js?h=c45f5fdf81">
+        <link rel="modulepreload" href="js/world/art/kits/fords.js?h=ed0a602810">
+        <link rel="modulepreload" href="js/world/art/kits/steps.js?h=df3bd0c7ee">
+        <link rel="modulepreload" href="js/world/grassmap.js?h=638da6f67d">
+        <link rel="modulepreload" href="js/world/layouts.js?h=38c6516d0d">
+        <link rel="modulepreload" href="js/world/terrains.js?h=100246e517">
+        <link rel="modulepreload" href="js/world/falls.js?h=ca63a754b9">
+        <link rel="modulepreload" href="js/world/windowpools.js?h=58c487d41f">
+        <link rel="modulepreload" href="js/world/art/kits/yards.js?h=088532529b">
+        <link rel="modulepreload" href="js/world/wind.js?h=48d9358cdc">
+        <link rel="modulepreload" href="js/world/firelight.js?h=dcf7933421">
+        <link rel="modulepreload" href="js/world/far/gather.js?h=59d4690f42">
+        <link rel="modulepreload" href="js/world/far/rivers.js?h=cad5b5c814">
+        <link rel="modulepreload" href="js/world/far/trees.js?h=057b09dd17">
+        <link rel="modulepreload" href="js/world/fields.js?h=0d4279dd70">
+        <link rel="modulepreload" href="js/world/art/engine/corners.js?h=cdfc8fe165">
+        <link rel="modulepreload" href="js/world/art/kits/castle.js?h=51fd5fea5d">
+        <link rel="modulepreload" href="js/world/art/kits/citadel.js?h=601a5d2ff4">
+        <link rel="modulepreload" href="js/world/art/kits/house.js?h=29e7dabb36">
+        <link rel="modulepreload" href="js/world/art/kits/landmarks.js?h=93eb4e6f42">
+        <link rel="modulepreload" href="js/world/art/kits/neutral.js?h=aae59bfb57">
+        <link rel="modulepreload" href="js/world/art/peoples/index.js?h=fb75d92de6">
+        <link rel="modulepreload" href="js/world/art/kits/burnt.js?h=bf8d5d27d5">
+        <link rel="modulepreload" href="js/world/art/kits/town.js?h=364533888d">
+        <link rel="modulepreload" href="js/world/art/kits/roofs.js?h=0727a03d56">
+        <link rel="modulepreload" href="js/world/art/kits/shopfront.js?h=cbab5efcd1">
+        <link rel="modulepreload" href="js/world/propkits.js?h=488d57276d">
+        <link rel="modulepreload" href="js/world/glowfungus.js?h=027605f09b">
+        <link rel="modulepreload" href="js/world/lava.js?h=a80182570c">
+        <link rel="modulepreload" href="js/world/flesh.js?h=bd2505a8ec">
+        <link rel="modulepreload" href="js/world/pit.js?h=220eea82eb">
+        <link rel="modulepreload" href="js/world/dungeondressing.js?h=d32c4d9df1">
+        <link rel="modulepreload" href="js/world/nestlife.js?h=46eb6612bd">
+        <link rel="modulepreload" href="js/world/scenery3d.js?h=346fb2a0e8">
         <link rel="modulepreload" href="js/core/dungeons/seeds.js?h=660258f39e">
-        <link rel="modulepreload" href="js/core/scenery/bellhaven.walk.js?h=9e01fa5891">
-        <link rel="modulepreload" href="js/core/walk.js?h=3f405eb5df">
+        <link rel="modulepreload" href="js/world/art/kits/emblems.js?h=0b8fbe7d03">
+        <link rel="modulepreload" href="js/world/art/kits/works.js?h=49b7dab3b0">
+        <link rel="modulepreload" href="js/app/spellicons.js?h=3a8e267f80">
+        <link rel="modulepreload" href="js/app/frames.js?h=623012b1ec">
+        <link rel="modulepreload" href="js/characters/face.js?h=610d4175f4">
+        <link rel="modulepreload" href="js/characters/headwear.js?h=81516181cb">
+        <link rel="modulepreload" href="js/characters/gait.js?h=e1761929b5">
+        <link rel="modulepreload" href="js/characters/garment-pictures.js?h=4b37f959f4">
+        <link rel="modulepreload" href="js/characters/noise.js?h=b55bab133b">
+        <link rel="modulepreload" href="js/characters/details.js?h=beb3b35903">
+        <link rel="modulepreload" href="js/characters/macro.js?h=b4fc3a2e4e">
+        <link rel="modulepreload" href="js/characters/pack.js?h=e805d1fae1">
+        <link rel="modulepreload" href="js/beasts/bones.js?h=da52959e8f">
+        <link rel="modulepreload" href="js/beasts/cloth.js?h=cb56f6e2a7">
+        <link rel="modulepreload" href="vendor/three-r186/addons/libs/meshopt_decoder.module.js?h=be8d1840d5">
+        <link rel="modulepreload" href="vendor/three-r186/addons/loaders/GLTFLoader.js?h=d6a2ddf42b">
+        <link rel="modulepreload" href="vendor/three-r186/addons/loaders/KTX2Loader.js?h=be7869d18f">
+        <link rel="modulepreload" href="js/app/scramble.js?h=85bb50d057">
+        <link rel="modulepreload" href="js/core/dungeons/graph.js?h=a4e799d7e8">
+        <link rel="modulepreload" href="js/core/dungeons/layouts.js?h=8f1767aa26">
+        <link rel="modulepreload" href="js/core/dungeons/place.js?h=4e5d4a61b8">
+        <link rel="modulepreload" href="js/audio/samples.js?h=0f5dfeac58">
+        <link rel="modulepreload" href="js/audio/battle.js?h=4c8e772993">
+        <link rel="modulepreload" href="js/audio/cat-folk.js?h=b601ad3ac6">
+        <link rel="modulepreload" href="js/audio/caves.js?h=d86cde1765">
+        <link rel="modulepreload" href="js/audio/crypts.js?h=15d1afd2e2">
+        <link rel="modulepreload" href="js/audio/dark-elves.js?h=c90a2ae9db">
+        <link rel="modulepreload" href="js/audio/elves.js?h=4c854e3b90">
+        <link rel="modulepreload" href="js/audio/hell.js?h=f48be49d11">
+        <link rel="modulepreload" href="js/audio/lair.js?h=92cc68c7c2">
+        <link rel="modulepreload" href="js/audio/lizard-folk.js?h=ebdde97ed6">
+        <link rel="modulepreload" href="js/audio/nest.js?h=f77f862672">
+        <link rel="modulepreload" href="js/audio/orcs.js?h=0840817f31">
+        <link rel="modulepreload" href="js/audio/ruins.js?h=7188dfc172">
+        <link rel="modulepreload" href="js/audio/score.js?h=819d4ed644">
+        <link rel="modulepreload" href="js/audio/tavern.js?h=9845d30431">
+        <link rel="modulepreload" href="js/audio/dsp.js?h=8010f570cc">
+        <link rel="modulepreload" href="js/core/setpieces/castles.js?h=d7dfa75444">
+        <link rel="modulepreload" href="js/core/setpieces/citadel.js?h=30892fedc4">
+        <link rel="modulepreload" href="js/core/setpieces/neutral.js?h=9def59e1f5">
+        <link rel="modulepreload" href="js/core/setpieces/works.js?h=c12cc846f3">
+        <link rel="modulepreload" href="js/core/setpieces/outlines.js?h=906c7e88bc">
+        <link rel="modulepreload" href="js/world/art/peoples/lizard.js?h=d9ea962f7d">
+        <link rel="modulepreload" href="js/world/art/peoples/orc.js?h=7130823d9c">
+        <link rel="modulepreload" href="js/characters/bvh.js?h=26a7e40b75">
+        <link rel="modulepreload" href="vendor/three-r186/addons/environments/RoomEnvironment.js?h=7c0f8204d6">
+        <link rel="modulepreload" href="js/world/art/kits/ivy.js?h=68c30a1108">
+        <link rel="modulepreload" href="js/world/art/engine/leafcards.js?h=1052ff62f1">
+        <link rel="modulepreload" href="js/world/art/kits/decay.js?h=55bb5a4b07">
+        <link rel="modulepreload" href="js/world/art/kits/leftovers.js?h=c2ac933a91">
+        <link rel="modulepreload" href="js/world/art/kits/framing.js?h=31147d86dd">
+        <link rel="modulepreload" href="js/world/art/kits/church.js?h=21100adc2c">
+        <link rel="modulepreload" href="js/world/art/peoples/cat.js?h=c4055830ee">
+        <link rel="modulepreload" href="js/world/art/peoples/cat-landmarks.js?h=9af2fbc6c1">
+        <link rel="modulepreload" href="js/world/art/peoples/cat-places.js?h=690a37d15d">
+        <link rel="modulepreload" href="js/world/art/peoples/orc-places.js?h=9d1b44767d">
+        <link rel="modulepreload" href="js/world/art/peoples/darkelf.js?h=7c1ca1de0b">
+        <link rel="modulepreload" href="js/world/art/peoples/elf.js?h=7c70105690">
+        <link rel="modulepreload" href="js/world/art/peoples/lizard-places.js?h=e88fc5c0a3">
+        <link rel="modulepreload" href="js/world/art/peoples/props.js?h=18f2de15a5">
+        <link rel="modulepreload" href="vendor/three-r186/addons/utils/WorkerPool.js?h=d46dc565a8">
+        <link rel="modulepreload" href="vendor/three-r186/addons/libs/ktx-parse.module.js?h=72cc52352f">
+        <link rel="modulepreload" href="vendor/three-r186/addons/libs/zstddec.module.js?h=20cc55bf28">
+        <link rel="modulepreload" href="vendor/three-r186/addons/math/ColorSpaces.js?h=63d406733c">
+        <link rel="modulepreload" href="js/core/dungeons/grid.js?h=1dc18a6876">
+        <link rel="modulepreload" href="js/audio/writing.js?h=5790bc18be">
+        <link rel="modulepreload" href="js/core/setpieces/castle.js?h=3daa8eef5e">
+        <link rel="modulepreload" href="js/core/setpieces/scenes.js?h=d062067c90">
+        <link rel="modulepreload" href="js/world/art/peoples/sylvan.js?h=28773a9ade">
+        <link rel="modulepreload" href="js/core/setpieces/plan.js?h=a83536751d">
         <script>
             // A new version of the game may come with a new service worker (sw.js), which takes
             // over as soon as it is installed. A page open since before then is reloaded into the
@@ -635,7 +1024,7 @@
                 }
             }
         </script>
-        <script type="module" src="js/main.js?h=c73216ff51"></script>
+        <script type="module" src="js/main.js?h=603f564162"></script>
     </head>
     <body>
         <!-- The world, and the character being made, are drawn here, behind every screen -->
