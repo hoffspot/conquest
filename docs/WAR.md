@@ -3684,6 +3684,15 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   Each is the `Host`'s own of the same name, which a server's supplier will keep a mirror of.
   The game now reaches its `Host` only as its world's authority (`battle`, `command`, `join`,
   `populate`, `soon`), which the same test holds it to.
+- **Blinkers** (`core/blinkers.js`; the plan's 3-9). For the tests, a game opened with
+  `?blinkers` (or `?blinkers=120`; `WORN`) reads its battle through a wrapper that knows only its hero
+  and those on their map within 192 m: `actors` leaves the rest out and `actor(id)` is null
+  for them, as a replicated world's game will be told only of what's near. The battle behind is
+  whole and steps as ever. `e2e/blinkers.spec.js` plays a game so, alone (the world played on,
+  those far off felled, the hero carried 600 m off and gone indoors) and joined to another's
+  world, with no error of the page's or in its debug log; `test/blinkers.test.js` holds the
+  wrapper itself. Three reads that took an actor for granted were given their fallbacks (a party
+  member past what's known is drawn where the roster has them).
 - **One authority.** The host's game is the world's one authority. Everything done to its world
   it records as it's done (`host.recorder`), and sends every tenth of a second: each step it's
   moved on, each command anyone gives, each player come or gone.
