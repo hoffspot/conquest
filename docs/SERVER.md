@@ -845,12 +845,20 @@ failed to understand what it was sent. A world can also be marked **Experimental
 (`experimental`): its card says so in the game's lists, and nothing else changes.
 
 **Settings › Replicated views** (`replication`: off, dark or on) is the switch for the netcode
-being built for worlds of more than 8 (generated/multiplayer_scaling_plan.md). It's off, and
-today dark and on do nothing more than off does: there are no views yet to build or send. What
-off already means, and will go on meaning: a world set to be played any other way than lockstep
+being built for worlds of more than 8 (generated/multiplayer_scaling_plan.md). It's off.
+
+- **Dark** (the plan's `3-14`): every world makes each player's views beside lockstep (the view
+  feed, docs/WAR.md *The view feed*), counts them and lets them go. Nothing is sent, and no
+  step, checksum or save changes: it's there to learn what the views would cost before any
+  player depends on them. Its cost shows in the world's metrics: the pass `flush.views`
+  (`world_pass_seconds_total`) and the work `views.frames`, `views.bytes`, `views.records` and
+  `views.known` (`world_work_total`). `npm run soak:server -- --replication dark` measures it.
+- **On** does nothing more than off does yet: there's nothing to send.
+
+What off already means, and will go on meaning: a world set to be played any other way than lockstep
 lets nobody in, its save kept exactly as it is, until the switch is turned on again or the world
 is set back to lockstep. It's changed on the management page and takes effect at once, with no
-update and no restart. Neither setting raises how many a world takes.
+update and no restart: every running world is told as it's changed. Neither setting raises how many a world takes.
 
 ## Crash reports
 

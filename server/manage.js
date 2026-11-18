@@ -1526,6 +1526,14 @@ export class Management {
         }
 
         this.server.registry.refill();
+
+        // (Replicated views turned dark or off: every running world told at once, with no restart)
+        if (Object.hasOwn(changes, "replication")) {
+            for (const { thread } of this.server.registry.entries.values()) {
+                thread?.replicate(changes.replication);
+            }
+        }
+
         this.server.nearby.follow(this.server.settings.get("bonjour"));
         this.server.nearby.refresh();
         if (Object.hasOwn(changes, "tunnelPort")) {

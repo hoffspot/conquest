@@ -600,6 +600,44 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         assert.equal(old.closed, 1003);
     });
 
+    it("makes each player's views dark where the server's replication is, counted with the world's work and never sent; and stops when it's turned off, with no restart", async () => {
+        const made = await server.call("POST", "/worlds", { auth: `Key ${server.adminKey}`, body: { name: "Darkwick", race: "human", seed: 6 } });
+        const entered = await server.call("POST", "/enter", { body: { world: made.json.world, key: made.json.playerKey, net: NET_VERSION } });
+        const frames = () => parseText(server.metrics.registry.text()).pellagos_world_work_total?.samples.find((sample) => sample.labels.world === made.json.world && sample.labels.kind === "views.frames")?.value ?? 0;
+
+        // (Dark before the world's opened: its thread begins so)
+        await server.manage.changeSettings({ replication: "dark" });
+
+        const game = await play(server, made.json.world, entered.json.session, { protocols: [PLAY_BINARY, PLAY_PROTOCOL] });
+
+        await until(() => frames() > 0, "its frames to be counted", ENTERING);
+        assert.deepEqual(game.frames, [], "none of them sent, though this game speaks bytes");
+        assert.ok(parseText(server.metrics.registry.text()).pellagos_world_work_total.samples.some((sample) => sample.labels.world === made.json.world && sample.labels.kind === "views.bytes" && sample.value > 0));
+
+        // (Off: the running world told at once. Whatever it had made is counted, then no more)
+        await server.manage.changeSettings({ replication: "off" });
+
+        let last = -1;
+        let since = Date.now();
+
+        await until(() => {
+            if (frames() !== last) {
+                [last, since] = [frames(), Date.now()];
+            }
+
+            return Date.now() - since > 2500;
+        }, "its frames to stop", ENTERING);
+
+        // (And dark again, as it runs)
+        await server.manage.changeSettings({ replication: "dark" });
+        await until(() => frames() > last, "its frames to be counted again", ENTERING);
+        assert.deepEqual(game.frames, []);
+        assert.equal(game.closed, null);
+        await server.manage.changeSettings({ replication: "off" });
+        game.close();
+        await until(() => server.registry.lifeOf(made.json.world).life === "stored", "set aside");
+    });
+
     it("trades a short code once for the world and its key", async () => {
         const owner = await server.call("POST", "/enter", { body: { world: world.world, key: world.ownerKey } });
         const key = await server.call("POST", `/worlds/${world.world}/keys`, { auth: `Bearer ${owner.json.session}`, body: { label: "Table", role: "player" } });

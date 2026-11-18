@@ -32,6 +32,11 @@
 //     --one-town   everyone human, in the humans' town
 //     --tunnel     everyone comes in through the tunnel listener (world-server.js listenTunnel:
 //                  where Tailscale Funnel brings the internet), so as the internet's, not home's
+//     --replication dark
+//                  the server's `replication` setting dark: each player's views made and counted
+//                  beside lockstep, never sent (core/viewfeed.js; the scaling plan's 3-14). The
+//                  report's `views` and a line at the end say what they cost: the pass's mean
+//                  time a step, and the bytes a second each player's frames came to
 //
 // Writes the report to test-results/server-soak/report.json. Exits 1 if it fails.
 
@@ -295,7 +300,33 @@ export function limitsFor(players) {
  * found astray, `skips` for one fallen too far behind to catch up, as one slow to load is as it
  * comes in), failures }).
  */
-export async function soakServer({ seed = 2, minutes = 120, players: count = 8, thin = 0, hold = false, fights = false, oneTown = false, tunnel = false, log = console.log } = {}) {
+/**
+ * What the view feed cost a run (core/viewfeed.js), from the world's passes and work as its
+ * metrics counted them: { ms (the pass's mean time a step it ran in), frames, bytes, records,
+ * known (how many each player knew of, on the mean), bytesASecond (each player's frames, on the
+ * mean, by the world's own time: 20 steps a second) }; null where no frame was made.
+ */
+export function viewsOf({ passes, work }, players) {
+    const pass = passes["flush.views"];
+    const frames = work["views.frames"] ?? 0;
+
+    if (!pass || !frames || !players) {
+        return null;
+    }
+
+    const steps = pass.calls;
+
+    return {
+        ms: (pass.seconds / steps) * 1000,
+        frames,
+        bytes: work["views.bytes"] ?? 0,
+        records: work["views.records"] ?? 0,
+        known: (work["views.known"] ?? 0) / steps / players,
+        bytesASecond: ((work["views.bytes"] ?? 0) / steps / players) * (1000 / STEP_MS),
+    };
+}
+
+export async function soakServer({ seed = 2, minutes = 120, players: count = 8, thin = 0, hold = false, fights = false, oneTown = false, tunnel = false, replication = null, log = console.log } = {}) {
     const folder = await mkdtemp(path.join(os.tmpdir(), "pellagos-server-soak-"));
     const limits = limitsFor(count + thin);
     const server = await WorldServer.open(folder, { awake: () => ({ stop() {} }), router: false, funnel: false, ...(Object.keys(limits).length ? { limits } : {}) });
@@ -306,6 +337,11 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
 
     try {
         await server.listen(0, "127.0.0.1");
+
+        // (Its views dark, if that's asked: before the world's opened, so its thread begins so)
+        if (replication) {
+            await server.settings.change({ replication });
+        }
 
         // (Through the tunnel listener: the internet answered there, as with Funnel on, on a port
         // of this machine's own that nothing outside it reaches)
@@ -382,7 +418,9 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
         // metrics keep: what its /metrics would say, so a run and a live server are read alike)
         const sum = (key) => reports.reduce((all, report) => all + (report[key] ?? 0), 0);
 
-        return { seed, minutes, options: { players: count, thin, hold, fights, layout: oneTown ? "one-town" : "spread", tunnel }, limits, players: reports, samples, histograms: server.metrics.histogramsOf(made.world), passes: server.metrics.passesOf(made.world), judged, resyncs: sum("resyncs"), desyncs: sum("desyncs"), skips: sum("skips"), failures };
+        const passes = server.metrics.passesOf(made.world);
+
+        return { seed, minutes, options: { players: count, thin, hold, fights, layout: oneTown ? "one-town" : "spread", tunnel, ...(replication ? { replication } : {}) }, limits, players: reports, samples, histograms: server.metrics.histogramsOf(made.world), passes, views: viewsOf(passes, count + thin), judged, resyncs: sum("resyncs"), desyncs: sum("desyncs"), skips: sum("skips"), failures };
     } finally {
         for (const one of players) {
             one.stop();
@@ -405,6 +443,7 @@ const { values } = parseArgs({
         spread: { type: "boolean" },
         "one-town": { type: "boolean" },
         tunnel: { type: "boolean" },
+        replication: { type: "string" },
         seed: { type: "string" },
         json: { type: "boolean" },
     },
@@ -430,6 +469,7 @@ if (values.join) {
         fights: values.fights === true,
         oneTown: values["one-town"] === true,
         tunnel: values.tunnel === true,
+        replication: values.replication ?? null,
     });
 
     await mkdir(path.dirname(REPORT), { recursive: true });
@@ -447,6 +487,12 @@ if (values.join) {
         const chars = thins.reduce((sum, one) => sum + Object.values(one.heard ?? {}).reduce((all, { chars: each }) => all + each, 0), 0);
 
         console.log(`${thins.length} thin players: each sent ${(chars / thins.length / (report.minutes * 60) / 1024).toFixed(1)} KB a second on the mean, ${thins.reduce((sum, one) => sum + (one.states ?? 0), 0)} sent the world again`);
+    }
+
+    if (report.views) {
+        const { ms, known, bytesASecond, frames } = report.views;
+
+        console.log(`Views, dark: ${ms.toFixed(3)} ms a step on the mean for everyone's, ${(bytesASecond / 1024).toFixed(1)} KB a second each player on the mean, ${known.toFixed(0)} known of each, ${frames} frames made and none sent`);
     }
 
     console.log(`The world sent again to a copy ${report.resyncs} time(s) in all: ${report.desyncs} for a copy found astray, ${report.skips} for one fallen too far behind to catch up`);
