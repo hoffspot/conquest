@@ -37,6 +37,7 @@ export const PLAY_PROTOCOL = "pellagos.play.1";
  * frames a replicated world will send. A game that offers it is answered with it; one that
  * offers only PLAY_PROTOCOL plays as ever. Till there are frames, the one message of bytes
  * spoken is the tests' echo: one whose first byte is BINARY.echo comes back as it was sent.
+ * A view's frame begins with its VIEW_VERSION (client/js/core/view.js), which is never 0.
  */
 export const PLAY_BINARY = "pellagos.play.2";
 export const BINARY = Object.freeze({ echo: 0 });

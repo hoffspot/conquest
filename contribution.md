@@ -573,12 +573,14 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
        name in `speaks`, a world's or the server's setting: once it has shipped, its name means
        that for good, even after what it named is taken out. A game or a server left on an
        older version would take the new meaning for the old.
-   - `VIEW_VERSION` (`client/js/core/view.js`, once the replicated views are built:
-     generated/multiplayer_scaling_plan.md 3-13): what a view's frame holds, its first byte. It
+   - `VIEW_VERSION` (`client/js/core/view.js`; generated/multiplayer_scaling_plan.md 3-13;
+     docs/WAR.md, *A view's frames*): what a view's frame holds, its first byte. It
      moves only when the frame's bytes do, and never with `NET_VERSION`: a change to lockstep's
      messages or to what both netcodes share bumps `NET_VERSION` alone, a change to the frame
-     bumps `VIEW_VERSION` alone, and a game says which views it reads in `speaks`. Until
-     `view.js` exists there is nothing to bump.
+     bumps `VIEW_VERSION` alone, and a game says which views it reads in `speaks`. It's
+     1, and never 0 (a message of bytes whose first is 0 is the tests' echo: `server/play.js`
+     `BINARY`). Nothing sends a frame yet, so till the feed does (3-14 onward) a change to the
+     frame's bytes may be made without a bump.
    - `SNAPSHOT_VERSION` (`client/js/core/host.js`): what a snapshot of the world holds. A world
      kept by an older version is carried on, not lost (the world server keeps worlds): add a step
      from the version before to `SNAPSHOT_STEPS`, filling in what the new version keeps as it
