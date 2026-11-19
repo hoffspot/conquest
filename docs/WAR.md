@@ -3862,12 +3862,49 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     latest is for the slice that draws from it.
   - **Faults:** what it was told that couldn't be so (a record for no one it knows of, someone
     leaving who was never there) is kept as lines, `faults`. None, if the feed and it agree.
+  - **Held to a game's own copy, in play** (the shadow, below).
   - **Held to the world in the tests** (`test/replicated.js` `mirrored(host)`): after every
     advance of a `Host`, each player's frames are made and taken and the mirror compared with
     the host's battle. It fails if a mirror knows of anyone other than the feed says it's been
     told of, or if anything told since it last changed differs: a place by a centimetre, a
     heading, how it's going, its health, its target. Eleven of the test files that play a host
     have it on (ambushes, invasions, trades, the director's cards among them).
+- **The shadow** (`core/shadow.js`, `app/shadowing.js`; the scaling plan's `3-17`). A lockstep
+  game that's also sent its player's frames, and holds each to its own copy. The copy plays
+  every step the world does, so it's the truth to hand: where a frame and the copy differ, what
+  a game drawn from frames alone would be shown is wrong, and it's counted while nothing depends
+  on it. Nothing's drawn from the frames.
+  - **Asked for:** a joined game says `{ kind: "views", shadow: true }` (`Joining.shadowing`).
+    A world whose view feed is dark, on a socket that speaks bytes, then sends that player a
+    frame every step, the step alone when there's nothing to say, beginning again from nothing
+    each time it's asked. Any other world hears a kind it doesn't know, and sends none.
+  - **In the game:** `?shadow` on the page's address, in a world on a server. Off without it.
+  - **What's held** (`Shadow`, `SHADOW`): of everyone a record tells of, their place to the
+    centimetre, heading, how they're going, health, target; that everyone near the hero is
+    known of before long and no one far off stays known (40 steps and 16 m of grace, the known
+    set being looked at every few steps and filled a few a frame); the copy's events of the
+    step, through the table of who hears what, against the frame's (all that must be told, in
+    order; none the copy didn't have); what the mirror was told that couldn't be so; and a
+    frame's length.
+  - **Either order:** a frame may come before or after the copy plays its step. The copy's side
+    of each step is kept till its frame comes, and a frame till its step's played. While the
+    copy's still being made (a world loading) every frame waits. A copy that lockstep's found
+    astray is the truth of nothing: its frames are taken and held to nothing till the world's
+    come again.
+  - **Where it's told:** the first differences in words in `shadow.lines`, its counts in
+    `shadow.counts`; in the game, an event `shadow` in the debug log when differences are found,
+    and the first of them sent to the world by the way a crash report goes, if the player
+    sends those (docs/SERVER.md, *Crash reports*).
+  - **What it found as it was built**, each mended: frames made after a hosting had stopped a
+    quiet player's hero, which said of a step what no copy has of it (frames are now made
+    first, as the step left the world); an event about someone gone from the battle sifted by
+    whether they're still in it (now by the id the player was told); someone gone from the
+    battle told of for a few steps more (now left at once); a player's first frame carrying
+    events from before their copy began (held to nothing); frames lost while a browser was
+    still making its copy; and an event that must be told, let go of for being long (an
+    invasion's coming is a kilobyte or two: one that must be told is now told however long).
+  - **`npm run soak:server -- --shadow`** has every whole copy ask for its shadow, and fails if
+    any frame differs.
 - **Who hears of what** (`core/eventscope.js`; the scaling plan's `3-15`). A lockstep copy plays
   the whole world and makes every event itself. A game sent views plays none of it, so it's told
   only the events that are its player's to hear. `SCOPES` gives each of the 184 kinds the battle

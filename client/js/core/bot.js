@@ -46,7 +46,7 @@ export class Bot {
      * @param {number} [options.seed] - Where it sends itself, and which way its fights face.
      * @param {object} [options.timing] - As BOT.
      */
-    constructor(joining, { idle = false, seed = 1, timing = BOT } = {}) {
+    constructor(joining, { idle = false, seed = 1, timing = BOT, shadow = false } = {}) {
         this.joining = joining;
         this.idle = idle;
         this.timing = timing;
@@ -79,7 +79,15 @@ export class Bot {
         // (Whether what it last asked the host for is still to be done)
         this.asking = false;
 
-        joining.onWelcome = ({ seed: worldSeed, race, snapshot }) => joining.attach(Host.restore(buildWorld({ seed: worldSeed, race }), snapshot));
+        joining.onWelcome = ({ seed: worldSeed, race, snapshot }) => {
+            joining.attach(Host.restore(buildWorld({ seed: worldSeed, race }), snapshot));
+
+            // (Its frames asked for beside lockstep, to hold to its copy: core/shadow.js. Asked
+            // again with each welcome: the world begins them again from nothing)
+            if (shadow) {
+                joining.shadowing(true);
+            }
+        };
         joining.onKicked = (reason) => (this.kicked = { reason, step: this.#step() });
     }
 
@@ -230,6 +238,8 @@ export class Bot {
             skips: joining.skips,
             checks: joining.checks,
             motionChecks: joining.motionChecks,
+            // (Its shadow, if it asked for one: what it counted, and its first differences in words)
+            ...(joining.shadow ? { shadow: { ...joining.shadow.counts, differences: joining.shadow.differences, live: joining.shadow.live, lines: [...joining.shadow.lines] } } : {}),
             moves: this.moves,
             fights: this.fights,
             engaged: this.engaged,

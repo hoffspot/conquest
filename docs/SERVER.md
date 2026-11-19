@@ -853,7 +853,10 @@ being built for worlds of more than 8 (generated/multiplayer_scaling_plan.md). I
   player depends on them. Its cost shows in the world's metrics: the pass `flush.views`
   (`world_pass_seconds_total`) and the work `views.frames`, `views.bytes`, `views.records`,
   `views.known`, `views.events`, `views.dropped` and `views.enters` (`world_work_total`). `npm run soak:server -- --replication dark` measures it.
-- **On** does nothing more than off does yet: there's nothing to send.
+  A game that asks is also sent its own player's frames beside lockstep, as bytes on its play
+  socket, to hold to its own copy (a shadow: docs/WAR.md, *The shadow*; `views.sent` counts
+  their bytes). No game asks unless it's opened with `?shadow`, or is one of the soak's.
+- **On** does nothing more than off does yet: no world is played by views.
 
 What off already means, and will go on meaning: a world set to be played any other way than lockstep
 lets nobody in, its save kept exactly as it is, until the switch is turned on again or the world
@@ -864,7 +867,9 @@ update and no restart: every running world is told as it's changed. Neither sett
 
 When a player's game falls over in a world here (a phone running out of memory, say) and they come
 back into it, their game sends what its debug log kept of the crash, unless they've turned **Send
-crash reports** off in its Game options (docs/GAME.md, *Crash reports*). Each world keeps the last
+crash reports** off in its Game options (docs/GAME.md, *Crash reports*). A game opened with
+`?shadow` whose frames differed from its copy sends what it found the same way, its event a
+`shadow` in place of a crash and its summary saying so (docs/WAR.md, *The shadow*). Each world keeps the last
 five it's been sent, with the world (`crashes.json` in its folder: backed up and archived with it,
 left as it is by a restore, gone when it's deleted; server/storage/crashes.js), newest first.
 

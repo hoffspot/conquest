@@ -31,7 +31,10 @@ const word = (value) => (typeof value === "string" && value ? value.slice(0, 64)
 /**
  * A crash report as a game sends it (the debug log, as app/telemetry.js text() writes it: { build,
  * code, built, events }), checked: { crashed (when the crash was, its event's), build, code, built,
- * events }; or null if it isn't one (no crash among its events, too many of them).
+ * events }; or null if it isn't one (no crash among its events, too many of them). A game's
+ * shadow that's found its frames differing from its copy comes the same way, its event a `shadow`
+ * in place of a crash (client/js/app/shadowing.js; generated/multiplayer_scaling_plan.md 3-17):
+ * kept among the world's crash reports, its summary saying which it is.
  */
 export function reportOf(given) {
     const events = Array.isArray(given?.events) ? given.events : null;
@@ -40,7 +43,7 @@ export function reportOf(given) {
         return null;
     }
 
-    const crash = events.find((event) => event.kind === "crash");
+    const crash = events.find((event) => event.kind === "crash") ?? events.find((event) => event.kind === "shadow");
     const crashed = typeof crash?.at === "string" ? new Date(crash.at) : null;
 
     if (!crash) {

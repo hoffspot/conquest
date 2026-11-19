@@ -37,6 +37,9 @@
 //                  beside lockstep, never sent (core/viewfeed.js; the scaling plan's 3-14). The
 //                  report's `views` and a line at the end say what they cost: the pass's mean
 //                  time a step, and the bytes a second each player's frames came to
+//     --shadow     every whole copy asks for its frames beside lockstep and holds each to its
+//                  copy (core/shadow.js; the plan's 3-17), the views dark if nothing else is
+//                  said. It fails if any frame differs from the copy it was held to
 //
 // Writes the report to test-results/server-soak/report.json. Exits 1 if it fails.
 
@@ -85,7 +88,7 @@ const memory = () => {
 
 // --- A player, in a process of its own (--join) ---
 
-async function play({ port, world, key, name, race, seed }) {
+async function play({ port, world, key, name, race, seed, shadow = false }) {
     const servers = new KnownServers(memory());
     const client = new ServerClient(servers.remember(addressOf(`127.0.0.1:${port}`)), { servers, secure: false });
     const entered = await client.enter({ world, key });
@@ -98,7 +101,7 @@ async function play({ port, world, key, name, race, seed }) {
         onClosed: (reason) => (closed = reason),
         onDrop: () => (dropped = true),
     });
-    const bot = new Bot(joining, { seed });
+    const bot = new Bot(joining, { seed, shadow });
     let ready = false;
     let last = performance.now();
 
@@ -326,7 +329,30 @@ export function viewsOf({ passes, work }, players) {
     };
 }
 
-export async function soakServer({ seed = 2, minutes = 120, players: count = 8, thin = 0, hold = false, fights = false, oneTown = false, tunnel = false, replication = null, log = console.log } = {}) {
+/**
+ * The players' shadows, added up (core/shadow.js: each whole copy sent its frames beside
+ * lockstep and holding them to its copy): { players (how many had one), frames, compared, late,
+ * differences, lines (the first of them, in words, by whose they were), failures }. It fails if
+ * any found a difference, or if one that asked was never sent a frame it could hold to its copy.
+ */
+export function shadowsOf(reports) {
+    const had = reports.filter((report) => report.shadow);
+    const sum = (key) => had.reduce((all, { shadow }) => all + (shadow[key] ?? 0), 0);
+    const lines = had.flatMap(({ name, shadow }) => shadow.lines.map((line) => `${name}: ${line}`)).slice(0, 20);
+    const failures = [];
+
+    for (const { name, shadow } of had) {
+        if (shadow.differences) {
+            failures.push(`${name}'s frames differed from its copy ${shadow.differences} time(s) (values ${shadow.values}, membership ${shadow.membership}, events ${shadow.events}, faults ${shadow.faults}, over ${shadow.over}): ${shadow.lines[0] ?? ""}`);
+        } else if (!shadow.compared) {
+            failures.push(`${name} asked for its frames and held none to its copy (${shadow.frames} came)`);
+        }
+    }
+
+    return { players: had.length, frames: sum("frames"), compared: sum("compared"), late: sum("late"), differences: sum("differences"), lines, failures };
+}
+
+export async function soakServer({ seed = 2, minutes = 120, players: count = 8, thin = 0, hold = false, fights = false, oneTown = false, tunnel = false, replication = null, shadow = false, log = console.log } = {}) {
     const folder = await mkdtemp(path.join(os.tmpdir(), "pellagos-server-soak-"));
     const limits = limitsFor(count + thin);
     const server = await WorldServer.open(folder, { awake: () => ({ stop() {} }), router: false, funnel: false, ...(Object.keys(limits).length ? { limits } : {}) });
@@ -339,8 +365,8 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
         await server.listen(0, "127.0.0.1");
 
         // (Its views dark, if that's asked: before the world's opened, so its thread begins so)
-        if (replication) {
-            await server.settings.change({ replication });
+        if (replication || shadow) {
+            await server.settings.change({ replication: replication ?? "dark" });
         }
 
         // (Through the tunnel listener: the internet answered there, as with Funnel on, on a port
@@ -360,7 +386,7 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
             const race = raceOf(k);
 
             // (Owners all: the fights they start are theirs to start, with the debug commands)
-            players.push(await player({ port, world: made.world, key: made.ownerKey, name: `Soak${k + 1}`, race, seed: k + 1 }));
+            players.push(await player({ port, world: made.world, key: made.ownerKey, name: `Soak${k + 1}`, race, seed: k + 1, shadow }));
             log(`Soak${k + 1} in, as ${/^[aeiou]/.test(race) ? "an" : "a"} ${race}`);
         }
 
@@ -410,6 +436,13 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
 
         failures.push(...stayed(reports));
 
+        // (Each whole copy's shadow: its frames held to its copy, and nothing to differ)
+        const shadows = shadow ? shadowsOf(reports) : null;
+
+        if (shadows) {
+            failures.push(...shadows.failures);
+        }
+
         const judged = judge(samples);
 
         failures.push(...judged.failures);
@@ -420,7 +453,7 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
 
         const passes = server.metrics.passesOf(made.world);
 
-        return { seed, minutes, options: { players: count, thin, hold, fights, layout: oneTown ? "one-town" : "spread", tunnel, ...(replication ? { replication } : {}) }, limits, players: reports, samples, histograms: server.metrics.histogramsOf(made.world), passes, views: viewsOf(passes, count + thin), judged, resyncs: sum("resyncs"), desyncs: sum("desyncs"), skips: sum("skips"), failures };
+        return { seed, minutes, options: { players: count, thin, hold, fights, layout: oneTown ? "one-town" : "spread", tunnel, ...(replication ? { replication } : {}), ...(shadow ? { shadow } : {}) }, limits, players: reports, samples, histograms: server.metrics.histogramsOf(made.world), passes, views: viewsOf(passes, count + thin), ...(shadows ? { shadows } : {}), judged, resyncs: sum("resyncs"), desyncs: sum("desyncs"), skips: sum("skips"), failures };
     } finally {
         for (const one of players) {
             one.stop();
@@ -444,6 +477,7 @@ const { values } = parseArgs({
         "one-town": { type: "boolean" },
         tunnel: { type: "boolean" },
         replication: { type: "string" },
+        shadow: { type: "boolean" },
         seed: { type: "string" },
         json: { type: "boolean" },
     },
@@ -470,6 +504,7 @@ if (values.join) {
         oneTown: values["one-town"] === true,
         tunnel: values.tunnel === true,
         replication: values.replication ?? null,
+        shadow: values.shadow === true,
     });
 
     await mkdir(path.dirname(REPORT), { recursive: true });
@@ -492,7 +527,13 @@ if (values.join) {
     if (report.views) {
         const { ms, known, bytesASecond, frames } = report.views;
 
-        console.log(`Views, dark: ${ms.toFixed(3)} ms a step on the mean for everyone's, ${(bytesASecond / 1024).toFixed(1)} KB a second each player on the mean, ${known.toFixed(0)} known of each, ${frames} frames made and none sent`);
+        console.log(`Views, dark: ${ms.toFixed(3)} ms a step on the mean for everyone's, ${(bytesASecond / 1024).toFixed(1)} KB a second each player on the mean, ${known.toFixed(0)} known of each, ${frames} frames made${report.shadows ? "" : " and none sent"}`);
+    }
+
+    if (report.shadows) {
+        const { players, frames, compared, late, differences } = report.shadows;
+
+        console.log(`Shadows: ${players} players sent ${frames} frames beside lockstep, ${compared} held to their copies (${late} came too late to be), ${differences} differences`);
     }
 
     console.log(`The world sent again to a copy ${report.resyncs} time(s) in all: ${report.desyncs} for a copy found astray, ${report.skips} for one fallen too far behind to catch up`);

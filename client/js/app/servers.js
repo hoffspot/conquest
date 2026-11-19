@@ -857,6 +857,8 @@ export class ServerClient {
         const joining = new Joining({ send: (text) => link.data(text), clock: () => performance.now() });
 
         link.onData = (text) => joining.hear(text);
+        // (A view's frame, where the server sends them: for the game's shadow, if it's asked for one)
+        link.onBinary = (data) => joining.frame(new Uint8Array(data));
         link.onClosed = (reason) => onClosed(reason);
         link.onLost = () => onLink("lost");
         link.onFound = () => {

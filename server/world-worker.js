@@ -151,7 +151,18 @@ const openedAt = clock();
 const runner = new WorldRunner(host, { clock });
 const keeper = new Keeper(runner, stored);
 const ahead = new Ahead(host.world, { host, clock });
-const hosting = new Hosting(host, { send: (peer, text) => post({ type: "send", peer, text }), sendAll: (sent, text) => post({ type: "send", peers: sent, text }), clock });
+const hosting = new Hosting(host, {
+    send: (peer, text) => post({ type: "send", peer, text }),
+    sendAll: (sent, text) => post({ type: "send", peers: sent, text }),
+    // (A view's frame for one player's game: its bytes handed to the supervisor, not copied
+    // (world-thread.js "binary"), which sends them on where that game's socket speaks bytes)
+    sendBinary: (peer, bytes) => {
+        const buffer = bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength ? bytes.buffer : bytes.slice().buffer;
+
+        parentPort.postMessage({ type: "binary", peer, buffer }, [buffer]);
+    },
+    clock,
+});
 
 runner.hosting = hosting;
 
