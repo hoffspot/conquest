@@ -253,7 +253,7 @@ export const MANIFEST = Object.freeze([
             ["js/core/setpieces/town.js", 78753, "4050c645c0"],
             ["js/core/setpieces/works.js", 15945, "c12cc846f3"],
             ["js/core/settlements.js", 12423, "3875509d1d"],
-            ["js/core/shadow.js", 18113, "68d770c204"],
+            ["js/core/shadow.js", 18193, "5d3f1bedb1"],
             ["js/core/shrines.js", 5761, "bde1c2b65a"],
             ["js/core/sighting.js", 4061, "6fcd04b565"],
             ["js/core/signposts.js", 4763, "34bc828d85"],

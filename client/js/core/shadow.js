@@ -243,18 +243,20 @@ export class Shadow {
         const { battle } = host;
         const values = new Map();
         const near = new Set();
-        const [inner, outer] = [(KNOWN.enter - SHADOW.slack) ** 2, (KNOWN.leave + SHADOW.slack) ** 2];
+        const squared = (value) => value * value;
+        const apartFrom = (actor) => squared(actor.x - hero.x) + squared(actor.y - hero.y);
+        const [inner, outer] = [squared(KNOWN.enter - SHADOW.slack), squared(KNOWN.leave + SHADOW.slack)];
         const keep = (actor) => {
             if (!values.has(actor.id)) {
                 const { target, ...told } = quantised(battle, actor);
 
-                values.set(actor.id, { ...told, target: target?.id ?? null, map: actor.map, apart: actor.map === hero.map ? (actor.x - hero.x) ** 2 + (actor.y - hero.y) ** 2 : Infinity, aims: actor.target === hero.id });
+                values.set(actor.id, { ...told, target: target?.id ?? null, map: actor.map, apart: actor.map === hero.map ? apartFrom(actor) : Infinity, aims: actor.target === hero.id });
             }
         };
 
         for (const actor of battle.actors) {
             if (actor.map === hero.map) {
-                const apart = (actor.x - hero.x) ** 2 + (actor.y - hero.y) ** 2;
+                const apart = apartFrom(actor);
 
                 if (apart <= outer || actor.target === hero.id) {
                     keep(actor);
