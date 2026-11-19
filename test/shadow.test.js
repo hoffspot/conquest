@@ -178,10 +178,13 @@ describe("a shadow (core/shadow.js)", () => {
         assert.equal(shadow.counts.compared, 0);
         assert.equal(shadow.mirror, null);
 
-        // (Then it plays: each of those steps held to its frame as it's played, none lost)
+        // (Then it plays. So far behind, it's sent the world again and begins where the world
+        // is by then: the frames of the steps it never played are taken in their order, held to
+        // nothing, and every step it does play is held to its frame. None's lost)
         play(8000, [owner]);
         assert.equal(shadow.differences, 0, shadow.lines.join("\n"));
-        assert.ok(shadow.counts.compared >= 340, JSON.stringify(shadow.counts));
+        assert.ok(shadow.counts.late >= 190 && shadow.counts.compared >= 140, JSON.stringify(shadow.counts));
+        assert.equal(shadow.counts.late + shadow.counts.compared, shadow.counts.frames);
         assert.ok(shadow.mirror.size >= 2);
         assert.deepEqual(shadow.mirror.faults, []);
     });
