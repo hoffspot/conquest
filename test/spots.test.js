@@ -41,6 +41,7 @@ import { layoutOf } from "../scripts/load.js";
 import { Ahead } from "../server/ahead.js";
 import { installWorkers } from "../server/workers.js";
 import { unexpired } from "./helpers.js";
+import { mirrored } from "./replicated.js";
 
 installWorkers();
 
@@ -67,6 +68,9 @@ function hostAt() {
     const world = buildWorld({ seed: 2 });
     const [{ race }] = layoutOf(world.plan, 6, "towns");
     const host = new Host(world, { populate: false, rules: { rest: "everyone", debug: "owner" } });
+
+    // (And every player's mirror held to it as it's played: test/replicated.js)
+    mirrored(host);
 
     host.join({ id: "p1", hero: { ...HERO, name: "P1", race }, square: [Math.floor(FROM[0]), Math.floor(FROM[1])], map: "town", role: "owner" });
     host.populate();

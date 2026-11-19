@@ -8,7 +8,7 @@ import { Hosting, NET_VERSION } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { COUNTERS, FLUSH_PASSES } from "../client/js/core/probe.js";
 import { cmOf, decodeFrame, NONE, VIEW } from "../client/js/core/view.js";
-import { KNOWN, VIEW_MODES, ViewFeed } from "../client/js/core/viewfeed.js";
+import { ENTERS, KNOWN, VIEW_MODES, ViewFeed } from "../client/js/core/viewfeed.js";
 import { encode } from "../client/js/core/wire.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
 
@@ -87,7 +87,8 @@ function feedOf(hosting) {
 
         assert.ok(frame, "a frame that reads back");
         assert.equal(frame.step, step);
-        assert.ok(bytes.length <= feed.budget + KNOWN.most);
+        // (What its budget holds, and beside it those who've left and who's come)
+        assert.ok(bytes.length <= feed.budget + KNOWN.most + ENTERS.frame + 8, `${bytes.length} bytes`);
 
         for (const index of frame.leaves) {
             assert.ok(mirror.delete(index), `${index} left, and was known`);
@@ -134,7 +135,7 @@ describe("the view feed (core/viewfeed.js)", () => {
                 const viewer = feed.viewers.get(id);
 
                 assert.equal(at, hosting.step());
-                assert.ok(bytes.length <= VIEW.budget, `${bytes.length} bytes`);
+                assert.ok(bytes.length <= VIEW.budget + (frame.sections.enters ? ENTERS.frame + 8 : 0), `${bytes.length} bytes`);
 
                 for (const record of frame.records) {
                     const { actor } = viewer.byIndex[record.index];
@@ -223,7 +224,14 @@ describe("the view feed (core/viewfeed.js)", () => {
 
         assert.deepEqual(toldOf(feed, mirrors, me.id), new Set([me, ...near]));
         assert.equal(feed.state.size, 31, "only those someone knows of are kept");
-        assert.equal(feed.totals.frames, 1, "a frame for the newcomers, then none: no one's changed");
+        // (The newcomers told of some nine a frame, who each is and then how; then no frames:
+        // no one's changed)
+        const first = feed.totals.frames;
+
+        assert.ok(first >= 2 && first <= 6, `${first} frames for 31 newcomers`);
+        assert.equal(feed.viewers.get(me.id).enters, 31);
+        run(5);
+        assert.equal(feed.totals.frames, first);
 
         // (165 m off: not come in. 161 m having been in: not left. Past 192 m: left)
         const edge = someone(165, 0);
@@ -324,7 +332,7 @@ describe("the view feed (core/viewfeed.js)", () => {
 
         me.target = quarry.id;
 
-        for (let step = 0; step < 40; step++) {
+        for (let step = 0; step < 60; step++) {
             feed.flush(step);
         }
 
@@ -339,7 +347,7 @@ describe("the view feed (core/viewfeed.js)", () => {
         assert.ok(foes.every((foe) => known.has(foe)), "every foe, though each is further off than most of the crowd");
         assert.ok(left.length > 100);
         assert.ok(Math.max(...kept.map(apart)) <= Math.min(...left.map(apart)), "of the rest, the nearer");
-        assert.deepEqual(toldOf(feed, mirrors, me.id), known, "and all 256 told of, a frame's budget at a time");
+        assert.deepEqual(toldOf(feed, mirrors, me.id), known, "and all 256 told of, some nine a frame as they come in");
         assert.ok(new Set(viewer.list.map(({ index }) => index)).size === KNOWN.most);
 
         // (The other player knows of many of the same: one slot each, whoever knows of them)
@@ -348,6 +356,6 @@ describe("the view feed (core/viewfeed.js)", () => {
 
         assert.ok([...theirs].filter((actor) => known.has(actor)).length > 100);
         assert.equal(feed.state.size, either.size);
-        assert.equal(feed.totals.steps, 40);
+        assert.equal(feed.totals.steps, 60);
     });
 });

@@ -3844,9 +3844,30 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     budget. Someone aiming at a character the player didn't know of is told of again once they
     do.
   - **Counted** (`core/probe.js`): the pass `flush.views`, and `views.frames`, `views.bytes`,
-    `views.records`, `views.known`, `views.events` and `views.dropped`.
-  - **Not yet:** who each index is (a record says how someone is, not who), the party's,
-    company's and quests' pins, and anything sent or read by a game.
+    `views.records`, `views.known`, `views.events`, `views.dropped` and `views.enters`.
+  - **Not yet:** the party's, company's and quests' pins, and anything sent or read by a game.
+- **The mirror** (`core/mirror.js`; the scaling plan's `3-16`). What a game holds of a world it's
+  sent views of, built from frames alone. Not loaded by the game yet: it runs in Node, in the
+  tests.
+  - **A real battle, never stepped:** those a mirror's told of are characters of a `Battle`,
+    added as they come and taken out as they leave, each of the one shape every character is.
+    A frame's leaves are taken first, then who's come, then how each is.
+  - **Only what the wire says** (`WIRED`): who someone is, where they are, which way they face,
+    whether they're running or dead, their health and whom they aim at. The rest of a character
+    is as one just made has it. `strict` has reading any of that throw, which the tests use:
+    what a game drawn from frames reads of others must be something they're told.
+  - **A ring for each** (`Ring`, `RING`): the last 8 tellings of where it was. `where(index,
+    time)` is where to draw it, 100 ms behind the world, between the tellings either side and
+    turning the short way, so it moves evenly however the frames come. Carrying it on past the
+    latest is for the slice that draws from it.
+  - **Faults:** what it was told that couldn't be so (a record for no one it knows of, someone
+    leaving who was never there) is kept as lines, `faults`. None, if the feed and it agree.
+  - **Held to the world in the tests** (`test/replicated.js` `mirrored(host)`): after every
+    advance of a `Host`, each player's frames are made and taken and the mirror compared with
+    the host's battle. It fails if a mirror knows of anyone other than the feed says it's been
+    told of, or if anything told since it last changed differs: a place by a centimetre, a
+    heading, how it's going, its health, its target. Eleven of the test files that play a host
+    have it on (ambushes, invasions, trades, the director's cards among them).
 - **Who hears of what** (`core/eventscope.js`; the scaling plan's `3-15`). A lockstep copy plays
   the whole world and makes every event itself. A game sent views plays none of it, so it's told
   only the events that are its player's to hear. `SCOPES` gives each of the 184 kinds the battle
@@ -3869,6 +3890,14 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     `core/runner.js`): a frame takes 900 bytes of `must` events at the most, the rest kept for the
     next; `may` events have what the frame's budget has left once those known of are told, and 160
     bytes at the least, and what doesn't fit is let go of (`views.dropped`).
+  - **Who's come** (`SECTION.enters`, `WHO`, `whoOf`; the plan's `3-16`): a record says how
+    someone is, never who. When someone comes into a player's known set the frame says who they
+    are first: their id, kind, name, people, map, weapon, boots, whether they're one of the
+    folk, their role and side, and their most health. Some nine a frame (`ENTERS.frame`, 1,000
+    bytes), those pinned first and then the nearer, beside what the frame's budget holds, so
+    those already known of go on being told of while a crowd comes in. No one's told how
+    someone is before who; and anyone who's no longer who the player was told (renamed, on
+    another map) is told of again, at the same index.
   - **A first reading of each kind.** No game reads these yet. The table is held to nothing but
     having every kind; whether each audience is right is for the shadow's comparator (`3-17`)
     and the first games that draw from frames to show.

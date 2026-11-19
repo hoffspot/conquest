@@ -21,6 +21,7 @@ import { createRandom } from "../client/js/core/random.js";
 import { WorldRunner } from "../client/js/core/runner.js";
 import { decode, encode, encodePlain } from "../client/js/core/wire.js";
 import { Keeper, KEEPER } from "../server/keeper.js";
+import { mirrored } from "./replicated.js";
 
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "snapshots");
 
@@ -134,6 +135,9 @@ describe("a world's snapshot written straight from the world (core/host.js snaps
 
     it("writes a world with players in it, numbers JSON can't carry among it, the same; and shares what it holds only while it's written", () => {
         const host = new Host(buildWorld({ seed: 2 }), { populate: false });
+
+        // (And every player's mirror held to it as it's played: test/replicated.js)
+        mirrored(host);
 
         host.join({ id: HOST_PLAYER, hero: { name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false } });
         host.populate();

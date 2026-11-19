@@ -10,6 +10,7 @@ import { buildWorld } from "../client/js/core/overworld.js";
 import { ABILITIES, ITEMS } from "../client/js/core/progress.js";
 import { SPELLS } from "../client/js/core/spells.js";
 import { decode, encode } from "../client/js/core/wire.js";
+import { mirrored } from "./replicated.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 
@@ -22,6 +23,9 @@ function run(host, ms) {
 // A world with its player in it, a while after it began (its battle's clock not at nought)
 function hosted(ms = 1000) {
     const host = new Host(buildWorld({ seed: 2 }), { populate: false });
+
+    // (And every player's mirror held to it as it's played: test/replicated.js)
+    mirrored(host);
 
     host.join({ id: HOST_PLAYER, hero: HERO, progress: { gear: { mainHand: { id: HERO.weapon } } } });
     run(host, ms);

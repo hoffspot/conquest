@@ -12,7 +12,7 @@
 import { sift } from "./eventscope.js";
 import { interestOf } from "./interest.js";
 import { count } from "./probe.js";
-import { encodeFrame, NONE, originFor, VIEW, ViewState } from "./view.js";
+import { encodeFrame, NONE, originFor, VIEW, ViewState, WHO, whoOf } from "./view.js";
 
 /**
  * A player's known set: someone comes into it within `enter` metres of their hero, on its map,
@@ -32,6 +32,14 @@ export const KNOWN = Object.freeze({ enter: 160, leave: 192, every: 5, most: VIE
  * longer than `one` is let go of whichever it is: nothing the game tells of is.
  */
 export const EVENTS = Object.freeze({ must: 900, may: 160, one: 800 });
+
+/**
+ * Who's come into a player's known set is told `frame` bytes of them a frame at the most (some
+ * nine), those pinned first, then the nearer: beside what the frame's budget holds, not out of
+ * it, so those already known of go on being told of while a crowd comes in. No one's told how
+ * someone is before they're told who.
+ */
+export const ENTERS = Object.freeze({ frame: 1000 });
 
 /** How the feed runs: not at all, or dark (frames made and counted, never sent). */
 export const VIEW_MODES = Object.freeze(["off", "dark"]);
@@ -172,7 +180,7 @@ export class ViewFeed {
     }
 
     #viewer(id) {
-        const viewer = { id, phase: this.#joined++ % KNOWN.every, list: [], byActor: new Map(), byIndex: new Array(KNOWN.most).fill(null), free: Array.from({ length: KNOWN.most }, (_, k) => KNOWN.most - 1 - k), leaves: [], owed: [], done: null, self: null, frames: 0, bytes: 0, records: 0, events: 0, dropped: 0 };
+        const viewer = { id, phase: this.#joined++ % KNOWN.every, list: [], byActor: new Map(), byIndex: new Array(KNOWN.most).fill(null), free: Array.from({ length: KNOWN.most }, (_, k) => KNOWN.most - 1 - k), leaves: [], owed: [], done: null, self: null, entering: 0, frames: 0, bytes: 0, records: 0, events: 0, dropped: 0, enters: 0 };
 
         this.viewers.set(id, viewer);
 
@@ -226,28 +234,30 @@ export class ViewFeed {
             }
         }
 
-        const came = new Set();
+        // (Those who've come: those pinned first, then the nearer, which is the order they're
+        // told of in. `who` is what the player's been told each is, null till they are)
+        const came = [...wanted].filter(([actor]) => !viewer.byActor.has(actor)).sort(([, a], [, b]) => a.rank - b.rank || a.apart - b.apart);
 
-        for (const actor of wanted.keys()) {
-            if (!viewer.byActor.has(actor)) {
-                const entry = { actor, index: viewer.free.pop(), slot: -1, sent: -1 };
+        for (const [actor] of came) {
+            const entry = { actor, index: viewer.free.pop(), slot: -1, sent: -1, who: null, entered: false };
 
-                viewer.byActor.set(actor, entry);
-                viewer.byIndex[entry.index] = entry;
-                this.known.set(actor, (this.known.get(actor) ?? 0) + 1);
-                came.add(actor);
-            }
+            viewer.byActor.set(actor, entry);
+            viewer.byIndex[entry.index] = entry;
+            this.known.set(actor, (this.known.get(actor) ?? 0) + 1);
         }
 
         viewer.list = [...viewer.byActor.values()];
+        viewer.entering = 0;
 
-        // (Whoever was aiming at someone the player didn't know of, and now does: whom they're
-        // aiming at told again, now that it can be said)
-        if (came.size) {
-            for (const entry of viewer.list) {
-                if (entry.slot >= 0 && entry.sent >= 0 && came.has(this.state.target[entry.slot])) {
-                    entry.sent = Math.min(entry.sent, this.state.changed.target[entry.slot] - 1);
-                }
+        // (Anyone who's no longer who the player was told they are, their name or their map
+        // changed, say: told again)
+        for (const entry of viewer.list) {
+            if (entry.entered && WHO.some((field) => (entry.actor[field] ?? null) !== entry.who[field])) {
+                entry.entered = false;
+            }
+
+            if (!entry.entered) {
+                viewer.entering++;
             }
         }
     }
@@ -259,7 +269,8 @@ export class ViewFeed {
         viewer.byIndex[entry.index] = null;
         viewer.free.push(entry.index);
 
-        if (told) {
+        // (Told only of one the player was ever told of)
+        if (told && entry.who) {
             viewer.leaves.push(entry.index);
         }
 
@@ -342,13 +353,59 @@ export class ViewFeed {
         }
 
         const { must = [], may = [], ...sections } = given ?? {};
+        let [known, budget] = [viewer.list, this.budget];
+
+        // (Who's come into the known set and not been told of yet: as many as a frame takes, in
+        // their order, the rest next frame; only those told of have how they are told)
+        if (viewer.entering) {
+            const texts = [];
+            const told = new Set();
+            let size = 2;
+
+            for (const entry of viewer.list) {
+                if (!entry.entered) {
+                    const who = whoOf(entry.actor);
+                    const text = JSON.stringify([entry.index, who]);
+                    const length = bytesOf(text) + 1;
+
+                    if (size + length > ENTERS.frame && texts.length) {
+                        break;
+                    }
+
+                    texts.push(text);
+                    size += length;
+                    Object.assign(entry, { who, entered: true });
+                    told.add(entry.actor);
+                    viewer.entering--;
+                }
+            }
+
+            // (Whoever was aiming at someone the player hadn't been told of, and now has: whom
+            // they're aiming at told again, now that it can be said)
+            for (const entry of viewer.list) {
+                if (entry.sent >= 0 && told.has(this.state.target[entry.slot])) {
+                    entry.sent = Math.min(entry.sent, this.state.changed.target[entry.slot] - 1);
+                }
+            }
+
+            sections.enters = `[${texts.join(",")}]`;
+            budget += size + 3;
+            known = viewer.entering ? viewer.list.filter((entry) => entry.entered) : viewer.list;
+            viewer.enters += texts.length;
+            count("views.enters", texts.length);
+        }
+
         const frame = {
             step,
             origin: originFor(hero.x, hero.y),
             leaves: viewer.leaves,
-            known: viewer.list,
-            indexOf: (actor) => viewer.byActor.get(actor)?.index ?? NONE,
-            budget: this.budget,
+            known,
+            indexOf: (actor) => {
+                const entry = viewer.byActor.get(actor);
+
+                return entry?.entered ? entry.index : NONE;
+            },
+            budget,
         };
         const eventsOf = (texts) => (texts.length ? { events: `[${texts.join(",")}]` } : {});
         let made = encodeFrame(this.state, { ...frame, sections: { ...eventsOf(must), ...sections } });
@@ -358,7 +415,7 @@ export class ViewFeed {
         // where only that least was left, fewer)
         if (may.length) {
             const texts = [...must];
-            let room = Math.max(EVENTS.may, this.budget - (made.bytes?.length ?? VIEW.header)) - (must.length ? 0 : 5);
+            let room = Math.max(EVENTS.may, budget - (made.bytes?.length ?? VIEW.header)) - (must.length ? 0 : 5);
 
             for (const event of may) {
                 const one = JSON.stringify(event);

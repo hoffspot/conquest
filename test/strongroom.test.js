@@ -29,6 +29,7 @@ import { encode } from "../client/js/core/wire.js";
 import { guilds } from "../client/js/core/worldplan/plan.js";
 import { BROKER_LIMITS } from "../server/broker.js";
 import { PLAY_LIMITS } from "../server/play.js";
+import { mirrored } from "./replicated.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 const empty = () => Array(STRONGROOM.size).fill(null);
@@ -51,6 +52,9 @@ const put = (actor, map, [x, y]) => Object.assign(actor, { map, square: [x, y], 
 // A world (seed 2) with its player in the home town's guild, standing before its chest
 function atTheChest({ gold = 100 } = {}) {
     const host = new Host(buildWorld({ seed: 2 }), { populate: false });
+
+    // (And every player's mirror held to it as it's played: test/replicated.js)
+    mirrored(host);
 
     host.join({ id: HOST_PLAYER, hero: HERO });
     host.populate();

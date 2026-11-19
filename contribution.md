@@ -656,6 +656,12 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
        new games and servers go on together, and is never taken away by a date.
      - A change to what's replicated changes lockstep's op and the view's schema in the same
        pull request, with a test of each.
+     - A test that plays a `Host` can hold a mirror to it for every player with one line,
+       `mirrored(host)` (`test/replicated.js`): it fails as soon as what a game would be told
+       by frames differs from the world. Put it on a new scenario that plays a fight, a place
+       or a crowd; `MIRROR_TALLY=1 node test/<file>.test.js` says whether its mirrors had work.
+       A field of a character that a game drawn from frames must read goes in `WHO` or a
+       record (`client/js/core/view.js`) and in `WIRED` (`client/js/core/mirror.js`) together.
      - A new kind of event (`Battle` `#emit`, `Host` `#event`) is given its audience and class in
        `client/js/core/eventscope.js` `SCOPES` in the same pull request, its kind written out
        where it's told (`test/eventscope.test.js` fails otherwise): who hears of it once worlds

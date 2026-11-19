@@ -177,6 +177,7 @@ export const COUNTERS = Object.freeze([
     // (And the events told in them, and those that might have been and weren't, for want of room: core/eventscope.js)
     "views.events",
     "views.dropped",
+    "views.enters",
     "checksums",
     "snapshots",
     "sends",
