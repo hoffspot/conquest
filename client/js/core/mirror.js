@@ -17,6 +17,7 @@
 // Not loaded by the game yet. Pure: no DOM, no network, no trigonometry.
 
 import { TAU } from "./exact.js";
+import { Summary } from "./summary.js";
 import { decodeFrame, GOING, NONE, VIEW, WHO } from "./view.js";
 
 /**
@@ -128,6 +129,13 @@ export class Mirror {
         this.done = null;
         this.self = null;
 
+        /**
+         * What it's been told of the world beside those it knows of (core/summary.js): its own
+         * player's record (the part "own") and the world's summary, each patch taken as it
+         * comes; `summary.at` is the step the world last said it had told everything as of.
+         */
+        this.summary = new Summary();
+
         /** The events of the last frame it took, and how many it's been told in all. */
         this.events = [];
         this.heard = 0;
@@ -154,10 +162,14 @@ export class Mirror {
         const time = frame.step * this.stepMs;
         let enters;
         let events;
+        let own;
+        let world;
 
         try {
             enters = frame.sections.enters === undefined ? [] : JSON.parse(frame.sections.enters);
             events = frame.sections.events === undefined ? [] : JSON.parse(frame.sections.events);
+            own = frame.sections.own === undefined ? [] : JSON.parse(frame.sections.own);
+            world = frame.sections.world === undefined ? null : JSON.parse(frame.sections.world);
         } catch {
             return null;
         }
@@ -183,6 +195,16 @@ export class Mirror {
                 this.self = JSON.parse(frame.sections.self);
             } catch {
                 this.faults.push(`step ${frame.step}: its own state wasn't to be read`);
+            }
+        }
+
+        this.summary.take(own.map(([key, value]) => ["own", key, value]));
+
+        if (world) {
+            this.summary.take(world.p ?? []);
+
+            if (Number.isInteger(world.at)) {
+                this.summary.at = world.at;
             }
         }
 
@@ -282,6 +304,21 @@ export class Mirror {
                 this.faults.push(`${index} aims at ${told.target}, who isn't known of`);
             }
         }
+    }
+
+    /**
+     * Begun from a welcome with no world in it (core/viewfeed.js welcome: { own, world }): its
+     * summary as it stood then, to be kept up by its frames.
+     */
+    welcome({ step, own = {}, world = {} }) {
+        this.summary = new Summary();
+        this.summary.take(Object.entries(own).map(([key, value]) => ["own", key, value]));
+
+        for (const [part, entries] of Object.entries(world)) {
+            this.summary.take(Object.entries(entries).map(([key, value]) => [part, key, value]));
+        }
+
+        this.summary.at = step ?? null;
     }
 
     /** How many it knows of. */

@@ -3580,10 +3580,20 @@ export class Host {
             invasions: copy(this.invasions),
             burnt: copy(this.burnt),
             fallen: copy(this.fallen),
-            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: copy(player.boons), readyAt: { ...player.readyAt }, prayed: { ...player.prayed }, inRing: player.inRing ?? null, discarded: copy(player.discarded ?? null), safety: copy(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: copy(player.resting), budget: player.budget ?? null, mightPeak: copy(player.mightPeak ?? null), ...this.characterOf(player), followers: undefined })),
+            players: [...this.players.values()].map((player) => this.keptPlayer(player, copy)),
             done: copy(this.done),
             legends: this.legends.toJSON(),
         };
+    }
+
+    /**
+     * A player's record as it's kept (snapshot's `players`): what the world knows of them that
+     * isn't their hero in the battle. `copy` copies what of it isn't plain values (none, for
+     * what's written out at once: snapshot's `shared`). Also what a game sent views is told of
+     * its own player (core/summary.js).
+     */
+    keptPlayer(player, copy = structuredClone) {
+        return { id: player.id, realm: player.realm, boons: copy(player.boons), readyAt: { ...player.readyAt }, prayed: { ...player.prayed }, inRing: player.inRing ?? null, discarded: copy(player.discarded ?? null), safety: copy(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: copy(player.resting), budget: player.budget ?? null, mightPeak: copy(player.mightPeak ?? null), ...this.characterOf(player), followers: undefined };
     }
 
     /**

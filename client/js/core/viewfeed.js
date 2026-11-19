@@ -12,6 +12,7 @@
 import { sift } from "./eventscope.js";
 import { interestOf } from "./interest.js";
 import { count } from "./probe.js";
+import { ownParts, patchesText, SUMMARY, summaryOf, Told, worldParts } from "./summary.js";
 import { encodeFrame, NONE, originFor, VIEW, ViewState, WHO, whoOf } from "./view.js";
 
 /**
@@ -185,6 +186,7 @@ export class ViewFeed {
         }
 
         let fresh = false;
+        let shared = null;
 
         this.pending = [];
 
@@ -227,6 +229,14 @@ export class ViewFeed {
                 viewer.entering = viewer.list.reduce((sum, entry) => sum + (entry.entered ? 0 : 1), 0);
             }
 
+            // (The world's summary, for a game that's sent its frames: looked at once a second
+            // for what's changed since that player was last told, the world's parts made once
+            // for all of them: core/summary.js)
+            if (step % SUMMARY.every === 0 && this.shadowing.has(id)) {
+                shared ??= worldParts(host);
+                this.#summarise(viewer, { ...shared, ...ownParts(host, id) }, step);
+            }
+
             viewer.peer = peers.get(id);
             this.#frame(viewer, hero, step, this.#sections(viewer, hero, events, world, viewer.peer));
         }
@@ -234,8 +244,50 @@ export class ViewFeed {
         this.totals.steps++;
     }
 
+    // What's changed of a player's summary since they were last told, put with what's still
+    // waiting to be (the later word of an entry in place of the earlier)
+    #summarise(viewer, parts, step) {
+        for (const patch of viewer.told.diff(parts)) {
+            viewer.patches.set(`${patch[0]}\n${patch[1]}`, patch);
+        }
+
+        viewer.summaryAt = step;
+    }
+
+    /**
+     * What a game that's to be sent views and no world is welcomed with (core/netplay.js, a
+     * hello whose `mode` is "view"; the scaling plan's 3-18): { step, own (its player's record),
+     * world ({ part: { key: value } }: the summary's other parts) }. From then it's sent its
+     * frames, which tell what changes of either. Null if they've no hero in the battle.
+     */
+    welcome(id) {
+        const { host } = this.hosting;
+        const parts = summaryOf(host, id);
+
+        if (!parts || !host.battle.actor(id)) {
+            return null;
+        }
+
+        const step = Math.floor(host.battle.time / 50);
+
+        if (this.viewers.has(id)) {
+            this.#forget(id);
+        }
+
+        const viewer = this.#viewer(id);
+
+        this.shadowing.add(id);
+        viewer.told.diff(parts);
+        viewer.summaryAt = viewer.atTold = step;
+
+        const { own, ...world } = parts;
+        const plain = (entries) => Object.fromEntries([...entries].map(([key, value]) => [key, JSON.parse(value)]));
+
+        return { step, own: plain(own), world: Object.fromEntries(Object.entries(world).map(([part, entries]) => [part, plain(entries)])) };
+    }
+
     #viewer(id) {
-        const viewer = { id, phase: this.#joined++ % KNOWN.every, list: [], byActor: new Map(), byIndex: new Array(KNOWN.most).fill(null), free: Array.from({ length: KNOWN.most }, (_, k) => KNOWN.most - 1 - k), leaves: [], owed: [], ids: new Set(), done: null, self: null, entering: 0, frames: 0, bytes: 0, records: 0, events: 0, dropped: 0, enters: 0 };
+        const viewer = { id, phase: this.#joined++ % KNOWN.every, list: [], byActor: new Map(), byIndex: new Array(KNOWN.most).fill(null), free: Array.from({ length: KNOWN.most }, (_, k) => KNOWN.most - 1 - k), leaves: [], owed: [], ids: new Set(), done: null, self: null, entering: 0, told: new Told(), patches: new Map(), summaryAt: null, atTold: null, frames: 0, bytes: 0, records: 0, events: 0, dropped: 0, enters: 0 };
 
         this.viewers.set(id, viewer);
 
@@ -454,6 +506,42 @@ export class ViewFeed {
             known = viewer.entering ? viewer.list.filter((entry) => entry.entered) : viewer.list;
             viewer.enters += texts.length;
             count("views.enters", texts.length);
+        }
+
+        // (What's waiting to be told of the summary: a frame's worth, beside its budget; and
+        // the step it's all been told as of, once nothing's waiting)
+        if (viewer.patches.size || viewer.summaryAt !== viewer.atTold) {
+            const [mine, others] = [[], []];
+            let size = 0;
+
+            for (const [key, patch] of viewer.patches) {
+                const length = bytesOf(patch[2] ?? "null") + patch[0].length + patch[1].length + 8;
+
+                if (size + length > SUMMARY.frame && size) {
+                    break;
+                }
+
+                size += length;
+                viewer.patches.delete(key);
+                (patch[0] === "own" ? mine : others).push(patch);
+            }
+
+            const all = viewer.patches.size === 0;
+
+            if (mine.length) {
+                sections.own = `[${mine.map(([, key, value]) => `[${JSON.stringify(key)},${value ?? "null"}]`).join(",")}]`;
+            }
+
+            if (others.length || all) {
+                sections.world = `{"p":${patchesText(others)}${all ? `,"at":${viewer.summaryAt}` : ""}}`;
+            }
+
+            if (all) {
+                viewer.atTold = viewer.summaryAt;
+            }
+
+            budget += size + 32;
+            count("views.summary", mine.length + others.length);
         }
 
         const frame = {

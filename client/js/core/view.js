@@ -29,7 +29,7 @@
 //
 // A section is what else a player's told in a step, each at most once a frame, in this order:
 //
-//   tag      uint8    SECTION: events, done, self or enters
+//   tag      uint8    SECTION: events, done, self, enters, own or world
 //   length   uint16   how many bytes follow
 //   ...               events: the step's events that are this player's to hear, as JSON text
 //                     (an array; core/eventscope.js says whose each is). done: uint32, the last
@@ -38,7 +38,10 @@
 //                     who's come into the player's known set, as JSON text: [[index, who], ...]
 //                     (whoOf: who each is, where a record says only how they are).
 //                     Whoever reads a frame takes its leaves first, then its enters, then its
-//                     records, wherever each lies in it
+//                     records, wherever each lies in it. own, world: what's changed of the
+//                     player's own record, and of the world's summary (core/summary.js), as JSON
+//                     text: own [[field, value or null]], world { p: [[part, key, value or
+//                     null]], at: the step everything was told as of (where it's all been) }
 //
 // A place is where it is, never how far it's moved: a record means the same whatever was sent
 // before it, so one that's dropped, or never sent to a player who came late, is made up for by
@@ -72,9 +75,9 @@ export const FIELD = Object.freeze({ place: 1, heading: 2, going: 4, health: 8, 
 export const GOING = Object.freeze({ moving: 1, running: 2, fighting: 4, dead: 8 });
 
 /** A frame's sections, by tag: what else a player's told beside those they know of. */
-export const SECTION = Object.freeze({ events: 1, done: 2, self: 3, enters: 4 });
+export const SECTION = Object.freeze({ events: 1, done: 2, self: 3, enters: 4, own: 5, world: 6 });
 
-const TEXTS = Object.freeze({ [SECTION.events]: "events", [SECTION.self]: "self", [SECTION.enters]: "enters" });
+const TEXTS = Object.freeze({ [SECTION.events]: "events", [SECTION.self]: "self", [SECTION.enters]: "enters", [SECTION.own]: "own", [SECTION.world]: "world" });
 
 const TAGS = new Set(Object.values(SECTION));
 const utf8 = new TextEncoder();
@@ -341,6 +344,14 @@ export function encodeFrame(state, { step, origin, leaves = [], known = [], inde
 
     if (sections?.enters !== undefined) {
         extra.push([SECTION.enters, utf8.encode(sections.enters)]);
+    }
+
+    if (sections?.own !== undefined) {
+        extra.push([SECTION.own, utf8.encode(sections.own)]);
+    }
+
+    if (sections?.world !== undefined) {
+        extra.push([SECTION.world, utf8.encode(sections.world)]);
     }
 
     const more = extra.reduce((sum, [, bytes]) => sum + 3 + bytes.length, 0);

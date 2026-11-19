@@ -16,6 +16,9 @@
 //               (core/eventscope.js), against the frame's: those that must be told all there, in
 //               order (or within SHADOW.patience steps, when a frame was full); none there that
 //               the copy didn't have
+//   summary     the world's summary and the player's own record (core/summary.js), as the
+//               mirror holds them once the world says it's told everything as of a step,
+//               against the copy's own at that step: every part, every entry
 //   faults      what the mirror was told that couldn't be so; and a frame that isn't one
 //   over        a frame longer than SHADOW.most bytes
 //
@@ -27,6 +30,7 @@
 import { Battle, STEP_MS } from "./battle.js";
 import { sift } from "./eventscope.js";
 import { Mirror } from "./mirror.js";
+import { SUMMARY, summaryOf, textsOf } from "./summary.js";
 import { decodeFrame, NONE, quantised } from "./view.js";
 import { KNOWN } from "./viewfeed.js";
 
@@ -41,10 +45,10 @@ import { KNOWN } from "./viewfeed.js";
 export const SHADOW = Object.freeze({ slack: 16, patience: 40, kept: 60, waiting: 6000, most: 2900, lines: 20 });
 
 /** What a shadow counts: frames taken and held to the copy, and how they differed. */
-export const SHADOW_COUNTS = Object.freeze(["frames", "compared", "late", "skipped", "stale", "values", "membership", "events", "faults", "over"]);
+export const SHADOW_COUNTS = Object.freeze(["frames", "compared", "late", "skipped", "stale", "summaries", "values", "membership", "events", "summary", "faults", "over"]);
 
 /** Which of them are differences: a shadow that's sound has none. */
-export const SHADOW_FAULTS = Object.freeze(["values", "membership", "events", "faults", "over"]);
+export const SHADOW_FAULTS = Object.freeze(["values", "membership", "events", "summary", "faults", "over"]);
 
 export class Shadow {
     // The copy's side of steps whose frames haven't come (step -> capture), and frames whose
@@ -64,6 +68,12 @@ export class Shadow {
     #world = null;
 
     #faults = 0;
+
+    // The step whose summary was last held to the copy's
+    #held = null;
+
+    // The copy's summary at the steps it's looked at (step -> { part: { key: text } }), the latest few
+    #summaries = new Map();
 
     constructor() {
         /** Its mirror (null till its first frame's taken). */
@@ -220,6 +230,16 @@ export class Shadow {
             return;
         }
 
+        // (The copy's summary, at the steps the world looks at its own: to hold the mirror's to
+        // when the world says it's told everything as of one of them)
+        if (step % SUMMARY.every === 0) {
+            this.#summaries.set(step, textsOf(summaryOf(host, me)));
+
+            if (this.#summaries.size > 8) {
+                this.#summaries.delete(this.#summaries.keys().next().value);
+            }
+        }
+
         const capture = Object.assign(this.#capture(host, hero, step, events), { fresh: this.fresh });
 
         this.fresh = false;
@@ -329,10 +349,13 @@ export class Shadow {
 
         this.#faults = mirror.faults.length;
 
-        // (Longer than a frame may be, but for one event that must be told and is long itself)
-        if (bytes.length > SHADOW.most + Math.max(0, (frame.sections.events?.length ?? 0) - 900)) {
+        // (Longer than a frame may be, but for one event that must be told and is long itself;
+        // the summary's patches are beside that, a frame's worth of their own)
+        if (bytes.length - (frame.sections.own?.length ?? 0) - (frame.sections.world?.length ?? 0) > SHADOW.most + Math.max(0, (frame.sections.events?.length ?? 0) - 900)) {
             this.#say("over", step, `a frame of ${bytes.length} bytes`);
         }
+
+        this.#summary(step, frame, mirror);
 
         this.#values(capture, frame, mirror);
 
@@ -341,6 +364,35 @@ export class Shadow {
         }
 
         this.#membership(capture, mirror);
+    }
+
+    // The mirror's summary against the copy's, where this frame says the world's told everything
+    // as of a step the copy's kept its own of
+    #summary(step, frame, mirror) {
+        if (frame.sections.world === undefined || mirror.summary.at === null) {
+            return;
+        }
+
+        const truth = this.#summaries.get(mirror.summary.at);
+
+        if (!truth || this.#held === mirror.summary.at) {
+            return;
+        }
+
+        this.#held = mirror.summary.at;
+        this.counts.summaries++;
+
+        const told = mirror.summary.texts();
+
+        for (const part of new Set([...Object.keys(truth), ...Object.keys(told)])) {
+            const [a, b] = [truth[part] ?? {}, told[part] ?? {}];
+
+            for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+                if (a[key] !== b[key]) {
+                    this.#say("summary", step, `${part}${key ? ` ${key}` : ""} as of step ${mirror.summary.at}: told ${(b[key] ?? "nothing").slice(0, 110)}, and the copy has ${(a[key] ?? "nothing").slice(0, 110)}`);
+                }
+            }
+        }
     }
 
     #values({ step, values }, frame, mirror) {

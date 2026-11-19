@@ -179,6 +179,7 @@ export const COUNTERS = Object.freeze([
     "views.dropped",
     "views.enters",
     "views.sent",
+    "views.summary",
     "checksums",
     "snapshots",
     "sends",

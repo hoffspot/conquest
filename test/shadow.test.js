@@ -11,6 +11,7 @@ import { buildWorld } from "../client/js/core/overworld.js";
 import { COUNTERS } from "../client/js/core/probe.js";
 import { WorldRunner } from "../client/js/core/runner.js";
 import { SHADOW, SHADOW_COUNTS, SHADOW_FAULTS, Shadow } from "../client/js/core/shadow.js";
+import { SUMMARY, summaryOf, textsOf } from "../client/js/core/summary.js";
 import { decodeFrame, encodeFrame, VIEW, ViewState } from "../client/js/core/view.js";
 import { SHADOW_KIND } from "../client/js/core/viewfeed.js";
 import { decode, encode } from "../client/js/core/wire.js";
@@ -131,7 +132,20 @@ describe("a shadow (core/shadow.js)", () => {
 
         assert.ok(mine.every((frame, k) => k === 0 || frame.step === mine[k - 1].step + 1), "one a step");
         assert.equal(encodeFrame(new ViewState(), { step: 5, origin: [0, 0], always: true }).bytes.length, VIEW.header, "with nothing to say, the step alone");
-        assert.ok(sent.frames.every(({ frame }) => frame.length <= SHADOW.most));
+        assert.ok(sent.frames.every(({ frame }) => frame.length <= SHADOW.most + SUMMARY.frame + 64));
+
+        // (And the world's summary, held to the copy's once a second: the war, the parties, who's
+        // in the world, each player's own record, the props about them)
+        for (const bot of [owner, elf]) {
+            const { shadow, me } = bot.joining;
+
+            assert.ok(shadow.counts.summaries >= 38, JSON.stringify(shadow.counts));
+            assert.equal(shadow.counts.summary, 0);
+            assert.deepEqual(shadow.mirror.summary.texts(), textsOf(summaryOf(bot.host, me)), "as the copy has it now, nothing having changed since it was last told");
+            assert.equal(shadow.mirror.summary.get("own", "id"), me);
+            assert.equal(shadow.mirror.summary.get("roster", me).name, bot === owner ? "Ada" : "Syl");
+            assert.ok(shadow.mirror.summary.parts.get("towns").size >= 50 && shadow.mirror.summary.get("clock").turn >= 0);
+        }
         assert.ok(COUNTERS.includes("views.sent"));
         assert.deepEqual(SHADOW_FAULTS.filter((name) => !SHADOW_COUNTS.includes(name)), []);
         assert.equal(SHADOW_KIND, "views");

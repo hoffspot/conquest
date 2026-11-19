@@ -150,7 +150,7 @@ describe("a frame's sections (core/view.js)", () => {
         assert.deepEqual(decodeFrame(alone.bytes), { version: 1, step: 9, origin, leaves: [], records: [], sections: { events, done: 41, self } });
         assert.deepEqual(decodeFrame(encodeFrame(state, { step: 9, origin, sections: { done: 4294967295 } }).bytes).sections, { done: 4294967295 });
         assert.equal(encodeFrame(state, { step: 9, origin, sections: {} }).bytes, null, "none of them: no frame");
-        assert.deepEqual(SECTION, { events: 1, done: 2, self: 3, enters: 4 });
+        assert.deepEqual(SECTION, { events: 1, done: 2, self: 3, enters: 4, own: 5, world: 6 });
 
         // (With those known: the records have what room the sections leave)
         const actors = Array.from({ length: 100 }, (_, k) => someone(k, 0));
