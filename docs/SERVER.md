@@ -851,8 +851,8 @@ being built for worlds of more than 8 (generated/multiplayer_scaling_plan.md). I
   feed, docs/WAR.md *The view feed*), counts them and lets them go. Nothing is sent, and no
   step, checksum or save changes: it's there to learn what the views would cost before any
   player depends on them. Its cost shows in the world's metrics: the pass `flush.views`
-  (`world_pass_seconds_total`) and the work `views.frames`, `views.bytes`, `views.records` and
-  `views.known` (`world_work_total`). `npm run soak:server -- --replication dark` measures it.
+  (`world_pass_seconds_total`) and the work `views.frames`, `views.bytes`, `views.records`,
+  `views.known`, `views.events` and `views.dropped` (`world_work_total`). `npm run soak:server -- --replication dark` measures it.
 - **On** does nothing more than off does yet: there's nothing to send.
 
 What off already means, and will go on meaning: a world set to be played any other way than lockstep

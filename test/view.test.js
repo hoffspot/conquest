@@ -276,7 +276,7 @@ describe("a view's frames (core/view.js)", () => {
         const { bytes, told } = encodeFrame(player.state, { step, origin, leaves: [3, 250], known: player.known, budget: 0 });
 
         assert.deepEqual(told, []);
-        assert.deepEqual(decodeFrame(bytes), { version: VIEW_VERSION, step, origin, leaves: [3, 250], records: [] });
+        assert.deepEqual(decodeFrame(bytes), { version: VIEW_VERSION, step, origin, leaves: [3, 250], records: [], sections: {} });
         assert.equal(bytes.length, VIEW.header + 2);
     });
 

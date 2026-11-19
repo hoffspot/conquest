@@ -656,6 +656,10 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
        new games and servers go on together, and is never taken away by a date.
      - A change to what's replicated changes lockstep's op and the view's schema in the same
        pull request, with a test of each.
+     - A new kind of event (`Battle` `#emit`, `Host` `#event`) is given its audience and class in
+       `client/js/core/eventscope.js` `SCOPES` in the same pull request, its kind written out
+       where it's told (`test/eventscope.test.js` fails otherwise): who hears of it once worlds
+       send views, and whether it may be left out when a frame's full.
      - **No pull request for replication bumps `SNAPSHOT_VERSION`.** The save is the same
        `Host` snapshot whichever way its players are connected, so a release can always be
        rolled back without stranding a world (an older server refuses a newer save).

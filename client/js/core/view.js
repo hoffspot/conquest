@@ -12,6 +12,7 @@
 //   ox, oy   int16    the frame's origin, in squares of VIEW.origin metres
 //   leaves   uint16   how many have left the player's known set, then each one's index (uint8)
 //   records  uint16   how many records follow
+//   ...               then the records; then any sections, to the frame's end (below)
 //
 // A record tells of one character the player knows of, by its index among them (0-255: the
 // player's known set, never the battle's list), and only what's changed since that player was
@@ -25,6 +26,15 @@
 //   going    uint8 flags (GOING), uint8 speed (5 cm/s each)
 //   health   uint8    a 255th of its most; 0 only when it has none
 //   target   uint8    its target's index among those the player knows of (NONE: none, or unknown)
+//
+// A section is what else a player's told in a step, each at most once a frame, in this order:
+//
+//   tag      uint8    SECTION: events, done or self
+//   length   uint16   how many bytes follow
+//   ...               events: the step's events that are this player's to hear, as JSON text
+//                     (an array; core/eventscope.js says whose each is). done: uint32, the last
+//                     of the player's commands the world has done. self: what the player alone
+//                     knows of their hero (core/selfstate.js selfOf), as JSON text
 //
 // A place is where it is, never how far it's moved: a record means the same whatever was sent
 // before it, so one that's dropped, or never sent to a player who came late, is made up for by
@@ -56,6 +66,13 @@ export const FIELD = Object.freeze({ place: 1, heading: 2, going: 4, health: 8, 
 
 /** How a character's going, as flags. */
 export const GOING = Object.freeze({ moving: 1, running: 2, fighting: 4, dead: 8 });
+
+/** A frame's sections, by tag: what else a player's told beside those they know of. */
+export const SECTION = Object.freeze({ events: 1, done: 2, self: 3 });
+
+const TAGS = new Set(Object.values(SECTION));
+const utf8 = new TextEncoder();
+const text = new TextDecoder("utf-8", { fatal: true });
 
 /** A target that's no one, or no one the player knows of. */
 export const NONE = 255;
@@ -256,12 +273,35 @@ function sizeOf(mask) {
  * @param {number} [frame.budget] - How many bytes it may take (no more than VIEW.frame). With
  *     more to tell than fits, those longest untold go first (then by index), and the rest wait:
  *     no one who's changing is left out for good.
+ * @param {{ events?: string, done?: number, self?: string }} [frame.sections] - What else to
+ *     tell: the events' JSON text, the last command done, the hero's own state's JSON text.
+ *     Always told, whatever the budget (whoever gives them keeps them within a frame); the
+ *     records have what room they leave.
  * @returns {{ bytes: Uint8Array | null, told: number[] }} `bytes` is null with nothing to tell
  *     (no frame's sent: a town standing still costs nothing); `told` is the indexes it tells of,
  *     whose `sent` is now this step.
  */
-export function encodeFrame(state, { step, origin, leaves = [], known = [], indexOf = () => NONE, budget = VIEW.budget }) {
-    const room = Math.min(budget, VIEW.frame);
+export function encodeFrame(state, { step, origin, leaves = [], known = [], indexOf = () => NONE, budget = VIEW.budget, sections = null }) {
+    // (The sections, as bytes, in their order: each its tag, its length and what it holds)
+    const extra = [];
+
+    if (sections?.events !== undefined) {
+        extra.push([SECTION.events, utf8.encode(sections.events)]);
+    }
+
+    if (sections?.done !== undefined) {
+        const done = new Uint8Array(4);
+
+        new DataView(done.buffer).setUint32(0, sections.done, true);
+        extra.push([SECTION.done, done]);
+    }
+
+    if (sections?.self !== undefined) {
+        extra.push([SECTION.self, utf8.encode(sections.self)]);
+    }
+
+    const more = extra.reduce((sum, [, bytes]) => sum + 3 + bytes.length, 0);
+    const room = Math.min(budget, VIEW.frame) - more;
     const [ox, oy] = origin;
     const [baseX, baseY] = [ox * VIEW.origin * 100, oy * VIEW.origin * 100];
     const due = [];
@@ -288,7 +328,7 @@ export function encodeFrame(state, { step, origin, leaves = [], known = [], inde
         }
     }
 
-    if (!due.length && !leaves.length) {
+    if (!due.length && !leaves.length && !extra.length) {
         return { bytes: null, told: [] };
     }
 
@@ -306,11 +346,11 @@ export function encodeFrame(state, { step, origin, leaves = [], known = [], inde
     }
 
     // (Nothing fits, and no one's left: nothing to say this step)
-    if (!chosen.length && !leaves.length) {
+    if (!chosen.length && !leaves.length && !extra.length) {
         return { bytes: null, told: [] };
     }
 
-    const bytes = new Uint8Array(length);
+    const bytes = new Uint8Array(length + more);
     const view = new DataView(bytes.buffer);
     let at = 0;
 
@@ -362,13 +402,21 @@ export function encodeFrame(state, { step, origin, leaves = [], known = [], inde
         }
     }
 
+    for (const [tag, held] of extra) {
+        view.setUint8(at, tag);
+        view.setUint16(at + 1, held.length, true);
+        bytes.set(held, at + 3);
+        at += 3 + held.length;
+    }
+
     return { bytes, told: chosen.map(({ index }) => index) };
 }
 
 /**
  * A frame read back: { version, step, origin: [ox, oy], leaves: [index], records: [{ index,
- * x, y (cm, from the map's nought), heading, going, speed, health, target }] }, each record with
- * only the fields it was sent. Null for bytes that aren't a frame of this version, are cut short,
+ * x, y (cm, from the map's nought), heading, going, speed, health, target }], sections: { events
+ * (JSON text), done (a number), self (JSON text) } }, each record with only the fields it was
+ * sent and only the sections there were. Null for bytes that aren't a frame of this version, are cut short,
  * or run on past their end: never thrown on, whatever they are.
  */
 export function decodeFrame(bytes) {
@@ -443,5 +491,37 @@ export function decodeFrame(bytes) {
         records.push(record);
     }
 
-    return at === bytes.length ? { version: VIEW_VERSION, step, origin, leaves, records } : null;
+    // (Then its sections, to its end: each known, each once, in their order)
+    const sections = {};
+    let last = 0;
+
+    while (at < bytes.length) {
+        if (at + 3 > bytes.length) {
+            return null;
+        }
+
+        const tag = view.getUint8(at);
+        const length = view.getUint16(at + 1, true);
+
+        if (!TAGS.has(tag) || tag <= last || at + 3 + length > bytes.length || (tag === SECTION.done && length !== 4)) {
+            return null;
+        }
+
+        const held = bytes.subarray(at + 3, at + 3 + length);
+
+        try {
+            if (tag === SECTION.done) {
+                sections.done = view.getUint32(at + 3, true);
+            } else {
+                sections[tag === SECTION.events ? "events" : "self"] = text.decode(held);
+            }
+        } catch {
+            return null;
+        }
+
+        last = tag;
+        at += 3 + length;
+    }
+
+    return { version: VIEW_VERSION, step, origin, leaves, records, sections };
 }

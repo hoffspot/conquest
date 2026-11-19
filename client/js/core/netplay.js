@@ -1772,6 +1772,7 @@ export class Hosting {
 
         if (!this.session.players.size) {
             this.feed.idle();
+            this.views.idle();
             this.session.admit();
             lap(null);
 

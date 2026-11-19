@@ -3844,9 +3844,33 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     budget. Someone aiming at a character the player didn't know of is told of again once they
     do.
   - **Counted** (`core/probe.js`): the pass `flush.views`, and `views.frames`, `views.bytes`,
-    `views.records` and `views.known`.
+    `views.records`, `views.known`, `views.events` and `views.dropped`.
   - **Not yet:** who each index is (a record says how someone is, not who), the party's,
     company's and quests' pins, and anything sent or read by a game.
+- **Who hears of what** (`core/eventscope.js`; the scaling plan's `3-15`). A lockstep copy plays
+  the whole world and makes every event itself. A game sent views plays none of it, so it's told
+  only the events that are its player's to hear. `SCOPES` gives each of the 184 kinds the battle
+  and the host tell of an audience and a class:
+  - **Audiences:** `near` (whoever knows of anyone it's about, or stands within 192 m of where
+    it is: a blow, a death, a spell); `one` (the player it's about: what they bought, learnt,
+    were given); `party` (that player and their party); `place` (as near, from 512 m: a camp
+    pitched, an ambush laid, a building's folk put out); `world` (everyone: a turn, a town
+    taken, a player joining).
+  - **Classes:** `must` is told whatever it costs, in order, and waits for the next frame sooner
+    than be left out; `may` is told while there's room (a swing, a miss, an emote).
+  - **It errs wide, never narrow:** an event about no player goes to those near it; one that
+    names no one and nowhere goes to everyone; a kind with no scope goes to everyone as `must`.
+  - **A new kind of event needs a scope:** `test/eventscope.test.js` reads `battle.js` and
+    `host.js` and fails for any kind told of that isn't in the table, any in the table that
+    nothing tells of, and any told by a name that isn't written out.
+  - **In a frame** (`core/view.js` `SECTION`): after the records come the step's events for that
+    player (JSON text), the last of their commands done, and their hero's own state, each only
+    when there's something to say. The view feed fills them (`heard`, told each step's events by
+    `core/runner.js`): a frame takes 900 bytes of `must` events at the most, the rest kept for the
+    next; `may` events have 160 bytes and what doesn't fit is let go of (`views.dropped`).
+  - **A first reading of each kind.** No game reads these yet. The table is held to nothing but
+    having every kind; whether each audience is right is for the shadow's comparator (`3-17`)
+    and the first games that draw from frames to show.
 - **The motion stream** (`core/motion.js`, `MOTION`; off: `Hosting` `sendsPlaces`). Until
   `NET_VERSION` 224 the sum was said every 100 steps, five seconds, and every 4 steps the host
   also sent where its characters near the players stood and how they were going, for a copy to

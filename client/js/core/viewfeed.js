@@ -9,6 +9,7 @@
 //
 // Pure: no DOM, no network, no trigonometry.
 
+import { sift } from "./eventscope.js";
 import { interestOf } from "./interest.js";
 import { count } from "./probe.js";
 import { encodeFrame, NONE, originFor, VIEW, ViewState } from "./view.js";
@@ -23,10 +24,41 @@ import { encodeFrame, NONE, originFor, VIEW, ViewState } from "./view.js";
  */
 export const KNOWN = Object.freeze({ enter: 160, leave: 192, every: 5, most: VIEW.most });
 
+/**
+ * A frame's events (core/eventscope.js): those that must be told take `must` bytes of a frame at
+ * the most, in order, the rest waiting for the next (a frame is one packet: core/view.js
+ * VIEW.frame); those that may be told have `may` bytes, and what doesn't fit is let go of. One
+ * event's text longer than `one` is let go of whichever it is: nothing the game tells of is.
+ */
+export const EVENTS = Object.freeze({ must: 1000, may: 160, one: 900 });
+
 /** How the feed runs: not at all, or dark (frames made and counted, never sent). */
 export const VIEW_MODES = Object.freeze(["off", "dark"]);
 
 const RANK = Object.freeze({ pinned: 0, hostile: 1, other: 2 });
+
+// How many bytes a text takes as it's sent (UTF-8), without making them
+function bytesOf(text) {
+    let bytes = 0;
+
+    for (let k = 0; k < text.length; k++) {
+        const code = text.charCodeAt(k);
+
+        if (code < 0x80) {
+            bytes += 1;
+        } else if (code < 0x800) {
+            bytes += 2;
+        } else if (code >= 0xd800 && code < 0xdc00) {
+            // (Half of a pair: 4 for the two)
+            bytes += 4;
+            k++;
+        } else {
+            bytes += 3;
+        }
+    }
+
+    return bytes;
+}
 
 export class ViewFeed {
     #joined = 0;
@@ -55,6 +87,27 @@ export class ViewFeed {
 
         /** Told each frame as it's made (id, bytes, step), before it's let go of: for the tests, and whoever compares them later. */
         this.onFrame = null;
+
+        // The events told of since frames were last made (heard), for the next
+        this.pending = [];
+    }
+
+    /**
+     * The events of a step just played (what Host.advance gave), for the frames about to be
+     * made: each player's are those the table says are theirs (core/eventscope.js). Whoever
+     * plays the world's steps tells it (core/runner.js); off, nothing's kept.
+     */
+    heard(events) {
+        if (this.mode === "dark" && events.length) {
+            for (const event of events) {
+                this.pending.push(event);
+            }
+        }
+    }
+
+    /** No one's joined, so no frames are made: what's been heard is let go of. */
+    idle() {
+        this.pending.length = 0;
     }
 
     /**
@@ -72,7 +125,19 @@ export class ViewFeed {
 
         const { host } = this.hosting;
         const { battle } = host;
+        const world = { players: host.players, partyOf: (id) => host.parties?.get(host.partyIds?.get(id))?.members };
+        const events = this.pending;
+        // (Whose link each player's is, for what the session's told them of their own: none, for
+        // a player of the host's own game)
+        const peers = new Map();
+
+        for (const [peer, id] of this.hosting.session?.players ?? []) {
+            peers.set(id, peer);
+        }
+
         let fresh = false;
+
+        this.pending = [];
 
         for (const id of this.viewers.keys()) {
             if (!host.players.has(id)) {
@@ -99,14 +164,14 @@ export class ViewFeed {
                 this.#look(viewer, hero);
             }
 
-            this.#frame(viewer, hero, step);
+            this.#frame(viewer, hero, step, this.#sections(viewer, hero, events, world, peers.get(id)));
         }
 
         this.totals.steps++;
     }
 
     #viewer(id) {
-        const viewer = { id, phase: this.#joined++ % KNOWN.every, list: [], byActor: new Map(), byIndex: new Array(KNOWN.most).fill(null), free: Array.from({ length: KNOWN.most }, (_, k) => KNOWN.most - 1 - k), leaves: [], frames: 0, bytes: 0, records: 0 };
+        const viewer = { id, phase: this.#joined++ % KNOWN.every, list: [], byActor: new Map(), byIndex: new Array(KNOWN.most).fill(null), free: Array.from({ length: KNOWN.most }, (_, k) => KNOWN.most - 1 - k), leaves: [], owed: [], done: null, self: null, frames: 0, bytes: 0, records: 0, events: 0, dropped: 0 };
 
         this.viewers.set(id, viewer);
 
@@ -207,7 +272,82 @@ export class ViewFeed {
         }
     }
 
-    #frame(viewer, hero, step) {
+    // What else a player's told this step: the events that are theirs to hear (those that must
+    // be told first, what was owed from before among them; then those that may, while there's
+    // room), the last of their commands done and their hero's own state, as the session last
+    // told their game of them, when either's changed. Null with none of it
+    #sections(viewer, hero, events, world, peer) {
+        const { battle } = this.hosting.host;
+        const sections = {};
+        let any = false;
+
+        if (events.length || viewer.owed.length) {
+            const heard = events.length ? sift(events, { id: viewer.id, hero, knows: (id) => viewer.byActor.has(battle.actor(id)) }, world) : { must: [], may: [] };
+            const told = [];
+            let [size, k] = [2, 0];
+
+            for (const event of heard.must) {
+                viewer.owed.push(JSON.stringify(event));
+            }
+
+            for (; k < viewer.owed.length; k++) {
+                const one = viewer.owed[k];
+                const length = bytesOf(one);
+
+                if (length > EVENTS.one) {
+                    viewer.dropped++;
+                    count("views.dropped");
+                } else if (size + length + 1 <= EVENTS.must || !told.length) {
+                    told.push(one);
+                    size += length + 1;
+                } else {
+                    break;
+                }
+            }
+
+            viewer.owed.splice(0, k);
+
+            const room = size + EVENTS.may;
+
+            for (const event of heard.may) {
+                const one = JSON.stringify(event);
+                const length = bytesOf(one);
+
+                if (size + length + 1 <= room) {
+                    told.push(one);
+                    size += length + 1;
+                } else {
+                    viewer.dropped++;
+                    count("views.dropped");
+                }
+            }
+
+            if (told.length) {
+                sections.events = `[${told.join(",")}]`;
+                viewer.events += told.length;
+                count("views.events", told.length);
+                any = true;
+            }
+        }
+
+        const own = peer === undefined ? null : this.hosting.session.toldSelf?.get(peer);
+
+        if (own) {
+            if (own.seq !== viewer.done) {
+                sections.done = viewer.done = own.seq;
+                any = true;
+            }
+
+            if (own.hero !== viewer.self) {
+                sections.self = viewer.self = own.hero;
+                any = true;
+            }
+        }
+
+        return any ? sections : null;
+    }
+
+    #frame(viewer, hero, step, sections = null) {
         const { battle } = this.hosting.host;
 
         for (const entry of viewer.list) {
@@ -221,6 +361,7 @@ export class ViewFeed {
             known: viewer.list,
             indexOf: (actor) => viewer.byActor.get(actor)?.index ?? NONE,
             budget: this.budget,
+            sections,
         });
 
         count("views.known", viewer.list.length);
@@ -266,5 +407,6 @@ export class ViewFeed {
         }
 
         this.state = new ViewState();
+        this.pending = [];
     }
 }
