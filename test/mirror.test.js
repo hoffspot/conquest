@@ -298,7 +298,7 @@ describe("mirrors on a played world (test/replicated.js)", () => {
     });
 
     it("tells a crowd's newcomers some nine a frame, who each is before how they are, beside what the frame's budget holds", () => {
-        assert.deepEqual(SECTION, { events: 1, done: 2, self: 3, enters: 4 });
+        assert.deepEqual(SECTION, { events: 1, done: 2, self: 3, enters: 4, own: 5, world: 6 });
         assert.ok(ENTERS.frame + VIEW.budget < 2 * VIEW.frame);
         assert.deepEqual(WHO, ["id", "kind", "name", "team", "map", "weapon", "boots", "neutral", "role", "side", "maxHp"]);
     });

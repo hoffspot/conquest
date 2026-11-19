@@ -121,7 +121,7 @@ import { levelOf } from "./gear.js";
 import { QUALITIES, thingOf } from "./progress.js";
 import { compareMotion, MOTION, packMotion, unpackMotion } from "./motion.js";
 import { Shadow } from "./shadow.js";
-import { SHADOW_KIND, ViewFeed } from "./viewfeed.js";
+import { SHADOW_KIND, VIEW_MODE, ViewFeed } from "./viewfeed.js";
 import { count, lap } from "./probe.js";
 import { selfOf } from "./selfstate.js";
 import { STARTING_WEAPONS } from "./weapons.js";
@@ -518,6 +518,14 @@ export class Session {
         /** Those who've joined (by peer): their player's id in the world. */
         this.players = new Map();
 
+        /**
+         * Those who've joined to be sent views and no world (a hello whose `mode` is "view": the
+         * scaling plan's 3-18), by peer: welcomed with the world's summary in place of a
+         * snapshot, sent their frames, and never what's been done (lockstep's ops and sums).
+         * None, unless a game asks and the view feed's run where bytes can be sent.
+         */
+        this.viewing = new Set();
+
         /** How long a word to each who's joined and back takes, as they've said (by peer: ms, their pings'). */
         this.rtts = new Map();
 
@@ -660,7 +668,7 @@ export class Session {
 
     /** Those who've joined and may be sent what everyone's sent: all of them but those in the world not yet sent it (#enter). */
     reached() {
-        return this.#entering.size ? [...this.players.keys()].filter((peer) => !this.#entering.has(peer)) : [...this.players.keys()];
+        return this.#entering.size || this.viewing.size ? [...this.players.keys()].filter((peer) => !this.#entering.has(peer) && !this.viewing.has(peer)) : [...this.players.keys()];
     }
 
     /** What one who's joined (or is joining) said. */
@@ -695,7 +703,11 @@ export class Session {
                 this.#command(peer, message);
                 break;
             case "again":
-                this.feed.again(peer);
+                // (One sent views has no copy to have gone astray, and is sent no world)
+                if (!this.viewing.has(peer)) {
+                    this.feed.again(peer);
+                }
+
                 break;
             case "ready":
                 if (this.players.has(peer)) {
@@ -866,6 +878,18 @@ export class Session {
             return;
         }
 
+        // (To be sent views and no world: only where the view feed's run and bytes can be sent.
+        // Elsewhere it's a way of playing this world isn't played, as any other it doesn't speak)
+        if (hello.mode === VIEW_MODE) {
+            if (this.hosting.views.mode !== "dark" || !this.hosting.sendBinary) {
+                this.hosting.post(peer, "refused", encode({ kind: "refused", reason: "netcode", netcode: this.netcode }));
+
+                return;
+            }
+
+            this.viewing.add(peer);
+        }
+
         if (this.welcomes > 0) {
             this.waiting.set(peer, hello);
             this.#line.set(peer, { at: this.clock?.() ?? 0 });
@@ -873,7 +897,10 @@ export class Session {
             return;
         }
 
-        this.#enter(peer, hello);
+        if (!this.#enter(peer, hello)) {
+            this.viewing.delete(peer);
+        }
+
         this.#welcomed();
     }
 
@@ -937,6 +964,16 @@ export class Session {
         this.#entering.clear();
 
         for (const [peer, { id, took }] of entering) {
+            // (One to be sent views: the world's summary and their own record, and no snapshot.
+            // Their frames follow, by the view feed)
+            if (this.viewing.has(peer)) {
+                const told = this.hosting.views.welcome(id);
+
+                this.hosting.post(peer, "welcome", encode({ kind: "welcome", version: NET_VERSION, mode: VIEW_MODE, id, seed: world.seed, race: world.start?.race ?? "human", ...(took ? { took: true } : {}), paused: this.paused, ...told }));
+
+                continue;
+            }
+
             this.hosting.post(peer, "welcome", this.feed.withWorld({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: null, ...(took ? { took: true } : {}), paused: this.paused }, this.feed.worldFor(id)));
 
             if (this.welcomes > 0) {
@@ -1268,6 +1305,8 @@ export class Session {
      * as it's to be kept, where they were and as they were (Host.placeOf, vitalsOf: to come back to).
      */
     gone(peer) {
+        this.viewing.delete(peer);
+
         // (One who was waiting to come in: no longer)
         this.waiting.delete(peer);
         this.#line.delete(peer);
