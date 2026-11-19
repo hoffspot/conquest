@@ -3900,8 +3900,9 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     first, as the step left the world); an event about someone gone from the battle sifted by
     whether they're still in it (now by the id the player was told); someone gone from the
     battle told of for a few steps more (now left at once); a player's first frame carrying
-    events from before their copy began (held to nothing); and frames lost while a browser was
-    still making its copy.
+    events from before their copy began (held to nothing); frames lost while a browser was
+    still making its copy; and an event that must be told, let go of for being long (an
+    invasion's coming is a kilobyte or two: one that must be told is now told however long).
   - **`npm run soak:server -- --shadow`** has every whole copy ask for its shadow, and fails if
     any frame differs.
 - **Who hears of what** (`core/eventscope.js`; the scaling plan's `3-15`). A lockstep copy plays

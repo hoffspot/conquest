@@ -533,8 +533,9 @@ export class ViewFeed {
         this.onFrame?.(viewer.id, bytes, step);
 
         if (viewer.peer !== undefined && this.shadowing.has(viewer.id) && this.hosting.sendBinary) {
-            this.hosting.sendBinary(viewer.peer, bytes);
+            // (Counted first: whoever sends them may hand the bytes over, and leave none here)
             count("views.sent", bytes.length);
+            this.hosting.sendBinary(viewer.peer, bytes);
         }
     }
 
