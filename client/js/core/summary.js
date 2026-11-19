@@ -14,6 +14,8 @@
 // The authority's side reads the world and writes nothing to it. Pure: no DOM, no network, no
 // trigonometry.
 
+import { decode, encode } from "./wire.js";
+
 /**
  * How often a world's summary is looked at for what's changed (steps: once a second); how many
  * bytes of patches a frame takes at the most, beside its budget; and how near the hero a prop
@@ -28,7 +30,9 @@ export const OWN_PARTS = Object.freeze(["own", "invites", "props"]);
 /** The director's props a player's told of when near: each a table of the host's, by its name there. */
 export const PROPS = Object.freeze(["ground", "campfires", "caches", "finds", "strangers", "obstacles", "treasures", "ambushes"]);
 
-const text = (value) => JSON.stringify(value) ?? "null";
+// (As the wire writes it, core/wire.js: a time that's never, -Infinity, is kept as it is, where
+// plain JSON would make it nothing)
+const text = (value) => (value === undefined ? "null" : encode(value));
 
 // An entry put in a table, unless it's nothing: a patch's null means an entry's gone, so one
 // that's null is as one that isn't there, on both sides
@@ -226,9 +230,12 @@ export class Summary {
 
     /** As { part: { key: JSON text } }, the parts and keys in order: to hold to another's (textsOf). */
     texts() {
-        return Object.fromEntries([...this.parts].filter(([, entries]) => entries.size).sort(([a], [b]) => (a < b ? -1 : 1)).map(([part, entries]) => [part, Object.fromEntries([...entries].sort(([a], [b]) => (a < b ? -1 : 1)).map(([key, value]) => [key, JSON.stringify(value)]))]));
+        return Object.fromEntries([...this.parts].filter(([, entries]) => entries.size).sort(([a], [b]) => (a < b ? -1 : 1)).map(([part, entries]) => [part, Object.fromEntries([...entries].sort(([a], [b]) => (a < b ? -1 : 1)).map(([key, value]) => [key, encode(value)]))]));
     }
 }
+
+/** A frame's patches (a section's text: core/wire.js), read: [[part, key, value or null]] or [[key, value or null]]. */
+export const readPatches = (text) => decode(text);
 
 /** A summary's parts (summaryOf) as { part: { key: JSON text } }, in order: what a game told all of it holds (Summary.texts). */
 export function textsOf(parts) {

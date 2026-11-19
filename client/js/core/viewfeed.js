@@ -14,6 +14,7 @@ import { interestOf } from "./interest.js";
 import { count } from "./probe.js";
 import { ownParts, patchesText, SUMMARY, summaryOf, Told, worldParts } from "./summary.js";
 import { encodeFrame, NONE, originFor, VIEW, ViewState, WHO, whoOf } from "./view.js";
+import { decode } from "./wire.js";
 
 /**
  * A player's known set: someone comes into it within `enter` metres of their hero, on its map,
@@ -268,7 +269,7 @@ export class ViewFeed {
             return null;
         }
 
-        const step = Math.floor(host.battle.time / 50);
+        const step = this.hosting.step?.() ?? Math.floor(host.battle.time / 50);
 
         if (this.viewers.has(id)) {
             this.#forget(id);
@@ -281,7 +282,7 @@ export class ViewFeed {
         viewer.summaryAt = viewer.atTold = step;
 
         const { own, ...world } = parts;
-        const plain = (entries) => Object.fromEntries([...entries].map(([key, value]) => [key, JSON.parse(value)]));
+        const plain = (entries) => Object.fromEntries([...entries].map(([key, value]) => [key, decode(value)]));
 
         return { step, own: plain(own), world: Object.fromEntries(Object.entries(world).map(([part, entries]) => [part, plain(entries)])) };
     }
@@ -648,6 +649,9 @@ export class ViewFeed {
         this.pending = [];
     }
 }
+
+/** What a hello says its `mode` is, to be sent views and no world (core/netplay.js Session: the scaling plan's 3-18). */
+export const VIEW_MODE = "view";
 
 /** The kind a joined game asks for its shadow by: { kind: SHADOW_KIND, shadow: true or false }. */
 export const SHADOW_KIND = "views";

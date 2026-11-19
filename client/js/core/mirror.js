@@ -17,7 +17,7 @@
 // Not loaded by the game yet. Pure: no DOM, no network, no trigonometry.
 
 import { TAU } from "./exact.js";
-import { Summary } from "./summary.js";
+import { readPatches, Summary } from "./summary.js";
 import { decodeFrame, GOING, NONE, VIEW, WHO } from "./view.js";
 
 /**
@@ -168,8 +168,8 @@ export class Mirror {
         try {
             enters = frame.sections.enters === undefined ? [] : JSON.parse(frame.sections.enters);
             events = frame.sections.events === undefined ? [] : JSON.parse(frame.sections.events);
-            own = frame.sections.own === undefined ? [] : JSON.parse(frame.sections.own);
-            world = frame.sections.world === undefined ? null : JSON.parse(frame.sections.world);
+            own = frame.sections.own === undefined ? [] : readPatches(frame.sections.own);
+            world = frame.sections.world === undefined ? null : readPatches(frame.sections.world);
         } catch {
             return null;
         }
