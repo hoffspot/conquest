@@ -68,7 +68,10 @@ class Known {
             this.known[index].sent = step;
         }
 
+        // (`placed` is a word about a place, not something held)
         for (const { index, ...fields } of frame.records) {
+            delete fields.placed;
+
             this.mirror.set(index, { ...this.mirror.get(index), ...fields });
         }
 
@@ -150,7 +153,7 @@ describe("a view's frames (core/view.js)", () => {
         assert.equal(state.slotOf(ann), slot);
         assert.equal(state.slotOf(bea), -1);
         assert.deepEqual([state.x[slot], state.y[slot], state.health[slot], state.target[slot]], [1000, 1000, 255, null]);
-        assert.deepEqual(Object.values(state.changed).map((changed) => changed[slot]), [7, 7, 7, 7, 7]);
+        assert.deepEqual(Object.values(state.changed).map((changed) => changed[slot]), [7, 7, 7, 7, 7, 7]);
 
         // (Asked again in the step: not read again, whatever's become of them meanwhile)
         ann.x = 11;
@@ -160,18 +163,18 @@ describe("a view's frames (core/view.js)", () => {
         // (The next step: where they are has changed, and nothing else)
         state.touch(battle, ann, 8);
         assert.equal(state.x[slot], 1100);
-        assert.deepEqual(Object.values(state.changed).map((changed) => changed[slot]), [8, 7, 7, 7, 7]);
+        assert.deepEqual(Object.values(state.changed).map((changed) => changed[slot]), [8, 7, 7, 7, 7, 7]);
 
         // (Less than a centimetre, less than a 512th of a turn: nothing's changed)
         ann.x += 0.004;
         ann.facing += TAU / 600;
         state.touch(battle, ann, 9);
-        assert.deepEqual(Object.values(state.changed).map((changed) => changed[slot]), [8, 7, 7, 7, 7]);
+        assert.deepEqual(Object.values(state.changed).map((changed) => changed[slot]), [8, 7, 7, 7, 7, 7]);
 
         // (Walking, hurt, and aiming at someone: each marked; no one given a slot for being aimed at)
         Object.assign(ann, { progress: 0.5, running: true, hp: 10, target: bea.id });
         state.touch(battle, ann, 10);
-        assert.deepEqual(Object.values(state.changed).map((changed) => changed[slot]), [8, 7, 10, 10, 10]);
+        assert.deepEqual(Object.values(state.changed).map((changed) => changed[slot]), [8, 7, 10, 10, 10, 7]);
         assert.equal(state.going[slot], GOING.moving | GOING.running | GOING.fighting);
         assert.equal(state.speed[slot], 28);
         assert.equal(state.health[slot], 128);
@@ -204,7 +207,7 @@ describe("a view's frames (core/view.js)", () => {
 
         assert.equal(again, slot);
         assert.deepEqual([state.x[again], state.y[again], state.health[again], state.going[again], state.target[again]], [5000, 6000, 255, 0, null]);
-        assert.deepEqual(Object.values(state.changed).map((changed) => changed[again]), [20, 20, 20, 20, 20]);
+        assert.deepEqual(Object.values(state.changed).map((changed) => changed[again]), [20, 20, 20, 20, 20, 20]);
     });
 
     it("tells a player only what's changed since they were last told: a walker in 6 bytes, 7 as it turns; everything of a newcomer; nothing of a town standing still", () => {
@@ -223,7 +226,7 @@ describe("a view's frames (core/view.js)", () => {
             const frame = player.frame(battle, step, origin);
 
             assert.ok(frame.length <= VIEW.budget);
-            assert.ok(frame.records.every((record) => Object.keys(record).length === 8), "everything of a newcomer");
+            assert.ok(frame.records.every((record) => Object.keys(record).length === 9 && record.placed), "everything of a newcomer, its place one it's set at");
             step++;
         }
 
@@ -269,7 +272,7 @@ describe("a view's frames (core/view.js)", () => {
         // (Too far off for a uint16 of centimetres from the origin: its place in full)
         walker.x = -3000.5;
         frame = player.frame(battle, step++, origin);
-        assert.deepEqual(frame.records, [{ index: 0, x: -300050, y: 10007 }]);
+        assert.deepEqual(frame.records, [{ index: 0, x: -300050, y: 10007, placed: true }], "and so far in a step is a placing");
         assert.equal(frame.length - VIEW.header, 10);
 
         // (Those who've left are told of whatever the budget, and with nothing else to say)
