@@ -3867,7 +3867,8 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     player (JSON text), the last of their commands done, and their hero's own state, each only
     when there's something to say. The view feed fills them (`heard`, told each step's events by
     `core/runner.js`): a frame takes 900 bytes of `must` events at the most, the rest kept for the
-    next; `may` events have 160 bytes and what doesn't fit is let go of (`views.dropped`).
+    next; `may` events have what the frame's budget has left once those known of are told, and 160
+    bytes at the least, and what doesn't fit is let go of (`views.dropped`).
   - **A first reading of each kind.** No game reads these yet. The table is held to nothing but
     having every kind; whether each audience is right is for the shadow's comparator (`3-17`)
     and the first games that draw from frames to show.

@@ -27,10 +27,11 @@ export const KNOWN = Object.freeze({ enter: 160, leave: 192, every: 5, most: VIE
 /**
  * A frame's events (core/eventscope.js): those that must be told take `must` bytes of a frame at
  * the most, in order, the rest waiting for the next (a frame is one packet: core/view.js
- * VIEW.frame); those that may be told have `may` bytes, and what doesn't fit is let go of. One
- * event's text longer than `one` is let go of whichever it is: nothing the game tells of is.
+ * VIEW.frame); those that may be told have what the frame's budget has left once those known of
+ * are told, and `may` bytes at the least, and what doesn't fit is let go of. One event's text
+ * longer than `one` is let go of whichever it is: nothing the game tells of is.
  */
-export const EVENTS = Object.freeze({ must: 1000, may: 160, one: 900 });
+export const EVENTS = Object.freeze({ must: 900, may: 160, one: 800 });
 
 /** How the feed runs: not at all, or dark (frames made and counted, never sent). */
 export const VIEW_MODES = Object.freeze(["off", "dark"]);
@@ -307,25 +308,11 @@ export class ViewFeed {
 
             viewer.owed.splice(0, k);
 
-            const room = size + EVENTS.may;
-
-            for (const event of heard.may) {
-                const one = JSON.stringify(event);
-                const length = bytesOf(one);
-
-                if (size + length + 1 <= room) {
-                    told.push(one);
-                    size += length + 1;
-                } else {
-                    viewer.dropped++;
-                    count("views.dropped");
-                }
-            }
-
-            if (told.length) {
-                sections.events = `[${told.join(",")}]`;
-                viewer.events += told.length;
-                count("views.events", told.length);
+            // (Those that may be told wait on the frame: how much room it has is known once
+            // those known of are told, #frame)
+            if (told.length || heard.may.length) {
+                sections.must = told;
+                sections.may = heard.may;
                 any = true;
             }
         }
@@ -347,22 +334,59 @@ export class ViewFeed {
         return any ? sections : null;
     }
 
-    #frame(viewer, hero, step, sections = null) {
+    #frame(viewer, hero, step, given = null) {
         const { battle } = this.hosting.host;
 
         for (const entry of viewer.list) {
             entry.slot = this.state.touch(battle, entry.actor, step);
         }
 
-        const { bytes, told } = encodeFrame(this.state, {
+        const { must = [], may = [], ...sections } = given ?? {};
+        const frame = {
             step,
             origin: originFor(hero.x, hero.y),
             leaves: viewer.leaves,
             known: viewer.list,
             indexOf: (actor) => viewer.byActor.get(actor)?.index ?? NONE,
             budget: this.budget,
-            sections,
-        });
+        };
+        const eventsOf = (texts) => (texts.length ? { events: `[${texts.join(",")}]` } : {});
+        let made = encodeFrame(this.state, { ...frame, sections: { ...eventsOf(must), ...sections } });
+
+        // (Those that may be told: in what the budget has left with those known of told, and
+        // EVENTS.may at the least; the frame made again with them, the same records in it or,
+        // where only that least was left, fewer)
+        if (may.length) {
+            const texts = [...must];
+            let room = Math.max(EVENTS.may, this.budget - (made.bytes?.length ?? VIEW.header)) - (must.length ? 0 : 5);
+
+            for (const event of may) {
+                const one = JSON.stringify(event);
+                const length = bytesOf(one) + 1;
+
+                if (length <= room && length <= EVENTS.one) {
+                    texts.push(one);
+                    room -= length;
+                } else {
+                    viewer.dropped++;
+                    count("views.dropped");
+                }
+            }
+
+            if (texts.length > must.length) {
+                made = encodeFrame(this.state, { ...frame, sections: { ...eventsOf(texts), ...sections } });
+            }
+
+            viewer.events += texts.length - must.length;
+            count("views.events", texts.length - must.length);
+        }
+
+        if (must.length) {
+            viewer.events += must.length;
+            count("views.events", must.length);
+        }
+
+        const { bytes, told } = made;
 
         count("views.known", viewer.list.length);
 
