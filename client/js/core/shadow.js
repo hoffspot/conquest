@@ -79,6 +79,13 @@ export class Shadow {
 
         /** The last step its copy played. */
         this.played = -1;
+
+        /**
+         * Whether its copy's next step is its first, the copy just made of the world as it was
+         * sent: what the world tells of that step may be of before the copy began (its own
+         * player's joining, say), so that step's events are held to nothing.
+         */
+        this.fresh = false;
     }
 
     /** How many differences it's found, in all. */
@@ -188,7 +195,9 @@ export class Shadow {
             return;
         }
 
-        const capture = this.#capture(host, hero, step, events);
+        const capture = Object.assign(this.#capture(host, hero, step, events), { fresh: this.fresh });
+
+        this.fresh = false;
 
         if (kept) {
             this.#frames.delete(step);
@@ -298,7 +307,11 @@ export class Shadow {
         }
 
         this.#values(capture, frame, mirror);
-        this.#events(step, heard, mirror.events);
+
+        if (!capture.fresh) {
+            this.#events(step, heard, mirror.events);
+        }
+
         this.#membership(capture, mirror);
     }
 

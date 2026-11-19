@@ -211,6 +211,19 @@ export class ViewFeed {
                 this.#look(viewer, hero);
             }
 
+            // (Anyone known of who's gone from the battle since the set was last looked at leaves
+            // now: nothing more can be said of them that's so)
+            if (viewer.list.some((entry) => battle.actor(entry.actor.id) !== entry.actor)) {
+                for (const entry of viewer.list) {
+                    if (battle.actor(entry.actor.id) !== entry.actor) {
+                        this.#leave(viewer, entry);
+                    }
+                }
+
+                viewer.list = [...viewer.byActor.values()];
+                viewer.entering = viewer.list.reduce((sum, entry) => sum + (entry.entered ? 0 : 1), 0);
+            }
+
             viewer.peer = peers.get(id);
             this.#frame(viewer, hero, step, this.#sections(viewer, hero, events, world, viewer.peer));
         }

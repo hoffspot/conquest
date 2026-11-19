@@ -1867,6 +1867,9 @@ export class Joining {
     // How many of the host's steps are waiting to be played (in the queue)
     #waiting = 0;
 
+    // Whether its copy's played no step yet since it was made (attach)
+    #fresh = false;
+
     constructor({ send, clock = () => 0 }) {
         this.send = send;
         this.clock = clock;
@@ -2187,6 +2190,11 @@ export class Joining {
     attach(host) {
         this.host = host;
         host.replaying();
+        this.#fresh = true;
+
+        if (this.shadow) {
+            this.shadow.fresh = true;
+        }
     }
 
     /**
@@ -2197,6 +2205,10 @@ export class Joining {
      */
     shadowing(on) {
         this.shadow = on ? new Shadow() : null;
+
+        if (this.shadow) {
+            this.shadow.fresh = this.#fresh;
+        }
         this.send(encode({ kind: SHADOW_KIND, shadow: Boolean(on) }));
     }
 
@@ -2373,6 +2385,8 @@ export class Joining {
                     this.#waiting--;
 
                     const events = this.host.advance(op[1]);
+
+                    this.#fresh = false;
 
                     // (The copy's side of the step, for its shadow's frame of it: a copy that's
                     // gone astray is the truth of nothing till the world's come again)
