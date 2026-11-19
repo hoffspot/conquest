@@ -554,6 +554,61 @@ test("the server's own address shows its worlds on the title: one open to anyone
     expect(await page.evaluate(() => Boolean(window.pellagos.inWorld))).toBe(true);
 });
 
+test("a game opened with ?shadow in a world whose server's views are dark is sent its player's frames beside lockstep and holds each to its copy: a minute's, and no difference", async ({ page }) => {
+    await ready(page, save("Una", "human", "sword"));
+    await server.settings.change({ replication: "dark" });
+
+    try {
+        const made = await server.createWorld({ name: "Shadefield", seed: 47, race: "human", heroes: "brought", settings: { open: true } });
+
+        await page.goto(`${base}/?shadow`);
+
+        const row = page.locator(`#titleserver li[data-world="${made.world}"]`);
+
+        await expect(row).toContainText("Shadefield", { timeout: 30000 });
+        await row.getByRole("button").click();
+        await page.locator("#worldask").getByRole("button", { name: /^Una/ }).click({ timeout: 60000 });
+        await playing(page, null, LONGER);
+
+        // (Its shadow, as its link's joining keeps it: frames coming, each held to the copy)
+        const shadow = () => page.evaluate(() => {
+            const held = window.pellagos.together?.joining.shadow;
+
+            return held ? { live: held.live, counts: { ...held.counts }, differences: held.differences, lines: [...held.lines], known: held.mirror?.size ?? 0 } : null;
+        });
+
+        await expect.poll(async () => (await shadow())?.live, { timeout: 30000 }).toBe(true);
+
+        // (The hero sent about meanwhile, so there's something to tell of)
+        const walk = (dx, dy) => page.evaluate(([x, y]) => {
+            const { game } = window.pellagos;
+            const me = game.host.battle.actor(game.me);
+
+            game.remote.command({ type: "move", to: [me.square[0] + x, me.square[1] + y], run: true });
+        }, [dx, dy]);
+
+        await walk(6, 3);
+
+        // (A minute of the world's steps, 20 a second: by the frames held, not by the clock)
+        await expect.poll(async () => (await shadow()).counts.compared, { timeout: 150000, intervals: [5000] }).toBeGreaterThanOrEqual(1200);
+        await walk(-5, -2);
+        await expect.poll(async () => (await shadow()).counts.compared, { timeout: 60000, intervals: [2000] }).toBeGreaterThanOrEqual(1300);
+
+        const found = await shadow();
+
+        expect(found.lines).toEqual([]);
+        expect(found.differences).toBe(0);
+        expect(found.known).toBeGreaterThanOrEqual(2);
+        expect(found.counts.frames).toBeGreaterThanOrEqual(found.counts.compared);
+        // (Lockstep as ever beside it: still in the world, its copy never astray)
+        expect(await page.evaluate(() => Boolean(window.pellagos.inWorld) && !window.pellagos.together.joining.astray)).toBe(true);
+        // (And nothing of it in the debug log, there being nothing to say)
+        expect(await page.evaluate(() => (JSON.parse(localStorage.getItem("pellagos.debuglog") ?? "[]") ?? []).filter((event) => event?.kind === "shadow").length)).toBe(0);
+    } finally {
+        await server.settings.change({ replication: "off" });
+    }
+});
+
 test("back into a world on a server after the game's reloaded: straight back in, each stage of the way shown as it's come to, as the same character where they stood; a stage that can't be got past says why, to try again; Cancel stops it and lets the world go", async ({ page }) => {
     await ready(page, save("Tamsin", "human", "sword"));
     // (Each stage of the way back in, as it's marked: "reach:now", "reach:done", ...)

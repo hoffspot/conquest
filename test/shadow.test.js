@@ -162,6 +162,30 @@ describe("a shadow (core/shadow.js)", () => {
         assert.equal(shadow.counts.late, 0, "each found its step's capture");
     });
 
+    it("keeps every frame that comes while its copy's still being made and has played no step, however many: the first of them say who everyone is", () => {
+        const { join, play } = served();
+        const owner = join("p1", character("Ada", "human"), { seed: 1, timing });
+
+        // (Asked for, and then ten seconds in which the copy plays nothing, as a world still
+        // loading in a browser plays nothing: 200 frames come, far more than are kept waiting
+        // once it's playing)
+        owner.joining.shadowing(true);
+        play(10000, []);
+
+        const { shadow } = owner.joining;
+
+        assert.ok(shadow.live && shadow.counts.frames >= 190 && shadow.counts.frames > SHADOW.kept * 3, JSON.stringify(shadow.counts));
+        assert.equal(shadow.counts.compared, 0);
+        assert.equal(shadow.mirror, null);
+
+        // (Then it plays: each of those steps held to its frame as it's played, none lost)
+        play(8000, [owner]);
+        assert.equal(shadow.differences, 0, shadow.lines.join("\n"));
+        assert.ok(shadow.counts.compared >= 340, JSON.stringify(shadow.counts));
+        assert.ok(shadow.mirror.size >= 2);
+        assert.deepEqual(shadow.mirror.faults, []);
+    });
+
     it("begins again when it's asked again, taking nothing of what was on its way from before", () => {
         const { join, play, hosting } = served({ late: 2 });
         const owner = join("p1", character("Ada", "human"), { seed: 1, timing });

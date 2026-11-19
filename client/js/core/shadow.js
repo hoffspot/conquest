@@ -33,11 +33,12 @@ import { KNOWN } from "./viewfeed.js";
 /**
  * A shadow's allowances: `slack` metres either side of the known set's edges and `patience`
  * steps before someone missing or lingering is counted; how many steps' captures and frames are
- * `kept` waiting for the other; the longest a frame may be (`most` bytes: its budget, a frame's
+ * `kept` waiting for the other, and how many frames while the copy's still being made and has
+ * played no step (`waiting`: five minutes of them); the longest a frame may be (`most` bytes: its budget, a frame's
  * worth of those who've come, and of events that must be told); how many differences are kept in
  * words (`lines`).
  */
-export const SHADOW = Object.freeze({ slack: 16, patience: 40, kept: 60, most: 2900, lines: 20 });
+export const SHADOW = Object.freeze({ slack: 16, patience: 40, kept: 60, waiting: 6000, most: 2900, lines: 20 });
 
 /** What a shadow counts: frames taken and held to the copy, and how they differed. */
 export const SHADOW_COUNTS = Object.freeze(["frames", "compared", "late", "skipped", "stale", "values", "membership", "events", "faults", "over"]);
@@ -146,13 +147,36 @@ export class Shadow {
         } else {
             this.#frames.set(frame.step, { frame, bytes });
 
-            if (this.#frames.size > SHADOW.kept) {
+            // (More waiting than may: the oldest taken, held to nothing. While the copy's still
+            // being made there's no mirror to take any, and all of them wait: a world takes a
+            // while to make, and the first of them say who everyone is. Too long even for that,
+            // and the shadow's begun too soon to be of use: it stops, till it's asked for again)
+            if (!this.#world) {
+                if (this.#frames.size > SHADOW.waiting) {
+                    this.#frames.clear();
+                    this.live = false;
+                }
+            } else if (this.#frames.size > SHADOW.kept) {
                 const [oldest, kept] = this.#frames.entries().next().value;
 
                 this.#frames.delete(oldest);
                 this.counts.late++;
-                this.#mirror()?.apply(kept.bytes);
+                this.#mirror().apply(kept.bytes);
             }
+        }
+    }
+
+    // The frames waiting for steps before `step`, which the copy won't play now (it began after
+    // them, or has passed them): taken in their order, held to nothing
+    #passed(step) {
+        for (const [waiting, kept] of this.#frames) {
+            if (waiting >= step) {
+                break;
+            }
+
+            this.#frames.delete(waiting);
+            this.counts.late++;
+            this.#mirror().apply(kept.bytes);
         }
     }
 
@@ -182,6 +206,7 @@ export class Shadow {
 
         this.#world = battle.world;
         this.played = step;
+        this.#passed(step);
 
         const kept = this.#frames.get(step);
 

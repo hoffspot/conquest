@@ -21,6 +21,7 @@
 // with the code in it (&at= the server it's looked for on).
 
 import { ASSETS } from "./app/assets.js";
+import { watchShadow } from "./app/shadowing.js";
 import { BLINKERS, WORN } from "./core/blinkers.js";
 import { Backdrop } from "./app/backdrop.js";
 import { Crest } from "./app/crest.js";
@@ -5224,6 +5225,20 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
         });
         sendCrashes(client, entered);
         sendMeasures(client, entered);
+
+        // (`?shadow`: this player's frames asked for beside lockstep and held to this copy,
+        // what differs kept in the debug log and told the world: app/shadowing.js, the scaling
+        // plan's 3-17. Asked again with each welcome; watched till the world's left)
+        if (params.has("shadow")) {
+            joined.joining.shadowing(true);
+            shadowWatch?.stop();
+            shadowWatch = watchShadow({
+                shadow: () => joined.joining.shadow,
+                keep: (kind, detail) => telemetry.keep(kind, detail),
+                send: (report) => (settings.sendCrashes ? client.reportCrash({ world: entered.world, session: entered.session, report }) : null),
+                still: () => state.together === joined,
+            });
+        }
     };
     joined.joining.onState = () => {
         fetcher.hold("the world again", { for: 5000 });
@@ -5243,6 +5258,9 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
 // each let go of once it's taken or refused for good; if the server can't be reached, or is busy,
 // they wait for the next time. (Welcomed again meanwhile, those already going aren't sent twice)
 let sendingCrashes = false;
+
+// The game's shadow watched, while it's in a world it asked for one in (`?shadow`: app/shadowing.js)
+let shadowWatch = null;
 
 async function sendCrashes(client, entered) {
     if (!settings.sendCrashes || sendingCrashes) {

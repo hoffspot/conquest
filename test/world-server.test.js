@@ -15,6 +15,8 @@ import { after, before, describe, it } from "node:test";
 import zlib from "node:zlib";
 import { isGuid } from "../client/js/core/guid.js";
 import { NET_VERSION } from "../client/js/core/netplay.js";
+import { decodeFrame } from "../client/js/core/view.js";
+import { SHADOW_KIND } from "../client/js/core/viewfeed.js";
 import { newPlayerSecret, playerIdOf, proofOf, publicKeyOf } from "../client/js/core/player.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { verifyIdentity } from "../server/access/identity.js";
@@ -635,6 +637,41 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         assert.equal(game.closed, null);
         await server.manage.changeSettings({ replication: "off" });
         game.close();
+        await until(() => server.registry.lifeOf(made.json.world).life === "stored", "set aside");
+    });
+
+    it("sends a game that asks its frames beside lockstep, as bytes, where the server's views are dark: one a step, read as frames; none to a game that doesn't ask, nor to one whose socket speaks no bytes", async () => {
+        const made = await server.call("POST", "/worlds", { auth: `Key ${server.adminKey}`, body: { name: "Shadewick", race: "human", seed: 7 } });
+        const enter = async () => (await server.call("POST", "/enter", { body: { world: made.json.world, key: made.json.ownerKey, net: NET_VERSION } })).json;
+
+        await server.manage.changeSettings({ replication: "dark" });
+
+        // (Three games of the one world: one that asks, one that doesn't, one that asks on the first protocol)
+        const [asks, quiet, old] = [await play(server, made.json.world, (await enter()).session, { protocols: [PLAY_BINARY, PLAY_PROTOCOL] }), await play(server, made.json.world, (await enter()).session, { protocols: [PLAY_BINARY, PLAY_PROTOCOL] }), await play(server, made.json.world, (await enter()).session)];
+
+        assert.ok(asks.message("welcome") && quiet.message("welcome") && old.message("welcome"));
+        asks.say({ kind: SHADOW_KIND, shadow: true });
+        old.say({ kind: SHADOW_KIND, shadow: true });
+        await until(() => asks.frames.length >= 40, "its frames", ENTERING);
+
+        const frames = asks.frames.map((bytes) => decodeFrame(new Uint8Array(bytes)));
+
+        assert.ok(frames.every(Boolean), "each a frame");
+        assert.ok(frames.every((frame, k) => k === 0 || frame.step === frames[k - 1].step + 1), "one a step");
+        assert.ok(JSON.parse(frames[0].sections.enters).some(([index, who]) => index === 0 && who.id === asks.message("welcome").id), "its own hero the first told of");
+        assert.deepEqual([quiet.frames.length, old.frames.length], [0, 0]);
+        assert.deepEqual([asks.closed, quiet.closed, old.closed], [null, null, null], "and no one the worse for asking");
+
+        // (Asked to stop: no more)
+        asks.say({ kind: SHADOW_KIND, shadow: false });
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        const stopped = asks.frames.length;
+
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        assert.equal(asks.frames.length, stopped);
+        await server.manage.changeSettings({ replication: "off" });
+        [asks, quiet, old].forEach((game) => game.close());
         await until(() => server.registry.lifeOf(made.json.world).life === "stored", "set aside");
     });
 
