@@ -852,7 +852,8 @@ being built for worlds of more than 8 (generated/multiplayer_scaling_plan.md). I
   step, checksum or save changes: it's there to learn what the views would cost before any
   player depends on them. Its cost shows in the world's metrics: the pass `flush.views`
   (`world_pass_seconds_total`) and the work `views.frames`, `views.bytes`, `views.records`,
-  `views.known`, `views.events`, `views.dropped` and `views.enters` (`world_work_total`). `npm run soak:server -- --replication dark` measures it.
+  `views.known`, `views.events`, `views.dropped`, `views.enters`, `views.sent` and `views.summary`
+  (`world_work_total`). `npm run soak:server -- --replication dark` measures it.
   A game that asks is also sent its own player's frames beside lockstep, as bytes on its play
   socket, to hold to its own copy (a shadow: docs/WAR.md, *The shadow*; `views.sent` counts
   their bytes). No game asks unless it's opened with `?shadow`, or is one of the soak's.

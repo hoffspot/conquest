@@ -3905,6 +3905,33 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     invasion's coming is a kilobyte or two: one that must be told is now told however long).
   - **`npm run soak:server -- --shadow`** has every whole copy ask for its shadow, and fails if
     any frame differs.
+- **The world's summary, and the welcome with no world** (`core/summary.js`; the scaling plan's
+  `3-18`). What a game sent views is told of the world beside those its hero can see.
+  - **In parts of small entries:** the rules; the war's clock; each realm, town, works, force
+    and fort; relations; the parties; who's in the world (a name, a people, a realm, a role:
+    not what each has and has done); the invasions and what's burnt; hell's rifts; the legends;
+    what's done; the dungeons. And one player's own: their record as the world keeps it, field
+    by field; the invitations that are theirs; and the director's props within 512 m of their
+    hero (what's on the ground, campfires, caches, finds, strangers, obstacles, treasures,
+    ambushes; one that doesn't say where it is, wherever they are). Each entry is the world's
+    kept form, as a snapshot keeps it.
+  - **Told as it changes:** once a second the feed looks at what's changed since a player was
+    last told and tells those entries and no others (a town taken is that town's entry), in
+    two more sections of a frame, `own` and `world`, 6,000 bytes a frame at the most beside
+    its budget. The world's parts are made once for everyone told that step. When nothing's
+    left waiting the frame says the step everything's told as of.
+  - **The welcome** (`Session`, `ViewFeed.welcome`): a game whose hello says `mode: "view"` is
+    welcomed with its id, the world's seed and people, the step, whether the world's stopped,
+    its own record and the summary, and no snapshot: 33 KB for a world of eight players, where
+    the snapshot is 146 KB, built and written in about a millisecond. From then it's sent
+    frames, and nothing of lockstep's: no ops, no sums, no world again. Only where the view
+    feed's run and bytes can be sent; elsewhere the hello's refused as a way of playing the
+    world isn't played (`netcode`). No game says so yet.
+  - **Held to the copy** by the shadow: each second's summary as the mirror holds it, against
+    the copy's own at that step, every part and entry (`summary` among its counts).
+  - **Not yet:** whatever of these a game drawn from frames turns out to need differently
+    (`3-24`, `3-25`), and the reads the game makes that aren't state but questions
+    (`core/worldview.js` `READS`' asks).
 - **Who hears of what** (`core/eventscope.js`; the scaling plan's `3-15`). A lockstep copy plays
   the whole world and makes every event itself. A game sent views plays none of it, so it's told
   only the events that are its player's to hear. `SCOPES` gives each of the 184 kinds the battle

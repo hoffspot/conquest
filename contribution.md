@@ -662,6 +662,10 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
        or a crowd; `MIRROR_TALLY=1 node test/<file>.test.js` says whether its mirrors had work.
        A field of a character that a game drawn from frames must read goes in `WHO` or a
        record (`client/js/core/view.js`) and in `WIRED` (`client/js/core/mirror.js`) together.
+     - Something new the world keeps that a game shows of the world at large (not of a
+       character in sight) is given a part in `client/js/core/summary.js` (`worldParts` for
+       what's everyone's, `ownParts` for one player's), or a game sent views never hears of it;
+       `npm run soak:server -- --shadow` holds every part to a lockstep copy's.
      - A new kind of event (`Battle` `#emit`, `Host` `#event`) is given its audience and class in
        `client/js/core/eventscope.js` `SCOPES` in the same pull request, its kind written out
        where it's told (`test/eventscope.test.js` fails otherwise): who hears of it once worlds
