@@ -120,7 +120,8 @@ import { BANES, MENDING, MERCENARY, pickOf, RENOWN, wearable } from "./followers
 import { levelOf } from "./gear.js";
 import { QUALITIES, thingOf } from "./progress.js";
 import { compareMotion, MOTION, packMotion, unpackMotion } from "./motion.js";
-import { ViewFeed } from "./viewfeed.js";
+import { Shadow } from "./shadow.js";
+import { SHADOW_KIND, ViewFeed } from "./viewfeed.js";
 import { count, lap } from "./probe.js";
 import { selfOf } from "./selfstate.js";
 import { STARTING_WEAPONS } from "./weapons.js";
@@ -749,6 +750,14 @@ export class Session {
             case "dms":
                 if (this.players.has(peer)) {
                     this.takeDms(this.players.get(peer), message);
+                }
+
+                break;
+            case SHADOW_KIND:
+                // (Their frames beside lockstep, to hold to their own copy: core/shadow.js. Only
+                // a player's, and only where the feed's run: elsewhere it's as any kind unknown)
+                if (this.players.has(peer)) {
+                    this.hosting.views.shadow(this.players.get(peer), message.shadow === true);
                 }
 
                 break;
@@ -1701,11 +1710,15 @@ export class Hosting {
      * @param {function} [options.clock] - The time (ms: performance.now, say), to hold those
      *   who've joined to how much they may ask of the host (AGAIN, HEARD); none, they aren't held
      *   (the tests' worlds, played faster than any clock).
+     * @param {function} [options.sendBinary] - Sends bytes to one who's joined (peer, a
+     *   Uint8Array), where whoever runs it can (the world server's play socket): a view's frame,
+     *   to a game that's asked for its shadow. None, no bytes are sent.
      */
-    constructor(host, { send, sendAll = null, clock = null }) {
+    constructor(host, { send, sendAll = null, clock = null, sendBinary = null }) {
         this.host = host;
         this.send = send;
         this.sendAll = sendAll;
+        this.sendBinary = sendBinary;
 
         /** What's been sent (characters of text, to everyone together), by kind. */
         this.sent = {};
@@ -1767,6 +1780,15 @@ export class Hosting {
      * no one joined, nothing's worked out or written.
      */
     flush() {
+        // (The frames first, where the view feed's run: a frame is the world as the step left
+        // it, before anything this does to it. A quiet player's hero is stopped just below, by a
+        // command every copy plays after the step, and a frame made after that would say of the
+        // step what no copy has of it: core/shadow.js found so)
+        if (this.session.players.size) {
+            lap("flush.views");
+            this.views.flush(this.step());
+        }
+
         lap("flush.quiet");
         this.session.quiet();
 
@@ -1783,8 +1805,6 @@ export class Hosting {
 
         lap("flush.selves");
         this.session.selves(step);
-        lap("flush.views");
-        this.views.flush(step);
         lap("flush.worlds");
         this.feed.answer();
         this.session.admit();
@@ -1901,6 +1921,13 @@ export class Joining {
         this.motionChecks = 0;
         this.checks = 0;
         this.desyncs = 0;
+
+        /**
+         * Its shadow (core/shadow.js; the scaling plan's 3-17), while it's asked for one
+         * (shadowing): its player's frames, sent beside lockstep by a world that runs the view
+         * feed, each held to this copy. Null, as it is unless it's asked for.
+         */
+        this.shadow = null;
 
         /**
          * The host's latest step heard; how late its steps come (ms: all but the latest few,
@@ -2162,6 +2189,22 @@ export class Joining {
         host.replaying();
     }
 
+    /**
+     * Ask the world for this player's frames beside lockstep, to hold to this copy (`on`), or to
+     * be sent no more. A world that doesn't run the view feed, or can't send bytes, or is older
+     * than the asking, hears a kind it doesn't know and sends none: the shadow then has nothing
+     * to hold, and says so (its counts stay at nothing). Asked again, it begins again.
+     */
+    shadowing(on) {
+        this.shadow = on ? new Shadow() : null;
+        this.send(encode({ kind: SHADOW_KIND, shadow: Boolean(on) }));
+    }
+
+    /** A frame come from the world (bytes: a Uint8Array), for the shadow if there's one; let go of otherwise. */
+    frame(bytes) {
+        this.shadow?.take(bytes);
+    }
+
     /** How many of the host's steps are waiting to be played. */
     get behind() {
         return this.#waiting;
@@ -2329,7 +2372,13 @@ export class Joining {
 
                     this.#waiting--;
 
-                    return this.host.advance(op[1]);
+                    const events = this.host.advance(op[1]);
+
+                    // (The copy's side of the step, for its shadow's frame of it: a copy that's
+                    // gone astray is the truth of nothing till the world's come again)
+                    this.shadow?.stepped(this.host, this.me, events, { astray: this.astray });
+
+                    return events;
                 }
                 case "c": {
                     const [, id, command, seq] = this.queue.shift();

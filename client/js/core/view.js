@@ -124,6 +124,26 @@ export const originFor = (x, y) => [Math.floor((x - VIEW.lead) / VIEW.origin), M
 const CHANGES = ["place", "heading", "going", "health", "target"];
 
 /**
+ * How a character is, as a record says it: { x, y (cm), heading, going, speed, health, target
+ * (the character it's aiming at, or null) }. What the authority tells and what a copy of the
+ * same world at the same step would tell, so the one can be held to the other (core/shadow.js).
+ */
+export function quantised(battle, actor) {
+    const moving = actor.progress !== null && !actor.dead;
+    const fighting = Boolean(actor.attack) || actor.target !== null || actor.order?.type === "engage";
+
+    return {
+        x: cmOf(actor.x),
+        y: cmOf(actor.y),
+        heading: turnOf(actor.facing),
+        going: (moving ? GOING.moving : 0) | (actor.running ? GOING.running : 0) | (fighting ? GOING.fighting : 0) | (actor.dead ? GOING.dead : 0),
+        speed: moving ? speedOf(actor.pace * shareOf(actor, "speed")) : 0,
+        health: actor.dead ? 0 : healthOf(actor.hp, actor.maxHp),
+        target: actor.target === null || actor.target === undefined ? null : (battle.actor(actor.target) ?? null),
+    };
+}
+
+/**
  * What's kept of each character as it's quantised, in typed arrays by slot: a character's slot
  * is its own for as long as it's kept (slotOf), and each field's `changed` says the step it last
  * came out different. A character's quantised once a step however many players know of it
@@ -221,14 +241,7 @@ export class ViewState {
         }
 
         const first = this.seen[slot] === 0;
-        const moving = actor.progress !== null && !actor.dead;
-        const fighting = Boolean(actor.attack) || actor.target !== null || actor.order?.type === "engage";
-        const target = actor.target === null || actor.target === undefined ? null : (battle.actor(actor.target) ?? null);
-        const [x, y] = [cmOf(actor.x), cmOf(actor.y)];
-        const heading = turnOf(actor.facing);
-        const going = (moving ? GOING.moving : 0) | (actor.running ? GOING.running : 0) | (fighting ? GOING.fighting : 0) | (actor.dead ? GOING.dead : 0);
-        const speed = moving ? speedOf(actor.pace * shareOf(actor, "speed")) : 0;
-        const health = actor.dead ? 0 : healthOf(actor.hp, actor.maxHp);
+        const { x, y, heading, going, speed, health, target } = quantised(battle, actor);
 
         if (first || this.x[slot] !== x || this.y[slot] !== y) {
             this.x[slot] = x;
@@ -301,11 +314,13 @@ function sizeOf(mask) {
  *     JSON text, who's come into the known set (JSON text).
  *     Always told, whatever the budget (whoever gives them keeps them within a frame); the
  *     records have what room they leave.
+ * @param {boolean} [frame.always] - A frame even with nothing to tell (its 13 bytes: the step
+ *     alone), for a game that's to know a step had nothing for it (a shadow: core/shadow.js).
  * @returns {{ bytes: Uint8Array | null, told: number[] }} `bytes` is null with nothing to tell
  *     (no frame's sent: a town standing still costs nothing); `told` is the indexes it tells of,
  *     whose `sent` is now this step.
  */
-export function encodeFrame(state, { step, origin, leaves = [], known = [], indexOf = () => NONE, budget = VIEW.budget, sections = null }) {
+export function encodeFrame(state, { step, origin, leaves = [], known = [], indexOf = () => NONE, budget = VIEW.budget, sections = null, always = false }) {
     // (The sections, as bytes, in their order: each its tag, its length and what it holds)
     const extra = [];
 
@@ -356,7 +371,7 @@ export function encodeFrame(state, { step, origin, leaves = [], known = [], inde
         }
     }
 
-    if (!due.length && !leaves.length && !extra.length) {
+    if (!due.length && !leaves.length && !extra.length && !always) {
         return { bytes: null, told: [] };
     }
 
@@ -374,7 +389,7 @@ export function encodeFrame(state, { step, origin, leaves = [], known = [], inde
     }
 
     // (Nothing fits, and no one's left: nothing to say this step)
-    if (!chosen.length && !leaves.length && !extra.length) {
+    if (!chosen.length && !leaves.length && !extra.length && !always) {
         return { bytes: null, told: [] };
     }
 

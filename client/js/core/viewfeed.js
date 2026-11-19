@@ -99,6 +99,34 @@ export class ViewFeed {
 
         // The events told of since frames were last made (heard), for the next
         this.pending = [];
+
+        // The step frames were last made for (flush): one frame a step for each player
+        this.flushed = -1;
+
+        /**
+         * The players whose games have asked to be sent their frames beside lockstep, to hold
+         * them to their own copies (a shadow: core/shadow.js), by id. Each is sent every step's
+         * frame, with nothing in it if there's nothing to say, by the hosting's `sendBinary`.
+         */
+        this.shadowing = new Set();
+    }
+
+    /**
+     * A player's game asks to be sent its frames (`on`), or to be sent no more. Asked for, what
+     * that player's been told begins again from nothing: their game knows of no one yet. Nothing
+     * comes of it while the feed's off, or where the hosting can't send bytes.
+     */
+    shadow(id, on) {
+        if (on) {
+            // (Asked again while it's being sent them: again from nothing, as its game begins)
+            this.shadowing.add(id);
+
+            if (this.viewers.has(id)) {
+                this.#forget(id);
+            }
+        } else {
+            this.shadowing.delete(id);
+        }
     }
 
     /**
@@ -132,6 +160,15 @@ export class ViewFeed {
             return;
         }
 
+        // (Once a step: a hosting sends what's been done as it hears a command too, between
+        // steps, and nothing of the world has changed by then that a frame tells of. What's
+        // been heard of since is the next step's)
+        if (step === this.flushed) {
+            return;
+        }
+
+        this.flushed = step;
+
         const { host } = this.hosting;
         const { battle } = host;
         const world = { players: host.players, partyOf: (id) => host.parties?.get(host.partyIds?.get(id))?.members };
@@ -151,6 +188,7 @@ export class ViewFeed {
         for (const id of this.viewers.keys()) {
             if (!host.players.has(id)) {
                 this.#forget(id);
+                this.shadowing.delete(id);
             }
         }
 
@@ -173,14 +211,15 @@ export class ViewFeed {
                 this.#look(viewer, hero);
             }
 
-            this.#frame(viewer, hero, step, this.#sections(viewer, hero, events, world, peers.get(id)));
+            viewer.peer = peers.get(id);
+            this.#frame(viewer, hero, step, this.#sections(viewer, hero, events, world, viewer.peer));
         }
 
         this.totals.steps++;
     }
 
     #viewer(id) {
-        const viewer = { id, phase: this.#joined++ % KNOWN.every, list: [], byActor: new Map(), byIndex: new Array(KNOWN.most).fill(null), free: Array.from({ length: KNOWN.most }, (_, k) => KNOWN.most - 1 - k), leaves: [], owed: [], done: null, self: null, entering: 0, frames: 0, bytes: 0, records: 0, events: 0, dropped: 0, enters: 0 };
+        const viewer = { id, phase: this.#joined++ % KNOWN.every, list: [], byActor: new Map(), byIndex: new Array(KNOWN.most).fill(null), free: Array.from({ length: KNOWN.most }, (_, k) => KNOWN.most - 1 - k), leaves: [], owed: [], ids: new Set(), done: null, self: null, entering: 0, frames: 0, bytes: 0, records: 0, events: 0, dropped: 0, enters: 0 };
 
         this.viewers.set(id, viewer);
 
@@ -269,6 +308,12 @@ export class ViewFeed {
         viewer.byIndex[entry.index] = null;
         viewer.free.push(entry.index);
 
+        // (By the id the player was told, which is what an event names: one gone from the battle
+        // is still known of till its leaving's told)
+        if (entry.who) {
+            viewer.ids.delete(entry.who.id);
+        }
+
         // (Told only of one the player was ever told of)
         if (told && entry.who) {
             viewer.leaves.push(entry.index);
@@ -289,12 +334,11 @@ export class ViewFeed {
     // room), the last of their commands done and their hero's own state, as the session last
     // told their game of them, when either's changed. Null with none of it
     #sections(viewer, hero, events, world, peer) {
-        const { battle } = this.hosting.host;
         const sections = {};
         let any = false;
 
         if (events.length || viewer.owed.length) {
-            const heard = events.length ? sift(events, { id: viewer.id, hero, knows: (id) => viewer.byActor.has(battle.actor(id)) }, world) : { must: [], may: [] };
+            const heard = events.length ? sift(events, { id: viewer.id, hero, knows: (id) => viewer.ids.has(id) }, world) : { must: [], may: [] };
             const told = [];
             let [size, k] = [2, 0];
 
@@ -375,6 +419,7 @@ export class ViewFeed {
                     texts.push(text);
                     size += length;
                     Object.assign(entry, { who, entered: true });
+                    viewer.ids.add(who.id);
                     told.add(entry.actor);
                     viewer.entering--;
                 }
@@ -406,6 +451,8 @@ export class ViewFeed {
                 return entry?.entered ? entry.index : NONE;
             },
             budget,
+            // (A shadow's told of every step, so it knows one had nothing for it)
+            always: this.shadowing.has(viewer.id),
         };
         const eventsOf = (texts) => (texts.length ? { events: `[${texts.join(",")}]` } : {});
         let made = encodeFrame(this.state, { ...frame, sections: { ...eventsOf(must), ...sections } });
@@ -466,8 +513,13 @@ export class ViewFeed {
         count("views.bytes", bytes.length);
         count("views.records", told.length);
 
-        // (Dark: made, counted, and let go of; nothing's sent)
+        // (Dark: made, counted, and let go of; sent only to a game that's asked for its shadow)
         this.onFrame?.(viewer.id, bytes, step);
+
+        if (viewer.peer !== undefined && this.shadowing.has(viewer.id) && this.hosting.sendBinary) {
+            this.hosting.sendBinary(viewer.peer, bytes);
+            count("views.sent", bytes.length);
+        }
     }
 
     // A player gone from the world: everything of theirs let go of
@@ -491,3 +543,6 @@ export class ViewFeed {
         this.pending = [];
     }
 }
+
+/** The kind a joined game asks for its shadow by: { kind: SHADOW_KIND, shadow: true or false }. */
+export const SHADOW_KIND = "views";
