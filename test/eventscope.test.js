@@ -220,7 +220,7 @@ describe("a player's events in their frames (core/viewfeed.js)", () => {
         feed.onFrame = (id, bytes) => {
             const frame = decodeFrame(bytes);
 
-            assert.ok(frame && bytes.length <= VIEW.frame, `${bytes.length} bytes`);
+            assert.ok(frame, `${bytes.length} bytes that read as a frame`);
             frames.get(id).push({ ...frame.sections, events: frame.sections.events === undefined ? undefined : JSON.parse(frame.sections.events), length: bytes.length });
         };
 
@@ -278,10 +278,24 @@ describe("a player's events in their frames (core/viewfeed.js)", () => {
         assert.equal(feed.viewers.get(ann.id).dropped, may.length - misses.length);
         assert.equal(feed.viewers.get(ann.id).owed.length, 0);
 
-        // (One too long for any frame is let go of, and what's after it still told)
-        feed.heard([{ type: "death", time: 50, id: wolf.id, note: "y".repeat(EVENTS.one) }, { type: "death", time: 50, id: wolf.id, n: "after" }]);
+        // (One that must be told and is longer than a frame's worth is told all the same, alone
+        // in a frame as long as it takes, and what's after it in the next: an invasion's coming
+        // is a kilobyte or two)
+        const long = { type: "death", time: 50, id: wolf.id, note: "y".repeat(3000) };
+
+        feed.heard([long, { type: "death", time: 50, id: wolf.id, n: "after" }]);
         feed.flush(10);
+        feed.flush(11);
+        assert.deepEqual(mine.at(-2).events, [long]);
+        assert.ok(mine.at(-2).length > 3000 && mine.at(-2).length < 3000 + VIEW.budget);
         assert.deepEqual(mine.at(-1).events, [{ type: "death", time: 50, id: wolf.id, n: "after" }]);
+        assert.equal(feed.viewers.get(ann.id).dropped, may.length - misses.length, "nothing more let go of");
+
+        // (One that only may be told and is too long is let go of; and one past what a section holds, whichever it is)
+        feed.heard([{ type: "miss", time: 50, id: wolf.id, target: ann.id, note: "z".repeat(EVENTS.one) }, { type: "death", time: 50, id: wolf.id, note: "w".repeat(EVENTS.big) }, { type: "death", time: 50, id: wolf.id, n: "last" }]);
+        feed.flush(12);
+        assert.deepEqual(mine.at(-1).events, [{ type: "death", time: 50, id: wolf.id, n: "last" }]);
+        assert.equal(feed.viewers.get(ann.id).dropped, may.length - misses.length + 2);
     });
 
     it("tells a player the last of their commands done and their hero's own state as the session last told their game, when either's changed and not again", () => {

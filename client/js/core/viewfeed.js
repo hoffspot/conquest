@@ -28,10 +28,13 @@ export const KNOWN = Object.freeze({ enter: 160, leave: 192, every: 5, most: VIE
  * A frame's events (core/eventscope.js): those that must be told take `must` bytes of a frame at
  * the most, in order, the rest waiting for the next (a frame is one packet: core/view.js
  * VIEW.frame); those that may be told have what the frame's budget has left once those known of
- * are told, and `may` bytes at the least, and what doesn't fit is let go of. One event's text
- * longer than `one` is let go of whichever it is: nothing the game tells of is.
+ * are told, and `may` bytes at the least, and what doesn't fit is let go of, as is one that may
+ * be told and is longer than `one`. One that must be told is told however long it is, in a
+ * frame as long as it takes (an invasion's coming names its place, its way and its raiders: a
+ * kilobyte or two, a few times an hour: a shadow's soak found them let go of). Only one past
+ * `big`, which a section can't hold, is let go of, and nothing the game tells of is near that.
  */
-export const EVENTS = Object.freeze({ must: 900, may: 160, one: 800 });
+export const EVENTS = Object.freeze({ must: 900, may: 160, one: 800, big: 60000 });
 
 /**
  * Who's come into a player's known set is told `frame` bytes of them a frame at the most (some
@@ -363,7 +366,7 @@ export class ViewFeed {
                 const one = viewer.owed[k];
                 const length = bytesOf(one);
 
-                if (length > EVENTS.one) {
+                if (length > EVENTS.big) {
                     viewer.dropped++;
                     count("views.dropped");
                 } else if (size + length + 1 <= EVENTS.must || !told.length) {

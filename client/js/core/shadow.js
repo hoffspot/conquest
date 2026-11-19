@@ -327,7 +327,8 @@ export class Shadow {
 
         this.#faults = mirror.faults.length;
 
-        if (bytes.length > SHADOW.most) {
+        // (Longer than a frame may be, but for one event that must be told and is long itself)
+        if (bytes.length > SHADOW.most + Math.max(0, (frame.sections.events?.length ?? 0) - 900)) {
             this.#say("over", step, `a frame of ${bytes.length} bytes`);
         }
 
