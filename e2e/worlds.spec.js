@@ -682,6 +682,12 @@ test("a game opened with ?mirror draws the others where its player's frames say 
         expect(found.copyApart).toBeLessThan(4);
         expect(found.delay).toBeGreaterThanOrEqual(100);
         expect(found.delay).toBeLessThanOrEqual(400);
+        // (Its own hero looked ahead from the mirror, the world's time told by its frames: 3-20)
+        const looked = await page.evaluate(() => ({ ...window.pellagos.game.forecast.corrections }));
+
+        expect(looked.mirrored).toBeGreaterThanOrEqual(10);
+        expect(looked.timed).toBeGreaterThanOrEqual(400);
+        expect(looked.snaps).toBe(0);
         // (Lockstep as ever beside it, and its shadow sound)
         expect(await page.evaluate(() => Boolean(window.pellagos.inWorld) && !window.pellagos.together.joining.astray && window.pellagos.together.joining.shadow.differences === 0)).toBe(true);
     } finally {

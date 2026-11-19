@@ -98,9 +98,12 @@ export class Forecast {
 
         /**
          * How often what's drawn has been put right (by half a metre to two, by more, and put there
-         * at once) and by how much at most (m): for the debug log.
+         * at once) and by how much at most (m); how many times it's looked ahead afresh, and how
+         * many of those from a battle that isn't the copy's (a mirror's: `from`, set by whoever
+         * asks); and how many times it's been told the host's time by other than its word of the
+         * hero: for the debug log.
          */
-        this.corrections = { small: 0, big: 0, snaps: 0, most: 0 };
+        this.corrections = { small: 0, big: 0, snaps: 0, most: 0, looks: 0, mirrored: 0, timed: 0 };
 
         // The swings and casts of theirs it's begun ({ type, what (the attack or the spell), time,
         // claimed (the copy's of it come) }), kept FORECAST.kept ms; and, at the present they were
@@ -117,6 +120,18 @@ export class Forecast {
         this.self = self;
         this.sent = this.sent.filter(({ seq }) => seq > self.seq);
         this.#again();
+    }
+
+    /**
+     * The host's time as something other than its word of the hero says it (`time`, heard at
+     * `at` of the link's clock: a frame, where the game's sent those): its clock's reckoned from
+     * these too, so it's known as well as the quickest of everything timed, not of the words of
+     * the hero alone. Nothing's looked ahead again for it.
+     */
+    timed(time, at) {
+        this.words = [...this.words.filter((word) => word.at > at - FORECAST.paced), { at, time }];
+        this.pace += (this.#paced() - this.pace) * 0.3;
+        this.corrections.timed++;
     }
 
     /** A command of the player's sent (its seq: Joining.command), at `at` (the link's clock). */
@@ -144,8 +159,10 @@ export class Forecast {
      * since last asked, each once (their battle's "attack" and "cast" events, but for a shot or
      * a throw: shown now, the copy's not again, claim): { x, y, map, facing, acting, begun },
      * or null for where the copy has them (nothing heard from the host yet, or they're dead).
+     * `copy` may be a mirror's battle (core/mirror.js: `mirrored`, to be counted so): those in it
+     * are who the game's frames tell of, where they last told, and it's as little touched.
      */
-    at(copy, me, now, rtt = FORECAST.rtt) {
+    at(copy, me, now, rtt = FORECAST.rtt, { mirrored = false } = {}) {
         const self = this.self;
 
         if (!self || self.hero.dead) {
@@ -171,6 +188,9 @@ export class Forecast {
 
                 return null;
             }
+
+            this.corrections.looks++;
+            this.corrections.mirrored += mirrored ? 1 : 0;
 
             this.#onTo(this.track, present);
             this.#reckon(present, now);

@@ -32,6 +32,14 @@ export class Drawn {
         /** How many frames it's taken, and how many were asked where to draw someone it couldn't say of. */
         this.frames = 0;
         this.unknown = 0;
+
+        /**
+         * Told, if set: `onTimed(time, now)` the world's time each frame is of, as it comes; and
+         * `onSelf({ time, seq, hero, at })` the frames' word of the player's own hero, as a
+         * lockstep link's `self` is (core/netplay.js Joining.self).
+         */
+        this.onTimed = null;
+        this.onSelf = null;
     }
 
     /** The world its characters are of (core/battle.js: a battle's `world`), once it's made: the frames that waited are taken. */
@@ -82,9 +90,25 @@ export class Drawn {
             this.mirror = new Mirror(new Battle(this.#world, { seed: 1 }), { stepMs: this.stepMs });
         }
 
+        const selves = this.mirror.selves;
+
         this.mirror.apply(bytes);
         this.playout.heard(frame.step * this.stepMs, now);
         this.frames++;
+
+        // (The world's time, as every frame says it; and its word of the player's own hero and
+        // the last of their commands done, when it has one: what a look ahead begins from,
+        // app/forecast.js, the scaling plan's 3-20)
+        this.onTimed?.(frame.step * this.stepMs, now);
+
+        if (this.mirror.selves !== selves && this.mirror.self && Number.isInteger(this.mirror.done)) {
+            this.onSelf?.({ time: this.mirror.asof, seq: this.mirror.done, hero: this.mirror.self, at: now });
+        }
+    }
+
+    /** The battle those it draws are characters of (the mirror's, never stepped): null till it has a frame. */
+    get battle() {
+        return this.mirror?.battle ?? null;
     }
 
     /** The world's time it draws at, the clock being at `now`: null till it has a frame. */

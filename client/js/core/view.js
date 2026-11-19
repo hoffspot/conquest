@@ -32,7 +32,7 @@
 //
 // A section is what else a player's told in a step, each at most once a frame, in this order:
 //
-//   tag      uint8    SECTION: events, done, self, enters, own or world
+//   tag      uint8    SECTION: events, done, self, enters, own, world or asof
 //   length   uint16   how many bytes follow
 //   ...               events: the step's events that are this player's to hear, as JSON text
 //                     (an array; core/eventscope.js says whose each is). done: uint32, the last
@@ -85,9 +85,9 @@ export const PLACED = 300;
 export const GOING = Object.freeze({ moving: 1, running: 2, fighting: 4, dead: 8 });
 
 /** A frame's sections, by tag: what else a player's told beside those they know of. */
-export const SECTION = Object.freeze({ events: 1, done: 2, self: 3, enters: 4, own: 5, world: 6 });
+export const SECTION = Object.freeze({ events: 1, done: 2, self: 3, enters: 4, own: 5, world: 6, asof: 7 });
 
-const TEXTS = Object.freeze({ [SECTION.events]: "events", [SECTION.self]: "self", [SECTION.enters]: "enters", [SECTION.own]: "own", [SECTION.world]: "world" });
+const TEXTS = Object.freeze({ [SECTION.events]: "events", [SECTION.self]: "self", [SECTION.enters]: "enters", [SECTION.own]: "own", [SECTION.world]: "world", [SECTION.asof]: "asof" });
 
 const TAGS = new Set(Object.values(SECTION));
 const utf8 = new TextEncoder();
@@ -369,6 +369,12 @@ export function encodeFrame(state, { step, origin, leaves = [], known = [], inde
 
     if (sections?.world !== undefined) {
         extra.push([SECTION.world, utf8.encode(sections.world)]);
+    }
+
+    // (The world's time `done` and `self` are as of, ms, as text: a frame says them a flush
+    // after the player's game was told, so it's not the frame's own)
+    if (sections?.asof !== undefined) {
+        extra.push([SECTION.asof, utf8.encode(String(sections.asof))]);
     }
 
     const more = extra.reduce((sum, [, bytes]) => sum + 3 + bytes.length, 0);

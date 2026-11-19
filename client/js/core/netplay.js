@@ -1936,6 +1936,9 @@ export class Joining {
         this.self = null;
         this.onSelf = null;
 
+        /** Told the world's time as anything but its word of the hero says it (time, at): a frame, while others are drawn from those (drawing). */
+        this.onTimed = null;
+
         /**
          * Who's told each way the host found, (id, way), as it's heard: some steps before it's
          * played (step), so the game can have the navigation's tiles under it baked meanwhile, off
@@ -2098,7 +2101,8 @@ export class Joining {
                 break;
             case "self":
                 // (Its own hero as the host has them now: looked ahead from, app/forecast.js)
-                if (message.hero && Number.isFinite(message.time) && Number.isInteger(message.seq)) {
+                // (Not while others are drawn from its frames: those say it then, drawing)
+                if (message.hero && Number.isFinite(message.time) && Number.isInteger(message.seq) && !this.drawn?.ready) {
                     this.self = { time: message.time, seq: message.seq, hero: message.hero, at: this.clock() };
                     this.onSelf?.(this.self);
                 }
@@ -2264,6 +2268,16 @@ export class Joining {
      */
     drawing(on) {
         this.drawn = on ? new Drawn({ stepMs: STEP_MS }) : null;
+
+        // (Its frames' word of the world's time, and of the player's own hero in place of the
+        // link's own `self`: what its hero's looked ahead from, the scaling plan's 3-20)
+        if (this.drawn) {
+            this.drawn.onTimed = (time, at) => this.onTimed?.(time, at);
+            this.drawn.onSelf = (self) => {
+                this.self = self;
+                this.onSelf?.(self);
+            };
+        }
 
         if (on && this.host) {
             this.drawn.begin(this.host.battle.world);

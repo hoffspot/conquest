@@ -28,7 +28,7 @@ const STICK = Object.freeze({ turned: 0.12, again: 500, reach: 30 });
  * of their Action Bar, and how their swings and casts were shown (`shown`: begun by the
  * forecast, the copy's of those claimed, and the copy's shown late, none begun by the forecast).
  */
-export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40, stall = 0.01, ms = 8000, stick = () => null, actions = [], setup = null, stickOptions = STICK }) {
+export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40, stall = 0.01, ms = 8000, stick = () => null, actions = [], setup = null, stickOptions = STICK, mirror = false }) {
     const host = new Host(world, { populate: false });
 
     host.join({ id: "host", hero: { name: "Host", shape: {}, look: {}, weapon: "sword", boots: false } });
@@ -41,7 +41,14 @@ export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40
         link.now = now;
         link.send(lane, text);
     };
-    const hosting = new Hosting(host, { send: (peer, text) => send("down", text) });
+    // (`mirror`: the world's view feed dark, its frames sent down the same link as bytes, and the
+    // joined game drawing from them, its hero looked ahead from its mirror: the scaling plan's 3-20)
+    const hosting = new Hosting(host, { send: (peer, text) => send("down", text), ...(mirror ? { sendBinary: (peer, bytes) => send("down", Uint8Array.from(bytes)) } : {}) });
+
+    if (mirror) {
+        hosting.views.mode = "dark";
+    }
+
     const joining = new Joining({ send: (text) => send("up", text), clock: () => now });
     let hostAt = 0;
 
@@ -56,7 +63,11 @@ export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40
         }
 
         for (const text of link.take("down")) {
-            joining.hear(text);
+            if (typeof text === "string") {
+                joining.hear(text);
+            } else {
+                joining.frame(text);
+            }
         }
     };
     const hostTick = () => {
@@ -81,6 +92,11 @@ export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40
     const forecast = new Forecast();
 
     joining.onSelf = (self) => forecast.heard(self);
+    joining.onTimed = (time, at) => forecast.timed(time, at);
+
+    if (mirror) {
+        joining.drawing(true);
+    }
 
     const answers = [];
     const command = (sent) => {
@@ -193,7 +209,8 @@ export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40
         const actor = copy();
         const before = previous.get(me) ?? actor;
         const alpha = accumulator / STEP_MS;
-        const place = forecast.at(joining.host.battle, me, now, joining.lately ?? undefined);
+        const from = joining.drawn?.ready ? joining.drawn.battle : null;
+        const place = forecast.at(from ?? joining.host.battle, me, now, joining.lately ?? undefined, { mirrored: Boolean(from) });
 
         shown.begun += place?.begun.length ?? 0;
         begun.push(...(place?.begun ?? []).map(({ type, time }) => ({ type, time, at: now })));

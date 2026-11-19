@@ -36,11 +36,12 @@ export const REMOTE = Object.freeze({
         paused: "Why the world's stopped ({ why, by }), or null while it's going",
         farBehind: "Whether it's fallen too far behind and is being brought up to date",
         received: "How many bytes it's heard, by kind (for the debug overlay)",
-        drawn: "Where to draw others from the world's frames ({ ready, of(id, now) }: core/drawn.js), or null where they're drawn from the copy",
+        drawn: "Where to draw others from the world's frames ({ ready, of(id, now), battle }: core/drawn.js), or null where they're drawn from the copy",
     }),
     /** Set by the game, to be told. */
     hears: Object.freeze({
         onSelf: "The world's word of the player's own hero, as it's heard",
+        onTimed: "The world's time (ms) as anything else that says it is heard (time, at): a frame, where others are drawn from those",
         onWay: "A way the world found for someone (id, way), as it's heard, before it's played; or null for none",
         onChat: "A line said in the player's party, or a direct message",
         onUnsaid: "Why a line of the player's wasn't said",

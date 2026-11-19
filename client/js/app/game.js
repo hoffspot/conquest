@@ -1453,6 +1453,8 @@ export class Game {
 
         if (remote) {
             remote.onSelf = (self) => this.forecast.heard(self);
+            // (`?mirror`: the world's time from every frame too, the scaling plan's 3-20)
+            remote.onTimed = (time, at) => this.forecast.timed(time, at);
 
             if (remote.self) {
                 this.forecast.heard(remote.self);
@@ -4715,7 +4717,10 @@ export class Game {
             }
 
             if (actor === mine && this.forecast) {
-                const place = this.forecast.at(battle, this.me, this.remote.clock(), this.remote.lately ?? undefined);
+                // (`?mirror`: looked ahead from the mirror's battle, those its frames tell of
+                // standing where they last told, and not from the copy's: core/drawn.js)
+                const mirror = this.remote.drawn?.ready ? this.remote.drawn.battle : null;
+                const place = this.forecast.at(mirror ?? battle, this.me, this.remote.clock(), this.remote.lately ?? undefined, { mirrored: Boolean(mirror) });
 
                 if (place && place.map === actor.map) {
                     [x, z, facing, acting] = [place.x, place.y, place.facing, place.acting];

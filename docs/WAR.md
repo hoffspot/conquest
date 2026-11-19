@@ -3956,8 +3956,19 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     the townsfolk are drawn within 0.005 m (95 in 100 pictures; 0.09 m at the worst) of where
     the world had them at the time drawn, 0.3 m allowed. Every step's frame told of them,
     so it's the measure of the drawing and the clock, not yet of frames that tell less often.
-  - **Not yet:** the forecast forking from the mirror (`3-20`); and how it looks on a phone,
-    which is the owner's to say (P3).
+  - **Their own hero looked ahead from the mirror** (`app/forecast.js`; the plan's `3-20`),
+    with the same `?mirror`. The look ahead is made from the mirror's battle and not the
+    copy's: those the frames tell of, standing where they last told. It begins from the
+    frames' word of the hero and the last of their commands done, in place of the link's own
+    `self`. A frame says the world's time those are as of in a section of its own (`asof`),
+    since it tells them a flush after the game was told. And the world's clock is reckoned
+    from every frame's time as well as from those words. Played in Node from the mirror at
+    150 and 300 ms, running, stopping and going, sent by a tap and casting round a foe, the
+    hero's drawn within the limits the copy's held to (0.7 m in a frame, 1.0 m from the host
+    on the mean): 0.52 m on the mean running at 150 ms where the copy gives 0.48, 0.65 m at
+    300 ms where it gives 0.59. The debug log counts looks ahead, those from a mirror, and
+    times told (`forecast`).
+  - **Not yet:** how it looks on a phone, which is the owner's to say (P3).
 - **Who hears of what** (`core/eventscope.js`; the scaling plan's `3-15`). A lockstep copy plays
   the whole world and makes every event itself. A game sent views plays none of it, so it's told
   only the events that are its player's to hear. `SCOPES` gives each of the 184 kinds the battle
