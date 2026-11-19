@@ -609,6 +609,86 @@ test("a game opened with ?shadow in a world whose server's views are dark is sen
     }
 });
 
+test("a game opened with ?mirror draws the others where its player's frames say they are, a little behind its copy and beside it; its own hero and lockstep as ever", async ({ page }) => {
+    await ready(page, save("Una", "human", "sword"));
+    await server.settings.change({ replication: "dark" });
+
+    try {
+        const made = await server.createWorld({ name: "Glassfield", seed: 47, race: "human", heroes: "brought", settings: { open: true } });
+
+        await page.goto(`${base}/?mirror`);
+
+        const row = page.locator(`#titleserver li[data-world="${made.world}"]`);
+
+        await expect(row).toContainText("Glassfield", { timeout: 30000 });
+        await row.getByRole("button").click();
+        await page.locator("#worldask").getByRole("button", { name: /^Una/ }).click({ timeout: 60000 });
+        await playing(page, null, LONGER);
+
+        // (Those drawn, as the game has them on the screen, beside where the frames and the copy say)
+        const seen = () => page.evaluate(() => {
+            const { game, together } = window.pellagos;
+            const drawn = together?.joining.drawn;
+
+            if (!drawn?.ready) {
+                return null;
+            }
+
+            const now = game.remote.clock();
+            const me = game.host.battle.actor(game.me);
+            const found = { frames: drawn.frames, delay: drawn.playout.delay, faults: drawn.mirror.faults.length, known: drawn.mirror.size, shown: 0, drawnApart: 0, copyApart: 0, hidden: 0 };
+
+            for (const actor of game.host.battle.actors) {
+                const avatar = game.avatars.get(actor.id);
+                const at = actor.id === game.me || actor.map !== me.map ? null : drawn.of(actor.id, now);
+
+                if (!avatar || !at || at.alpha < 1) {
+                    continue;
+                }
+
+                if (!avatar.object.visible) {
+                    found.hidden++;
+
+                    continue;
+                }
+
+                const [ox, oz] = game.originOf(actor.map);
+
+                found.shown++;
+                found.drawnApart = Math.max(found.drawnApart, Math.hypot(avatar.object.position.x - ox - at.x, avatar.object.position.z - oz - at.y));
+                found.copyApart = Math.max(found.copyApart, Math.hypot(actor.x - at.x, actor.y - at.y));
+            }
+
+            return found;
+        });
+
+        await expect.poll(async () => (await seen())?.frames ?? 0, { timeout: 60000, intervals: [2000] }).toBeGreaterThanOrEqual(200);
+        await page.evaluate(() => {
+            const { game } = window.pellagos;
+            const me = game.host.battle.actor(game.me);
+
+            game.remote.command({ type: "move", to: [me.square[0] + 5, me.square[1] + 3], run: true });
+        });
+        await expect.poll(async () => (await seen()).frames, { timeout: 60000, intervals: [2000] }).toBeGreaterThanOrEqual(400);
+
+        const found = await seen();
+
+        expect(found.faults).toBe(0);
+        expect(found.known).toBeGreaterThanOrEqual(2);
+        expect(found.shown).toBeGreaterThanOrEqual(1);
+        // (On the screen where the frames say, give or take what a body trails where it's put;
+        // and that no further from the copy than someone goes in the time it's drawn behind)
+        expect(found.drawnApart).toBeLessThan(1.5);
+        expect(found.copyApart).toBeLessThan(4);
+        expect(found.delay).toBeGreaterThanOrEqual(100);
+        expect(found.delay).toBeLessThanOrEqual(400);
+        // (Lockstep as ever beside it, and its shadow sound)
+        expect(await page.evaluate(() => Boolean(window.pellagos.inWorld) && !window.pellagos.together.joining.astray && window.pellagos.together.joining.shadow.differences === 0)).toBe(true);
+    } finally {
+        await server.settings.change({ replication: "off" });
+    }
+});
+
 test("back into a world on a server after the game's reloaded: straight back in, each stage of the way shown as it's come to, as the same character where they stood; a stage that can't be got past says why, to try again; Cancel stops it and lets the world go", async ({ page }) => {
     await ready(page, save("Tamsin", "human", "sword"));
     // (Each stage of the way back in, as it's marked: "reach:now", "reach:done", ...)

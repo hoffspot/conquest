@@ -36,6 +36,7 @@ export const REMOTE = Object.freeze({
         paused: "Why the world's stopped ({ why, by }), or null while it's going",
         farBehind: "Whether it's fallen too far behind and is being brought up to date",
         received: "How many bytes it's heard, by kind (for the debug overlay)",
+        drawn: "Where to draw others from the world's frames ({ ready, of(id, now) }: core/drawn.js), or null where they're drawn from the copy",
     }),
     /** Set by the game, to be told. */
     hears: Object.freeze({

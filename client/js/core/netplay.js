@@ -120,6 +120,7 @@ import { BANES, MENDING, MERCENARY, pickOf, RENOWN, wearable } from "./followers
 import { levelOf } from "./gear.js";
 import { QUALITIES, thingOf } from "./progress.js";
 import { compareMotion, MOTION, packMotion, unpackMotion } from "./motion.js";
+import { Drawn } from "./drawn.js";
 import { Shadow } from "./shadow.js";
 import { SHADOW_KIND, VIEW_MODE, ViewFeed } from "./viewfeed.js";
 import { count, lap } from "./probe.js";
@@ -1972,6 +1973,12 @@ export class Joining {
         this.shadow = null;
 
         /**
+         * Where to draw others from its frames (core/drawn.js; the scaling plan's 3-19), while
+         * it's asked for (drawing): null, as it is unless it is.
+         */
+        this.drawn = null;
+
+        /**
          * The host's latest step heard; how late its steps come (ms: all but the latest few,
          * PLAYOUT); how many of them to keep in hand (`delay`), and how many it's had in hand
          * lately (`inHand`: smoothed, pace; not `held`, which is whether its player's menu holds
@@ -2251,9 +2258,28 @@ export class Joining {
         this.send(encode({ kind: SHADOW_KIND, shadow: Boolean(on) }));
     }
 
-    /** A frame come from the world (bytes: a Uint8Array), for the shadow if there's one; let go of otherwise. */
+    /**
+     * Have others drawn from this player's frames (`on`: core/drawn.js), or from the copy again.
+     * The frames are a shadow's, asked for with it if they aren't yet; the copy's played as ever.
+     */
+    drawing(on) {
+        this.drawn = on ? new Drawn({ stepMs: STEP_MS }) : null;
+
+        if (on && this.host) {
+            this.drawn.begin(this.host.battle.world);
+        }
+
+        // (Asked for afresh, so the frames begin again with who everyone is; a shadow that
+        // was there begins again with them)
+        if (on) {
+            this.shadowing(true);
+        }
+    }
+
+    /** A frame come from the world (bytes: a Uint8Array), for the shadow and the drawing if there are any; let go of otherwise. */
     frame(bytes) {
         this.shadow?.take(bytes);
+        this.drawn?.take(bytes, this.clock());
     }
 
     /** How many of the host's steps are waiting to be played. */
@@ -2430,6 +2456,7 @@ export class Joining {
                     // (The copy's side of the step, for its shadow's frame of it: a copy that's
                     // gone astray is the truth of nothing till the world's come again)
                     this.shadow?.stepped(this.host, this.me, events, { astray: this.astray });
+                    this.drawn?.begin(this.host.battle.world);
 
                     return events;
                 }

@@ -3932,6 +3932,32 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   - **Not yet:** whatever of these a game drawn from frames turns out to need differently
     (`3-24`, `3-25`), and the reads the game makes that aren't state but questions
     (`core/worldview.js` `READS`' asks).
+- **Others drawn from the mirror** (`core/drawn.js`, `core/playout.js`; the scaling plan's
+  `3-19`). A lockstep game can draw everyone but its own hero from its player's frames and
+  not from its copy, to set the two side by side. The copy's still played and is still the
+  truth of everything else.
+  - **In the game:** `?mirror` on the page's address, in a world on a server whose view feed
+    is dark. Off without it. It asks for the frames a shadow asks for.
+  - **A little behind the world** (`Playout`, `PLAYOUT`): the world's time is reckoned from
+    the frame that came soonest of the last 40, and everyone's drawn two steps behind that
+    and further by how late 95 in 100 frames come, between 100 and 400 ms. The time drawn
+    comes to a new delay a tenth faster or slower than the clock, never with a jump, unless
+    it's a second out (a page that was hidden).
+  - **Between two tellings** (`Ring`, `RING`): each is drawn between the tellings either
+    side of that time. Past the latest, one that was moving is carried on as it went for
+    250 ms at the most.
+  - **Placed** (`FIELD.placed`, `PLACED`): a record says so when its place is further off
+    than anyone goes in a step (3 m), as when someone's carried to a town or comes through
+    a door. It's then drawn there at once, never sliding over.
+  - **Coming and going:** someone the frames begin to tell of fades in over 300 ms, and one
+    they stop telling of fades out where it was. Someone the frames have never told of isn't
+    drawn at all, so what's missing from them shows.
+  - **Measured** in Node on a 300 ms round trip with 40 ms of jitter: a running player and
+    the townsfolk are drawn within 0.005 m (95 in 100 pictures; 0.09 m at the worst) of where
+    the world had them at the time drawn, 0.3 m allowed. Every step's frame told of them,
+    so it's the measure of the drawing and the clock, not yet of frames that tell less often.
+  - **Not yet:** the forecast forking from the mirror (`3-20`); and how it looks on a phone,
+    which is the owner's to say (P3).
 - **Who hears of what** (`core/eventscope.js`; the scaling plan's `3-15`). A lockstep copy plays
   the whole world and makes every event itself. A game sent views plays none of it, so it's told
   only the events that are its player's to hear. `SCOPES` gives each of the 184 kinds the battle

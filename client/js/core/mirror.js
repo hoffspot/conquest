@@ -7,14 +7,16 @@
 // of and taken out as they leave, so whatever reads a battle's characters reads these. Each has
 // a ring of where it's lately been told it was, to be drawn from a little behind the world
 // (RING.delay), between two tellings and not at the latest, so it moves evenly however the
-// frames come.
+// frames come. A little past the latest it's carried on the way it was going (RING.carry), no
+// further; one that's been placed (a record's FIELD.placed) is there at once, never slid; and one
+// that's come or gone is faded in or out (RING.fade), to be asked for by its id (drawn).
 //
 // A character here has only what the wire's said of it (WIRED): its own state as the authority
 // alone keeps it (whom it's angry at, its way, when it may strike again) is never sent, and is
 // here as a character just made has it. `strict` has reading any of that throw, for the tests:
 // what a game drawn from frames reads of others must be something they're told.
 //
-// Not loaded by the game yet. Pure: no DOM, no network, no trigonometry.
+// Drawn from only where a game's asked to (app/mirrordraw.js, `?mirror`). Pure: no DOM, no network, no trigonometry.
 
 import { TAU } from "./exact.js";
 import { readPatches, Summary } from "./summary.js";
@@ -22,10 +24,12 @@ import { decodeFrame, GOING, NONE, VIEW, WHO } from "./view.js";
 
 /**
  * A character's ring: how many tellings of where it was are kept, and how far behind the world
- * it's drawn (ms, the world's time). Past the latest telling it stands where that was: carrying
- * it on the way it was going is for the slice that draws from this (3-19).
+ * it's drawn (ms, the world's time), where nothing's measured how late its frames come
+ * (core/playout.js does). Past the latest telling, one that was moving is carried on as it went
+ * between its last two for `carry` at the most, if those were no further apart than `apart`; and
+ * one come or gone is faded over `fade`.
  */
-export const RING = Object.freeze({ kept: 8, delay: 100 });
+export const RING = Object.freeze({ kept: 8, delay: 100, carry: 250, apart: 500, fade: 300 });
 
 /** What of a character the wire says: who it is (core/view.js WHO), and how it is, from its records. */
 export const WIRED = Object.freeze([...WHO, "x", "y", "facing", "running", "dead", "hp", "target"]);
@@ -48,18 +52,21 @@ export class Ring {
     // [{ time, x, y, heading }], the oldest first
     #told = [];
 
-    /** Told where it is as of `time` (ms, the world's): x, y (m), heading (a 256th of a turn). */
-    push(time, x, y, heading) {
+    /**
+     * Told where it is as of `time` (ms, the world's): x, y (m), heading (a 256th of a turn);
+     * whether it's moving; and whether it was placed there (set down, not walked).
+     */
+    push(time, x, y, heading, { moving = false, placed = false } = {}) {
         const last = this.#told.at(-1);
 
         // (Told again for the same time, or an earlier: the later telling stands)
         if (last && time <= last.time) {
-            Object.assign(last, { x, y, heading });
+            Object.assign(last, { x, y, heading, moving, placed: last.placed || placed });
 
             return;
         }
 
-        this.#told.push({ time, x, y, heading });
+        this.#told.push({ time, x, y, heading, moving, placed });
 
         if (this.#told.length > RING.kept) {
             this.#told.shift();
@@ -73,10 +80,12 @@ export class Ring {
 
     /**
      * Where it's drawn at `time`: between the two tellings either side of it; before the first,
-     * there; past the last, where it was last told. Null if it's never been told where it is.
-     * The heading turns the short way round.
+     * there; past the last, where it was last told, or, given `carry` (ms) and moving then,
+     * carried on as it went between its last two tellings for that long at the most. Never
+     * between a telling and one it was placed at: it's where it was till then, and there after.
+     * Null if it's never been told where it is. The heading turns the short way round.
      */
-    at(time) {
+    at(time, { carry = 0 } = {}) {
         const told = this.#told;
 
         if (!told.length) {
@@ -90,6 +99,10 @@ export class Ring {
         for (let k = 1; k < told.length; k++) {
             const [a, b] = [told[k - 1], told[k]];
 
+            if (time < b.time && b.placed) {
+                return { x: a.x, y: a.y, heading: a.heading };
+            }
+
             if (time <= b.time) {
                 const share = (time - a.time) / (b.time - a.time);
                 const turn = ((b.heading - a.heading + 384) % 256) - 128;
@@ -99,8 +112,20 @@ export class Ring {
         }
 
         const last = told.at(-1);
+        const before = told.at(-2);
+
+        if (carry > 0 && last.moving && !last.placed && before && last.time - before.time <= RING.apart) {
+            const share = Math.min(time - last.time, carry) / (last.time - before.time);
+
+            return { x: last.x + (last.x - before.x) * share, y: last.y + (last.y - before.y) * share, heading: last.heading };
+        }
 
         return { x: last.x, y: last.y, heading: last.heading };
+    }
+
+    /** Everything it was told let go of (it's somewhere else altogether: another map). */
+    clear() {
+        this.#told = [];
     }
 }
 
@@ -145,7 +170,18 @@ export class Mirror {
 
         /** How many frames it's taken. */
         this.frames = 0;
+
+        /**
+         * Those who've lately left, by id: { ring, map, at (ms, the world's: when they left) },
+         * kept while they fade (RING.fade) and let go of a while after.
+         */
+        this.gone = new Map();
+
+        // Those it knows of, by id
+        this.#byId = new Map();
     }
+
+    #byId;
 
     /**
      * A frame taken: those who've left taken out, those who've come added, how each is set on
@@ -175,11 +211,18 @@ export class Mirror {
         }
 
         for (const index of frame.leaves) {
-            this.#leave(index);
+            this.#leave(index, time);
         }
 
         for (const [index, who] of enters) {
-            this.#enter(index, who);
+            this.#enter(index, who, time);
+        }
+
+        // (Those long gone let go of)
+        for (const [id, left] of this.gone) {
+            if (time - left.at > RING.fade * 4) {
+                this.gone.delete(id);
+            }
         }
 
         for (const record of frame.records) {
@@ -217,7 +260,7 @@ export class Mirror {
         return frame;
     }
 
-    #leave(index) {
+    #leave(index, time) {
         const entry = this.known[index];
 
         if (!entry) {
@@ -228,6 +271,8 @@ export class Mirror {
 
         this.battle.remove(entry.actor.id);
         this.known[index] = null;
+        this.#byId.delete(entry.actor.id);
+        this.gone.set(entry.actor.id, { ring: entry.ring, map: entry.actor.map, at: time });
 
         // (Whoever was aiming at them aims at no one it knows of)
         for (const other of this.known) {
@@ -238,13 +283,18 @@ export class Mirror {
         }
     }
 
-    #enter(index, who) {
+    #enter(index, who, time) {
         const entry = this.known[index];
 
         // (Told again who someone it knows of is: what's changed of them set)
         if (entry) {
             if (entry.who.id !== who.id) {
                 this.faults.push(`${index} is ${who.id}, and was ${entry.who.id} who never left`);
+            }
+
+            // (On another map now: nowhere it was told it was is on this one)
+            if (entry.who.map !== who.map) {
+                entry.ring.clear();
             }
 
             Object.assign(entry.actor, who);
@@ -256,7 +306,9 @@ export class Mirror {
         const actor = this.battle.add({ id: who.id, kind: who.kind, name: who.name, weapon: who.weapon ?? undefined, boots: who.boots ?? undefined, team: who.team, map: who.map, square: [0, 0], neutral: who.neutral ?? undefined, role: who.role ?? undefined, side: who.side ?? undefined });
 
         Object.assign(actor, who);
-        this.known[index] = { actor, who, ring: new Ring(), heading: 0, going: 0, speed: 0, health: 0, target: NONE };
+        this.known[index] = { actor, who, ring: new Ring(), since: time, heading: 0, going: 0, speed: 0, health: 0, target: NONE };
+        this.#byId.set(actor.id, this.known[index]);
+        this.gone.delete(actor.id);
     }
 
     #record({ index, ...told }, time) {
@@ -280,15 +332,15 @@ export class Mirror {
             actor.y = told.y / 100;
         }
 
-        if (told.x !== undefined || told.heading !== undefined) {
-            entry.ring.push(time, actor.x, actor.y, entry.heading);
-        }
-
         if (told.going !== undefined) {
             entry.going = told.going;
             entry.speed = told.speed;
             actor.running = Boolean(told.going & GOING.running);
             actor.dead = Boolean(told.going & GOING.dead);
+        }
+
+        if (told.x !== undefined || told.heading !== undefined || told.going !== undefined) {
+            entry.ring.push(time, actor.x, actor.y, entry.heading, { moving: Boolean(entry.going & GOING.moving), placed: Boolean(told.placed) });
         }
 
         if (told.health !== undefined) {
@@ -340,5 +392,26 @@ export class Mirror {
      */
     where(index, time) {
         return this.known[index]?.ring.at(time - RING.delay) ?? null;
+    }
+
+    /**
+     * How to draw the character with an id at a playout time (ms, the world's, already as far
+     * behind it as it's to be drawn: core/playout.js): { x, y, heading (a 256th of a turn), map,
+     * alpha (0 to 1: fading in from when it came, out from when it left), known (whether it's
+     * still known of) }. Carried on past its latest telling for RING.carry at the most. Null for
+     * one never told of, long gone, or never told where it is.
+     */
+    drawn(id, time) {
+        const entry = this.#byId.get(id);
+        const left = entry ? null : this.gone.get(id);
+        const at = (entry ?? left)?.ring.at(time, { carry: entry ? RING.carry : 0 });
+
+        if (!at) {
+            return null;
+        }
+
+        const alpha = entry ? (time - entry.since) / RING.fade : 1 - (time - left.at) / RING.fade;
+
+        return { ...at, map: entry ? entry.actor.map : left.map, alpha: Math.max(0, Math.min(1, alpha)), known: Boolean(entry) };
     }
 }

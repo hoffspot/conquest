@@ -5239,6 +5239,13 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
                 still: () => state.together === joined,
             });
         }
+
+        // (`?mirror`: others drawn from this player's frames and not from the copy, to set the
+        // two side by side; the frames asked for with it, if `?shadow` hasn't: core/drawn.js,
+        // the scaling plan's 3-19. Asked again with each welcome, as the shadow is)
+        if (params.has("mirror")) {
+            joined.joining.drawing(true);
+        }
     };
     joined.joining.onState = () => {
         fetcher.hold("the world again", { for: 5000 });

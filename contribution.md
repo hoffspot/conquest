@@ -662,6 +662,11 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
        or a crowd; `MIRROR_TALLY=1 node test/<file>.test.js` says whether its mirrors had work.
        A field of a character that a game drawn from frames must read goes in `WHO` or a
        record (`client/js/core/view.js`) and in `WIRED` (`client/js/core/mirror.js`) together.
+     - What the game draws of others from frames goes through `client/js/core/drawn.js`
+       (`?mirror`; the link seam's `drawn`, `client/js/core/remote.js`). A change to how they're
+       timed or drawn (`client/js/core/playout.js`, `Ring` in `client/js/core/mirror.js`) keeps
+       `test/drawn.test.js`'s measure: within 0.3 m, 95 in 100, on a 300 ms round trip with
+       40 ms of jitter (`DRAWN_TALLY=1 node --test test/drawn.test.js` prints it).
      - Something new the world keeps that a game shows of the world at large (not of a
        character in sight) is given a part in `client/js/core/summary.js` (`worldParts` for
        what's everyone's, `ownParts` for one player's), or a game sent views never hears of it;

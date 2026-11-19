@@ -374,6 +374,9 @@ const FOCUS_EASE = 6;
 // How far the camera's eased height may lag under the ground the player's climbing (metres)
 const FOCUS_LAG = 0.2;
 
+// Someone a game drawn from its frames (`?mirror`) hasn't been told of: not to be seen
+const MIRROR_UNSEEN = Object.freeze({ x: 0, y: 0, heading: 0, map: null, alpha: 0, known: false });
+
 // How long the shadow under someone takes to fade once they've hit the ground (s): they lie flat
 const CONTACT_FADES = 0.6;
 
@@ -4678,9 +4681,15 @@ export class Game {
                 continue;
             }
 
+            // (`?mirror`: others drawn where this player's frames say they are, and not at all
+            // where they don't say: core/drawn.js, the scaling plan's 3-19. The copy's still
+            // played, and is where everything else of them is from)
+            const told = this.remote?.drawn?.ready && actor !== mine ? (this.remote.drawn.of(actor.id, this.remote.clock()) ?? MIRROR_UNSEEN) : null;
+            const shown = !told || (told.alpha > 0 && told.map === actor.map);
+
             // (Only those on the player's map are seen, and moved; and out in the world, only
             // those near them)
-            if (!this.#inSight(actor, mine)) {
+            if (!shown || !this.#inSight(actor, mine)) {
                 avatar.object.visible = false;
 
                 if (this.thronged.has(actor.id)) {
@@ -4698,6 +4707,13 @@ export class Game {
             // (Joined: their own hero drawn where the rules will have them as soon as what's sent
             // now is done, ahead of the copy, facing as they'll face, swinging and casting as they
             // begin to there: app/forecast.js)
+            if (told) {
+                [x, z, facing] = [told.x, told.y, (told.heading * Math.PI) / 128];
+                this.#faded(avatar, told.alpha);
+            } else if (avatar.faded !== undefined) {
+                this.#faded(avatar, 1);
+            }
+
             if (actor === mine && this.forecast) {
                 const place = this.forecast.at(battle, this.me, this.remote.clock(), this.remote.lately ?? undefined);
 
@@ -18054,6 +18070,37 @@ export class Game {
             this.sigil.end(change, this.battle.time);
             this.sound?.play("chainBroken");
         }
+    }
+
+    // Someone coming into what a game drawn from frames is told of, or going out of it (`?mirror`:
+    // core/drawn.js): seen through as they do, by `alpha` (1: as they are). Their materials made
+    // their own while they are, as someone unseen's (#unseen, which this leaves alone)
+    #faded(avatar, alpha) {
+        if (avatar.unseen || (avatar.faded ?? 1) === alpha) {
+            return;
+        }
+
+        avatar.faded = alpha;
+        avatar.object.traverse((part) => {
+            if (part.material && !part.userData.ownMaterial) {
+                part.material = Array.isArray(part.material) ? part.material.map((each) => each.clone()) : part.material.clone();
+                part.userData.ownMaterial = true;
+            }
+
+            for (const material of [part.material].flat().filter(Boolean)) {
+                material.userData.opacity ??= material.opacity;
+                material.userData.transparent ??= material.transparent;
+
+                const clear = alpha < 1 || material.userData.transparent;
+
+                if (material.transparent !== clear) {
+                    material.transparent = clear;
+                    material.needsUpdate = true;
+                }
+
+                material.opacity = material.userData.opacity * alpha;
+            }
+        });
     }
 
     // Someone unseen (Invisibility): all but gone, a shimmer of them (their materials made their

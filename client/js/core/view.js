@@ -27,6 +27,9 @@
 //   health   uint8    a 255th of its most; 0 only when it has none
 //   target   uint8    its target's index among those the player knows of (NONE: none, or unknown)
 //
+// FIELD.placed adds nothing after it: it says the place in this record is one the character was
+// set at (carried to a town, come through a door), not one it walked to.
+//
 // A section is what else a player's told in a step, each at most once a frame, in this order:
 //
 //   tag      uint8    SECTION: events, done, self, enters, own or world
@@ -69,7 +72,14 @@ export const VIEW_VERSION = 1;
 export const VIEW = Object.freeze({ origin: 64, lead: 320, frame: 1500, budget: 640, most: 256, header: 13 });
 
 /** A record's mask: which fields follow. */
-export const FIELD = Object.freeze({ place: 1, heading: 2, going: 4, health: 8, target: 16, far: 32 });
+export const FIELD = Object.freeze({ place: 1, heading: 2, going: 4, health: 8, target: 16, far: 32, placed: 64 });
+
+/**
+ * How far a character goes in a step before it's been placed, not walked (cm, along either axis:
+ * none is so fast): a record of where it is then says so (FIELD.placed), so no one draws it
+ * sliding there (core/mirror.js).
+ */
+export const PLACED = 300;
 
 /** How a character's going, as flags. */
 export const GOING = Object.freeze({ moving: 1, running: 2, fighting: 4, dead: 8 });
@@ -124,7 +134,7 @@ export function healthOf(hp, most) {
 /** The origin of a frame for a hero standing at a spot (m): [ox, oy], squares of VIEW.origin metres. */
 export const originFor = (x, y) => [Math.floor((x - VIEW.lead) / VIEW.origin), Math.floor((y - VIEW.lead) / VIEW.origin)];
 
-const CHANGES = ["place", "heading", "going", "health", "target"];
+const CHANGES = ["place", "heading", "going", "health", "target", "placed"];
 
 /**
  * How a character is, as a record says it: { x, y (cm), heading, going, speed, health, target
@@ -247,6 +257,13 @@ export class ViewState {
         const { x, y, heading, going, speed, health, target } = quantised(battle, actor);
 
         if (first || this.x[slot] !== x || this.y[slot] !== y) {
+            // (Further than anyone goes in the steps since it was last looked at: set there)
+            const reach = PLACED * Math.max(1, step + 1 - this.seen[slot]);
+
+            if (!first && (Math.abs(x - this.x[slot]) > reach || Math.abs(y - this.y[slot]) > reach)) {
+                this.changed.placed[slot] = step;
+            }
+
             this.x[slot] = x;
             this.y[slot] = y;
             this.changed.place[slot] = step;
@@ -367,6 +384,11 @@ export function encodeFrame(state, { step, origin, leaves = [], known = [], inde
             if (state.changed[field][slot] > sent) {
                 mask |= FIELD[field];
             }
+        }
+
+        // (Placed is said of a place, and only with one)
+        if (!(mask & FIELD.place)) {
+            mask &= ~FIELD.placed;
         }
 
         if (mask & FIELD.place) {
@@ -507,7 +529,7 @@ export function decodeFrame(bytes) {
         const mask = view.getUint8(at + 1);
 
         // (A mask that says nothing, far with no place, or what this version doesn't know)
-        if (mask === 0 || (mask & ~63) !== 0 || (mask & FIELD.far && !(mask & FIELD.place)) || at + sizeOf(mask) > bytes.length) {
+        if (mask === 0 || (mask & ~127) !== 0 || (mask & (FIELD.far | FIELD.placed) && !(mask & FIELD.place)) || at + sizeOf(mask) > bytes.length) {
             return null;
         }
 
@@ -523,6 +545,10 @@ export function decodeFrame(bytes) {
             record.x = baseX + view.getUint16(at, true);
             record.y = baseY + view.getUint16(at + 2, true);
             at += 4;
+        }
+
+        if (mask & FIELD.placed) {
+            record.placed = true;
         }
 
         if (mask & FIELD.heading) {
