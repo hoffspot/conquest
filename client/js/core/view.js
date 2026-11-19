@@ -29,12 +29,16 @@
 //
 // A section is what else a player's told in a step, each at most once a frame, in this order:
 //
-//   tag      uint8    SECTION: events, done or self
+//   tag      uint8    SECTION: events, done, self or enters
 //   length   uint16   how many bytes follow
 //   ...               events: the step's events that are this player's to hear, as JSON text
 //                     (an array; core/eventscope.js says whose each is). done: uint32, the last
 //                     of the player's commands the world has done. self: what the player alone
-//                     knows of their hero (core/selfstate.js selfOf), as JSON text
+//                     knows of their hero (core/selfstate.js selfOf), as JSON text. enters:
+//                     who's come into the player's known set, as JSON text: [[index, who], ...]
+//                     (whoOf: who each is, where a record says only how they are).
+//                     Whoever reads a frame takes its leaves first, then its enters, then its
+//                     records, wherever each lies in it
 //
 // A place is where it is, never how far it's moved: a record means the same whatever was sent
 // before it, so one that's dropped, or never sent to a player who came late, is made up for by
@@ -68,11 +72,30 @@ export const FIELD = Object.freeze({ place: 1, heading: 2, going: 4, health: 8, 
 export const GOING = Object.freeze({ moving: 1, running: 2, fighting: 4, dead: 8 });
 
 /** A frame's sections, by tag: what else a player's told beside those they know of. */
-export const SECTION = Object.freeze({ events: 1, done: 2, self: 3 });
+export const SECTION = Object.freeze({ events: 1, done: 2, self: 3, enters: 4 });
+
+const TEXTS = Object.freeze({ [SECTION.events]: "events", [SECTION.self]: "self", [SECTION.enters]: "enters" });
 
 const TAGS = new Set(Object.values(SECTION));
 const utf8 = new TextEncoder();
 const text = new TextDecoder("utf-8", { fatal: true });
+
+/**
+ * Who a character is, as a player's told when it comes into their known set: what of it a
+ * record never says and seldom changes. Told again, for the same index, if any of it does.
+ */
+export const WHO = Object.freeze(["id", "kind", "name", "team", "map", "weapon", "boots", "neutral", "role", "side", "maxHp"]);
+
+/** A character's WHO, as it's told: { id, kind, ... }. */
+export function whoOf(actor) {
+    const who = {};
+
+    for (const field of WHO) {
+        who[field] = actor[field] ?? null;
+    }
+
+    return who;
+}
 
 /** A target that's no one, or no one the player knows of. */
 export const NONE = 255;
@@ -273,8 +296,9 @@ function sizeOf(mask) {
  * @param {number} [frame.budget] - How many bytes it may take (no more than VIEW.frame). With
  *     more to tell than fits, those longest untold go first (then by index), and the rest wait:
  *     no one who's changing is left out for good.
- * @param {{ events?: string, done?: number, self?: string }} [frame.sections] - What else to
- *     tell: the events' JSON text, the last command done, the hero's own state's JSON text.
+ * @param {{ events?: string, done?: number, self?: string, enters?: string }} [frame.sections] -
+ *     What else to tell: the events' JSON text, the last command done, the hero's own state's
+ *     JSON text, who's come into the known set (JSON text).
  *     Always told, whatever the budget (whoever gives them keeps them within a frame); the
  *     records have what room they leave.
  * @returns {{ bytes: Uint8Array | null, told: number[] }} `bytes` is null with nothing to tell
@@ -298,6 +322,10 @@ export function encodeFrame(state, { step, origin, leaves = [], known = [], inde
 
     if (sections?.self !== undefined) {
         extra.push([SECTION.self, utf8.encode(sections.self)]);
+    }
+
+    if (sections?.enters !== undefined) {
+        extra.push([SECTION.enters, utf8.encode(sections.enters)]);
     }
 
     const more = extra.reduce((sum, [, bytes]) => sum + 3 + bytes.length, 0);
@@ -415,7 +443,7 @@ export function encodeFrame(state, { step, origin, leaves = [], known = [], inde
 /**
  * A frame read back: { version, step, origin: [ox, oy], leaves: [index], records: [{ index,
  * x, y (cm, from the map's nought), heading, going, speed, health, target }], sections: { events
- * (JSON text), done (a number), self (JSON text) } }, each record with only the fields it was
+ * (JSON text), done (a number), self (JSON text), enters (JSON text) } }, each record with only the fields it was
  * sent and only the sections there were. Null for bytes that aren't a frame of this version, are cut short,
  * or run on past their end: never thrown on, whatever they are.
  */
@@ -513,7 +541,7 @@ export function decodeFrame(bytes) {
             if (tag === SECTION.done) {
                 sections.done = view.getUint32(at + 3, true);
             } else {
-                sections[tag === SECTION.events ? "events" : "self"] = text.decode(held);
+                sections[TEXTS[tag]] = text.decode(held);
             }
         } catch {
             return null;
