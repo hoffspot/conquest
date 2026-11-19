@@ -18,6 +18,17 @@ import { ViewFeed } from "../client/js/core/viewfeed.js";
 
 const FIELDS = ["place", "heading", "going", "health", "target"];
 
+/**
+ * What every mirror made in this process has done, in all: the hosts mirrored, the times they
+ * were held to their worlds, the frames taken, the most any mirror knew of at once.
+ * `MIRROR_TALLY=1` says it as the process ends, to see that a test file's mirrors had work.
+ */
+export const tally = { hosts: 0, checked: 0, frames: 0, most: 0 };
+
+if (process.env.MIRROR_TALLY) {
+    process.on("exit", () => console.log(`mirrors: ${JSON.stringify(tally)}`));
+}
+
 /** How a player's mirror and the world differ, as lines: none, if they agree. */
 export function mismatches(host, feed, mirrors) {
     const found = [];
@@ -118,7 +129,11 @@ export function mirrored(host, { budget = null } = {}) {
         }
 
         assert.ok(mirrors.get(id).apply(bytes), `${id}'s mirror couldn't read a frame`);
+        tally.frames++;
+        tally.most = Math.max(tally.most, mirrors.get(id).size);
     };
+
+    tally.hosts++;
 
     // (Not a field of the host's that anything that goes through its fields would find)
     Object.defineProperty(host, "advance", {
@@ -134,6 +149,7 @@ export function mirrored(host, { budget = null } = {}) {
             const found = mismatches(host, feed, mirrors);
 
             told.checked++;
+            tally.checked++;
             assert.deepEqual(found.slice(0, 8), [], `a mirror and the world disagree at ${host.battle.time} ms (${found.length} ways)`);
 
             return events;

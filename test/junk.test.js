@@ -27,6 +27,7 @@ import { createRandom } from "../client/js/core/random.js";
 import { makeUnique } from "../client/js/core/rare.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { KeptHeroes } from "../server/storage/heroes.js";
+import { mirrored } from "./replicated.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 const stack = (id, count = 1, quality = "common") => ({ ...thingOf({ id, quality }), count });
@@ -50,6 +51,9 @@ const put = (actor, map, [x, y]) => Object.assign(actor, { map, square: [x, y], 
 // a character brings them), the orc out of the way
 function hosted({ pack = [], gold = 0, skills = {}, followers = [] } = {}) {
     const host = new Host(buildWorld({ seed: 2 }), { populate: false });
+
+    // (And every player's mirror held to it as it's played: test/replicated.js)
+    mirrored(host);
 
     host.join({ id: HOST_PLAYER, hero: HERO, progress: { gold, pack, skills, gear: { mainHand: { id: HERO.weapon } } }, followers });
     host.populate();

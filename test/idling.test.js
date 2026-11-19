@@ -26,6 +26,7 @@ import { install, lap, Probes, uninstall } from "../client/js/core/probe.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { generateWorld } from "../client/js/core/world.js";
 import { lookIn, unexpired } from "./helpers.js";
+import { mirrored } from "./replicated.js";
 
 // Battle.idling's expiry (contribution.md, section 3, *Two netcodes side by side*): off, it plays
 // the rule the owner changed, not the same battle, so it's to be taken out once nothing's left
@@ -533,6 +534,9 @@ const insideOf = (host) => [...new Set(host.battle.actors.filter((actor) => acto
 // (core/host.js Host.peopling, plan 1-23), and they're kept while the player's at the door
 function atTheDoor(seconds = 2) {
     const host = new Host(buildWorld({ seed: 2 }), { populate: false });
+
+    // (And every player's mirror held to it as it's played: test/replicated.js)
+    mirrored(host);
 
     host.join({ id: HOST_PLAYER, hero: HERO });
     host.populate();

@@ -25,6 +25,7 @@ import { navigatorOf } from "../client/js/core/navigation.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { AMBUSH } from "../client/js/core/ambush.js";
 import { lookPrint } from "../client/js/world/tracks3d.js";
+import { mirrored } from "./replicated.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 
@@ -45,6 +46,9 @@ const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5
 function hosted(deck) {
     const world = buildWorld({ seed: 2 });
     const host = new Host(world, { populate: false });
+
+    // (And every player's mirror held to it as it's played: test/replicated.js)
+    mirrored(host);
 
     host.join({ id: HOST_PLAYER, hero: HERO });
     host.populate();

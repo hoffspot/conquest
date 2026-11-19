@@ -17,6 +17,7 @@ import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
 import { TOWNSFOLK_REACH } from "../client/js/core/townsfolk.js";
 import { postsOf } from "../client/js/core/war/muster.js";
 import { encode } from "../client/js/core/wire.js";
+import { mirrored } from "./replicated.js";
 
 const HERO = Object.freeze({ name: "Ada", race: "human", shape: {}, look: {}, weapon: "sword", boots: false });
 const CITY = "human-city-1";
@@ -29,6 +30,9 @@ function worldNear(id, off) {
     const place = world.plan.places.find((each) => each.id === id) ?? world.plan.sites.find((each) => each.id === id);
     const edge = SETTLEMENT_KINDS[place.kind]?.radius ?? 0;
     const host = new Host(world, { populate: false });
+
+    // (And every player's mirror held to it as it's played: test/replicated.js)
+    mirrored(host);
     const at = (metres) => nearestFree(squaresOf(overworld), [Math.round(place.at[0] - edge - metres), Math.round(place.at[1])], { within: 40 });
     const game = { world, overworld, host, place, edge, at, events: [], inSteps: 0, stepping: false };
     const groundChunk = overworld.ground.chunk.bind(overworld.ground);

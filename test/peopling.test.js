@@ -22,6 +22,7 @@ import { buildWorld } from "../client/js/core/overworld.js";
 import { install, Probes, uninstall } from "../client/js/core/probe.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { unexpired } from "./helpers.js";
+import { mirrored } from "./replicated.js";
 
 // Host.peopling's expiry (contribution.md, section 3, *Two netcodes side by side*): off, it plays
 // the rule the owner changed, not the same battle, so it's to be taken out once nothing's left
@@ -58,6 +59,9 @@ const standingOf = (actor) => JSON.stringify({ ...actor, lookAt: null, rethinkAt
 function town({ guests = [] } = {}) {
     const world = buildWorld({ seed: 2 });
     const host = new Host(world, { populate: false });
+
+    // (And every player's mirror held to it as it's played: test/replicated.js)
+    mirrored(host);
 
     host.join({ id: HOST_PLAYER, hero: HERO });
 

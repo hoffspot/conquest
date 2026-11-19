@@ -23,6 +23,7 @@ import { createRandom } from "../client/js/core/random.js";
 import { TURN_MS, War } from "../client/js/core/war/war.js";
 import { encode } from "../client/js/core/wire.js";
 import { Ahead } from "../server/ahead.js";
+import { mirrored } from "./replicated.js";
 
 const HERO = Object.freeze({ name: "Ada", race: "human", shape: {}, look: {}, weapon: "sword", boots: false });
 
@@ -55,6 +56,9 @@ function play({ ahead, each = null }) {
     const overworld = world.maps.town;
     const navigation = navigatorOf(overworld);
     const host = new Host(world, { populate: false });
+
+    // (And every player's mirror held to it as it's played: test/replicated.js)
+    mirrored(host);
 
     host.populate();
 

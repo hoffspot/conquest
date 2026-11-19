@@ -14,6 +14,7 @@ import { CHECK_EVERY } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { joinWorld, LINK_TIMING, openWorld } from "../client/js/app/together.js";
 import { attachRelay, RELAY_LIMITS, RELAY_PATH } from "../server/relay.js";
+import { mirrored } from "./replicated.js";
 
 // (Everything quick: pings every 50 ms, a link given up on after 200 ms unanswered)
 const TIMING = Object.freeze({ ...LINK_TIMING, ping: 50, patience: 200, first: 20, most: 100, within: 3000 });
@@ -51,6 +52,9 @@ async function until(check, ms = 3000) {
 // what each hears of their link, and the joined game's states and drops
 async function together() {
     const host = new Host(buildWorld({ seed: 2 }), { populate: false });
+
+    // (And every player's mirror held to it as it's played: test/replicated.js)
+    mirrored(host);
 
     host.join({ id: HOST_PLAYER, hero: HERO });
     host.populate();
