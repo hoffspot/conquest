@@ -242,6 +242,9 @@ export class WorldRunner {
         const started = this.clock?.();
         const events = this.host.advance(STEP_MS);
 
+        // (The step's events, for the view feed's frames where it's run: core/viewfeed.js)
+        this.hosting?.views?.heard(events);
+
         if (this.times) {
             this.times.add(this.clock() - started, this.host.battle.time);
         }
