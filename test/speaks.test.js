@@ -34,9 +34,9 @@ function opened() {
 }
 
 describe("what a game says it speaks (netplay.js SPEAKS)", () => {
-    it("is lockstep, the only netcode there is, and a game that says nothing speaks lockstep alone", () => {
-        assert.deepEqual([...NETCODES], ["lockstep"]);
-        assert.deepEqual([...SPEAKS], ["lockstep"]);
+    it("is lockstep and replicated, the two netcodes there are, and a game that says nothing speaks lockstep alone", () => {
+        assert.deepEqual([...NETCODES], ["lockstep", "replicated"]);
+        assert.deepEqual([...SPEAKS], ["lockstep", "replicated"]);
         assert.deepEqual(speaksOf(undefined), ["lockstep"]);
         assert.deepEqual(speaksOf(null), ["lockstep"]);
         assert.deepEqual(speaksOf("views"), ["lockstep"]);
@@ -55,7 +55,8 @@ describe("what a game says it speaks (netplay.js SPEAKS)", () => {
         joining.hello(guest("Bryn"));
         assert.equal(said[0].kind, "hello");
         assert.equal(said[0].version, NET_VERSION);
-        assert.deepEqual(said[0].speaks, ["lockstep"]);
+        assert.deepEqual(said[0].speaks, ["lockstep", "replicated"]);
+        assert.equal(said[0].mode, undefined, "and asks for the whole world, as lockstep does");
     });
 
     it("lets into a lockstep world a game that says nothing, one that says lockstep, and one that speaks more besides", () => {
