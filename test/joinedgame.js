@@ -9,6 +9,7 @@
 import { STEP_MS } from "../client/js/core/battle.js";
 import { Host } from "../client/js/core/host.js";
 import { Hosting, Joining, PACE } from "../client/js/core/netplay.js";
+import { Viewing } from "../client/js/core/viewing.js";
 import { Forecast } from "../client/js/app/forecast.js";
 import { BadLink } from "./badlink.js";
 
@@ -28,7 +29,7 @@ const STICK = Object.freeze({ turned: 0.12, again: 500, reach: 30 });
  * of their Action Bar, and how their swings and casts were shown (`shown`: begun by the
  * forecast, the copy's of those claimed, and the copy's shown late, none begun by the forecast).
  */
-export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40, stall = 0.01, ms = 8000, stick = () => null, actions = [], setup = null, stickOptions = STICK, mirror = false }) {
+export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40, stall = 0.01, ms = 8000, stick = () => null, actions = [], setup = null, stickOptions = STICK, mirror = false, replicated = false }) {
     const host = new Host(world, { populate: false });
 
     host.join({ id: "host", hero: { name: "Host", shape: {}, look: {}, weapon: "sword", boots: false } });
@@ -43,16 +44,23 @@ export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40
     };
     // (`mirror`: the world's view feed dark, its frames sent down the same link as bytes, and the
     // joined game drawing from them, its hero looked ahead from its mirror: the scaling plan's 3-20)
-    const hosting = new Hosting(host, { send: (peer, text) => send("down", text), ...(mirror ? { sendBinary: (peer, bytes) => send("down", Uint8Array.from(bytes)) } : {}) });
+    const hosting = new Hosting(host, { send: (peer, text) => send("down", text), ...(mirror || replicated ? { sendBinary: (peer, bytes) => send("down", Uint8Array.from(bytes)) } : {}) });
 
     if (mirror) {
         hosting.views.mode = "dark";
     }
 
-    const joining = new Joining({ send: (text) => send("up", text), clock: () => now });
+    // (`replicated`: the world played from views alone, the joined game a link with no copy of
+    // it, kept by its frames, its hero looked ahead over its mirror: the scaling plan's 3-22)
+    if (replicated) {
+        hosting.session.netcode = "replicated";
+        hosting.views.mode = "on";
+    }
+
+    const joining = new (replicated ? Viewing : Joining)({ send: (text) => send("up", text), clock: () => now });
     let hostAt = 0;
 
-    joining.onWelcome = ({ snapshot }) => joining.attach(Host.restore(copyWorld, snapshot));
+    joining.onWelcome = (welcome) => (replicated ? joining.attach(new Host(copyWorld, { populate: false }), welcome) : joining.attach(Host.restore(copyWorld, welcome.snapshot)));
     joining.hello(character);
 
     const deliver = () => {
@@ -73,21 +81,26 @@ export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40
     const hostTick = () => {
         while (hostAt + STEP_MS <= now) {
             hostAt += STEP_MS;
-            host.advance(STEP_MS);
+            // (As core/runner.js plays a world: the step's events told the view feed)
+            hosting.views.heard(host.advance(STEP_MS));
             hosting.flush();
         }
     };
 
-    for (; now < 3000 && !joining.host; now += FRAME) {
+    for (; now < 3000 && !(joining.host && (!replicated || joining.host.battle.actor(joining.me))); now += FRAME) {
         hostTick();
         deliver();
     }
+
+    // (What a test sets on the copy as on the world: there's no copy of a replicated world to
+    // set it on, so it's set on the world alone, and the frames say so)
+    const copyHost = replicated ? host : joining.host;
 
     const me = joining.me;
     const copy = () => joining.host.battle.actor(me);
     const truth = () => host.battle.actor(me);
 
-    setup?.({ host, copyHost: joining.host, me });
+    setup?.({ host, copyHost, me });
 
     const forecast = new Forecast();
 
@@ -168,12 +181,18 @@ export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40
             if (action.when) {
                 if (t - (action.last ?? -Infinity) >= action.every && action.when({ copy: copy(), host, t })) {
                     action.last = t;
-                    action.prep?.({ host, copyHost: joining.host, me });
-                    command(action.command);
+                    action.prep?.({ host, copyHost, me });
+
+                    // (One with no command only watches: told the forecast as it stands)
+                    if (action.command) {
+                        command(action.command);
+                    } else {
+                        action.watch?.({ forecast, t, host });
+                    }
                 }
             } else if (t >= action.at && !fired.has(k)) {
                 fired.add(k);
-                action.prep?.({ host, copyHost: joining.host, me });
+                action.prep?.({ host, copyHost, me });
                 command(action.command);
             }
         }

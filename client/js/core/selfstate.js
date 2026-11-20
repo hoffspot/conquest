@@ -27,8 +27,16 @@ const cm = (value) => round(value, 2);
 // second, breath to a tenth)
 const ROUNDED = { facing: 3, pace: 2, stamina: 1 };
 
-/** A hero's own state, as it's sent: plain data. */
-export function selfOf(actor) {
+/**
+ * What more of a hero's goes to a game that holds no copy of the world (core/viewing.js; the
+ * scaling plan's 3-22), which a copy has for itself: when they may next cast (any spell, and
+ * each), and the most breath they have. Said only where it's asked for (selfOf `whole`), and
+ * taken only where it's said (withSelf): a lockstep game's word of its hero is as it was.
+ */
+export const SELF_MORE = Object.freeze(["spellReadyAt", "spellsReadyAt", "maxStamina"]);
+
+/** A hero's own state, as it's sent: plain data. `whole`: with what a game that holds no copy needs too (SELF_MORE). */
+export function selfOf(actor, { whole = false } = {}) {
     const self = { x: cm(actor.x), y: cm(actor.y), path: actor.path.slice(0, SELF_CORNERS).map(([x, y]) => [cm(x), cm(y)]) };
 
     for (const [key, unsaid] of Object.entries(KEPT)) {
@@ -42,6 +50,14 @@ export function selfOf(actor) {
     // (A swing: which of their attacks it is, by name, its own being the copy's)
     if (actor.attack) {
         self.attack = { id: actor.attack.attack.id, target: actor.attack.target, start: actor.attack.start, struck: actor.attack.struck, ...(actor.attack.ahead === undefined ? {} : { ahead: actor.attack.ahead }) };
+    }
+
+    if (whole) {
+        for (const key of SELF_MORE) {
+            if (actor[key] !== undefined && actor[key] !== null) {
+                self[key] = actor[key];
+            }
+        }
     }
 
     return self;
@@ -60,6 +76,13 @@ export function placeOf(self) {
 export function withSelf(actor, self) {
     for (const [key, unsaid] of Object.entries(KEPT)) {
         actor[key] = key in self ? structuredClone(self[key]) : unsaid;
+    }
+
+    // (What a copy has for itself: set only where it's said, to a game with no copy)
+    for (const key of SELF_MORE) {
+        if (key in self) {
+            actor[key] = structuredClone(self[key]);
+        }
     }
 
     actor.x = self.x;

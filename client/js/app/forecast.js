@@ -111,6 +111,10 @@ export class Forecast {
         this.shown = [];
         this.present = null;
         this.casting = null;
+
+        /** Their breath in that present, and the most they have: null where nothing's looked ahead. */
+        this.stamina = null;
+        this.maxStamina = null;
     }
 
     /** The host's word of the hero (Joining.self). */
@@ -167,7 +171,7 @@ export class Forecast {
 
         if (!self || self.hero.dead) {
             this.track = this.old = null;
-            this.present = this.casting = null;
+            this.present = this.casting = this.stamina = null;
 
             return null;
         }
@@ -184,7 +188,7 @@ export class Forecast {
             this.track = this.#made(copy, me, trip, now);
 
             if (!this.track) {
-                this.present = this.casting = null;
+                this.present = this.casting = this.stamina = null;
 
                 return null;
             }
@@ -203,6 +207,8 @@ export class Forecast {
 
         this.present = present;
         this.casting = place.casting;
+        this.stamina = place.stamina ?? null;
+        this.maxStamina = this.track.battle.actor(me)?.maxStamina ?? null;
 
         return { x: place.x + this.gap[0] * left, y: place.y + this.gap[1] * left, map: place.map, facing: place.facing, acting: place.acting, begun: this.#begun(this.track, present) };
     }
@@ -334,7 +340,7 @@ export class Forecast {
     // How a hero of a look ahead's stands: which way they face, whether they're swinging or casting,
     // and what spell
     #doing(hero) {
-        return { facing: hero.facing, acting: Boolean(hero.attack || hero.casting), casting: hero.casting?.spell ?? null };
+        return { facing: hero.facing, acting: Boolean(hero.attack || hero.casting), casting: hero.casting?.spell ?? null, stamina: hero.stamina };
     }
 
     // A look ahead stepped on till it's past `present` (FORECAST.ahead steps at most): each command given
@@ -450,11 +456,21 @@ export class Forecast {
         const before = steps[Math.max(0, k - 1)];
 
         if (before === after || before.map !== after.map || after.time <= before.time) {
-            return { x: after.x, y: after.y, map: after.map, facing: after.facing, acting: after.acting, casting: after.casting };
+            return { x: after.x, y: after.y, map: after.map, facing: after.facing, acting: after.acting, casting: after.casting, stamina: after.stamina };
         }
 
         const share = Math.max(0, Math.min(1, (time - before.time) / (after.time - before.time)));
 
-        return { x: before.x + (after.x - before.x) * share, y: before.y + (after.y - before.y) * share, map: after.map, facing: after.facing, acting: after.acting, casting: after.casting };
+        return { x: before.x + (after.x - before.x) * share, y: before.y + (after.y - before.y) * share, map: after.map, facing: after.facing, acting: after.acting, casting: after.casting, stamina: after.stamina };
+    }
+
+    /**
+     * How much of a spell's cooldown is left for the hero in the present they were last drawn
+     * in (0 to 1, as Battle.cooldown gives it), a cast of theirs sent and not yet done counted
+     * as it will be: null where nothing's looked ahead. For a game that holds no copy of the
+     * world to ask (the scaling plan's 3-22).
+     */
+    cooldown(spell) {
+        return this.track && this.present !== null ? this.track.battle.cooldown(this.track.me, spell) : null;
     }
 }

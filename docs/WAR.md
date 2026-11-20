@@ -3988,11 +3988,21 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     frames come) and everyone's drawn between one step's place and the next's.
   - **What came of a command** is told its game in a message of its own (`result`), since no
     copy plays it.
-  - **Its own hero** is where the server last said, with nothing looked ahead: on a slow link
-    it answers the hand late. That's `3-22`.
+  - **Its own hero looked ahead** (the plan's `3-22`), as a lockstep game's is
+    (`app/forecast.js`): from what each frame says of them and of the world's time, taken as
+    the frame comes and not when it's played, over the mirror's battle. No message of the hero
+    is sent beside the frames. What a copy would have had for itself goes with it: when they
+    may next cast, and the most breath they have. In Node at 150 and 300 ms it's within the
+    limits a lockstep game's held to: 0.51 m from the host on the mean running at 150 ms
+    (0.48 in lockstep), 0.65 m at 300 ms (0.59).
+  - **Breath and cooldowns as they will be:** the HUD's breath is the look ahead's in the
+    present the hero's drawn in. A spell's cooldown is the look ahead's too, counted from the
+    moment the cast is sent. One of the Action Bar's blows cools from its press, till the
+    player's record says so or the world says it wasn't done. A lockstep game's are as they
+    were.
   - **The kill switch:** replication turned off, everyone in such a world is sent out and told
     why, and nobody's let in.
-  - **Not yet**, each a later slice's: the hero looked ahead (`3-22`); insides and dungeons
+  - **Not yet**, each a later slice's: insides and dungeons
     (`3-23`); parties, shops and the war table (`3-24`); the war, props, what's on the ground
     and what flies (`3-25`); a page hidden and shown, and coming back after a reload (`3-26`).
     What another player wears is as it was when they came into sight. Outside what's built,

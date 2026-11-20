@@ -1253,14 +1253,20 @@ export class Session {
                 continue;
             }
 
+            // (A game sent views has it in its frames (core/viewfeed.js: `self`, `done`, `asof`),
+            // with what a copy would have had for itself, and is sent no message of it)
+            const viewing = this.viewing.has(peer);
             const seq = this.done.get(peer) ?? 0;
-            const hero = encode(selfOf(actor));
+            const hero = encode(selfOf(actor, { whole: viewing }));
             const last = this.toldSelf.get(peer);
             const due = !last || seq !== last.seq || this.host.battle.time - last.time >= SELF.again || (step % SELF.every === 0 && hero !== last.hero);
 
             if (due) {
                 this.toldSelf.set(peer, { seq, hero, time: this.host.battle.time });
-                this.hosting.post(peer, "self", `{"kind":"self","step":${step},"time":${encode(this.host.battle.time)},"seq":${seq},"hero":${hero}}`);
+
+                if (!viewing) {
+                    this.hosting.post(peer, "self", `{"kind":"self","step":${step},"time":${encode(this.host.battle.time)},"seq":${seq},"hero":${hero}}`);
+                }
             }
         }
     }

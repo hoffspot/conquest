@@ -374,6 +374,10 @@ const FOCUS_EASE = 6;
 // How far the camera's eased height may lag under the ground the player's climbing (metres)
 const FOCUS_LAG = 0.2;
 
+// How near a blow's cooldown in the player's record must be to the one counted from its press
+// for the record's to be taken in its place (ms): a replicated world's, #cooldowns
+const PRESSED = Object.freeze({ near: 1500 });
+
 // Someone a game drawn from its frames (`?mirror`) hasn't been told of: not to be seen
 const MIRROR_UNSEEN = Object.freeze({ x: 0, y: 0, heading: 0, map: null, alpha: 0, known: false });
 
@@ -1377,7 +1381,7 @@ export class Game {
      *     (save.js loadTold: `#once`).
      * @param {Function} [options.onTold] - Hears them whenever there's another (to keep them).
      */
-    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, onPing = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, legends = null, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], roll = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {}, markers = [], onMarkers = () => {}, place = null, vitals = null, messages = [], onMessages = () => {}, told = [], onTold = () => {} }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, onPing = () => {}, host = null, me = HOST_PLAYER, viewed = false, war = null, onWar = () => {}, legends = null, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], roll = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {}, markers = [], onMarkers = () => {}, place = null, vitals = null, messages = [], onMessages = () => {}, told = [], onTold = () => {} }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
@@ -1442,6 +1446,17 @@ export class Game {
          * there is read, called or set here.
          */
         this.remote = remote;
+
+        /**
+         * Whether the world's a replicated one (core/viewing.js): this game holds no copy of it,
+         * so what a copy would have had of its own hero's breath and cooldowns is the look
+         * ahead's (app/forecast.js; the scaling plan's 3-22).
+         */
+        this.viewed = Boolean(viewed && remote);
+
+        // The Action Bar's blows pressed and not yet in the player's record: ability -> when
+        // it'll be ready again, as the look ahead has it (#cooldowns)
+        this.pressed = new Map();
         this.pingedAt = 0;
 
         /**
@@ -4808,7 +4823,13 @@ export class Game {
                 this.mounts.show(actor.id, map === this.mapId);
             }
 
-            hud.setStamina(actor.id, actor.stamina, actor.maxStamina);
+            // (Their own breath, in a replicated world: as the look ahead has it in the present
+            // they're drawn in, not as the world last said)
+            if (actor.id === this.me && this.viewed && Number.isFinite(this.forecast?.stamina)) {
+                hud.setStamina(actor.id, this.forecast.stamina, this.forecast.maxStamina ?? actor.maxStamina);
+            } else {
+                hud.setStamina(actor.id, actor.stamina, actor.maxStamina);
+            }
 
             // (Not shown till its shaders are ready and its pictures sent: #register, #sending)
             if (avatar.compiling || avatar.sent === false) {
@@ -20678,6 +20699,15 @@ export class Game {
         const shares = {};
         const readyAt = this.worldview.players.get(this.me)?.readyAt ?? {};
         const theirs = unit ? this.worldview.unitAbility(unit) : null;
+        // (A replicated world's: the time a press sent now would be done at, and a blow pressed
+        // counted from when it was, till the player's record says so or the world says no)
+        const now = this.viewed ? (this.forecast?.present ?? this.battle.time) : this.battle.time;
+
+        for (const [ability, until] of this.pressed) {
+            if (until <= now || (readyAt[ability] ?? 0) >= until - PRESSED.near) {
+                this.pressed.delete(ability);
+            }
+        }
 
         for (const [direction, key] of Object.entries(slots ?? {})) {
             const action = actionOf(key);
@@ -20686,9 +20716,9 @@ export class Game {
             if (action?.unit === "ability" && theirs) {
                 shares[direction] = Math.max(0, Math.min(1, (theirs.readyAt - this.battle.time) / theirs.cooldown));
             } else if (action?.spell) {
-                shares[direction] = this.battle.cooldown(this.me, action.spell);
+                shares[direction] = (this.viewed ? this.forecast?.cooldown(action.spell) : null) ?? this.battle.cooldown(this.me, action.spell);
             } else if (cooldown) {
-                shares[direction] = Math.max(0, Math.min(1, ((readyAt[action.ability] ?? 0) - this.battle.time) / cooldown));
+                shares[direction] = Math.max(0, Math.min(1, (Math.max(readyAt[action.ability] ?? 0, this.pressed.get(action.ability) ?? 0) - now) / cooldown));
             }
         }
 
@@ -21723,6 +21753,24 @@ export class Game {
         // (Joined: told to the forecast too, which has the hero do it as the host will, as soon as
         // the host will: app/forecast.js)
         if (this.remote) {
+            // (A replicated world's: one of the Action Bar's blows shown cooling from the press,
+            // and no longer if the world says it wasn't done)
+            const cooling = this.viewed && command.type === "ability" ? (ABILITIES[command.ability]?.cooldown ?? 0) : 0;
+
+            if (cooling) {
+                const ability = command.ability;
+                const heard = then;
+
+                this.pressed.set(ability, (this.forecast?.present ?? this.battle.time) + cooling);
+                then = (result) => {
+                    if (!result?.ok) {
+                        this.pressed.delete(ability);
+                    }
+
+                    heard?.(result);
+                };
+            }
+
             const sent = this.remote.command(command, then);
 
             this.forecast?.sending(sent.seq, command, this.remote.clock());

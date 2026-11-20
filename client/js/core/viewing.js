@@ -16,8 +16,9 @@
 //
 // `step()` plays one frame, a step of the world's, into that: a few are kept in hand so they
 // go by evenly however they come (the same pacing a lockstep link has), and the game draws
-// everyone between one step's places and the next's, as it does a copy's. Its own hero is where
-// the server last said, with nothing looked ahead: that's the plan's next slice (3-22).
+// everyone between one step's places and the next's, as it does a copy's. Its own hero is looked
+// ahead as a lockstep game's is (app/forecast.js; the plan's 3-22): from what each frame says of
+// them and of the world's time as it comes, over the mirror's battle.
 //
 // Not yet (each a later slice's): the rest of the world's summary put where the game reads it
 // (the war, parties, props: 3-24, 3-25), insides and dungeons (3-23), and being hidden and
@@ -46,6 +47,12 @@ export class Viewing extends Joining {
 
     #started = null;
 
+    // The last of the player's commands done and their hero's own state, as the latest frame
+    // to come said (not the latest played)
+    #done = null;
+
+    #hero = null;
+
     constructor({ send, clock = () => 0 }) {
         super({ send, clock });
 
@@ -65,13 +72,6 @@ export class Viewing extends Joining {
             this.#started = resolve;
         });
     }
-
-    // (Nothing's looked ahead from yet: the game draws its hero where the server last said)
-    get self() {
-        return null;
-    }
-
-    set self(_self) {}
 
     /** Ask to come into the world, to be sent views of it and no copy. */
     hello(character, { hero } = {}) {
@@ -99,7 +99,7 @@ export class Viewing extends Joining {
             return;
         }
 
-        // (The world's word of its hero, for a look ahead: nothing's looked ahead from yet)
+        // (A lockstep link's word of its hero: this one's is in its frames, as they come)
         if (text.startsWith('{"kind":"self"')) {
             this.received.self = (this.received.self ?? 0) + text.length;
 
@@ -148,6 +148,10 @@ export class Viewing extends Joining {
     #dress(actor, as) {
         const { host } = this;
 
+        if (Number.isFinite(as.maxStamina)) {
+            actor.maxStamina = as.maxStamina;
+        }
+
         if (as.folk) {
             host.folk.set(actor.id, as.folk);
         } else if (as.soldier) {
@@ -191,10 +195,49 @@ export class Viewing extends Joining {
         this.heard = frame.step;
         this.hostStep = frame.step;
         this.#frames.push({ step: frame.step, bytes });
+        this.#word(frame);
 
         if (this.mirror) {
             this.#begin();
         }
+    }
+
+    // What a frame says of the world's time and of the player's own hero, told as it comes and
+    // not when it's played (a few steps on): the hero's looked ahead from the latest word there
+    // is, as a lockstep link's is from its `self` (app/forecast.js; the scaling plan's 3-22)
+    #word(frame) {
+        const at = this.clock();
+        const { done, self, asof } = frame.sections;
+
+        this.onTimed?.(frame.step * STEP_MS, at);
+
+        if (done !== undefined) {
+            this.#done = done;
+        }
+
+        if (self !== undefined) {
+            try {
+                this.#hero = decode(self);
+            } catch {
+                return;
+            }
+        }
+
+        if (asof === undefined || !Number.isFinite(Number(asof)) || !this.#hero || this.#done === null) {
+            return;
+        }
+
+        // (Their breath, as the world has it, on their character too: what's shown of it where
+        // nothing's looked ahead)
+        const mine = this.host?.battle.actor(this.me);
+
+        if (mine) {
+            mine.stamina = this.#hero.stamina ?? 0;
+            mine.maxStamina = this.#hero.maxStamina ?? mine.maxStamina;
+        }
+
+        this.self = { time: Number(asof), seq: this.#done, hero: this.#hero, at };
+        this.onSelf?.(this.self);
     }
 
     /** How many of the world's steps have come and aren't played. */
