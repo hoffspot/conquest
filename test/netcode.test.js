@@ -67,11 +67,11 @@ function raw(port, { method = "GET", route = "/", host = `localhost:${port}`, he
 describe("the schema of a setting that's one of a few (server/storage/settings.js)", () => {
     it("takes a world's netcode as lockstep alone, and nothing that would let more than 8 in", () => {
         assert.deepEqual([...WORLD_SETTINGS.netcode.of], [...NETCODES]);
-        assert.deepEqual([...NETCODES], ["lockstep"]);
+        assert.deepEqual([...NETCODES], ["lockstep", "replicated"]);
         assert.equal(WORLD_SETTINGS.netcode.default, "lockstep");
         assert.equal(schemaReason(WORLD_SETTINGS, "netcode", "lockstep"), null);
-        assert.equal(schemaReason(WORLD_SETTINGS, "netcode", "views.1"), 'netcode must be lockstep, not "views.1".');
-        assert.match(schemaReason(WORLD_SETTINGS, "netcode", true), /must be lockstep, not true/);
+        assert.equal(schemaReason(WORLD_SETTINGS, "netcode", "views.1"), 'netcode must be one of lockstep, replicated, not "views.1".');
+        assert.match(schemaReason(WORLD_SETTINGS, "netcode", true), /must be one of lockstep, replicated, not true/);
         assert.deepEqual(Object.keys(NETCODE_WORDS), [...NETCODES], "each named for the management page");
 
         assert.equal(WORLD_SETTINGS.experimental.default, false);
@@ -138,7 +138,8 @@ describe("a world's netcode and the server's replication, on a world server (ser
         assert.deepEqual([card.netcode, card.experimental, card.most], ["lockstep", false, 8]);
         assert.equal(page.settings.replication, "off");
         assert.deepEqual(page.schema.replication.of, ["off", "dark", "on"]);
-        assert.deepEqual(page.worldSchema.netcode.of, ["lockstep"]);
+        assert.deepEqual(page.worldSchema.netcode.of, ["lockstep", "replicated"]);
+        assert.match(page.worldSchema.netcode.words.replicated, /^Replicated/);
         assert.match(page.worldSchema.netcode.words.lockstep, /^Lockstep/);
     });
 
@@ -146,7 +147,7 @@ describe("a world's netcode and the server's replication, on a world server (ser
         const bad = await admin("PATCH", `/worlds/${world.world}`, { settings: { netcode: "views.1" } });
 
         assert.equal(bad.status, 400);
-        assert.match(bad.json.message, /netcode must be lockstep/);
+        assert.match(bad.json.message, /netcode must be one of lockstep, replicated/);
         assert.equal((await admin("POST", "/worlds", { name: "Too many", race: "human", seed: 4, settings: { mostPlayers: 9 } })).status, 400, "and no world of more than 8");
 
         const marked = await admin("PATCH", `/worlds/${world.world}`, { settings: { experimental: true, netcode: "lockstep" } });
@@ -191,6 +192,17 @@ describe("a world's netcode and the server's replication, on a world server (ser
         await server.settings.change({ replication: "on" });
         assert.equal((await enter(["lockstep", "views.1"])).json.error, "replication");
         await server.settings.change({ replication: "off" });
+
+        // (A world set to replicated, which this server can play: let in while replication's on,
+        // and by a game that speaks it; refused while it's off, its save kept)
+        await stored.writeMeta({ settings: { ...stored.meta.settings, netcode: "replicated" } });
+        assert.deepEqual([(await enter(["lockstep"])).json.error, (await enter(["lockstep", "replicated"])).json.error], ["netcode", "replication"]);
+        await server.settings.change({ replication: "on" });
+        assert.equal((await enter(["lockstep", "replicated"])).status, 200);
+        assert.equal((await enter(["lockstep"])).json.error, "netcode");
+        await server.settings.change({ replication: "off" });
+        assert.equal((await enter(["lockstep", "replicated"])).json.error, "replication");
+        await stored.writeMeta({ settings: { ...stored.meta.settings, netcode: "views.1" } });
 
         // (Going: how it's played can't change; set aside, it reopens as lockstep, its save as it was)
         assert.equal((await admin("POST", `/worlds/${world.world}/start`, {})).status, 200);

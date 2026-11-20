@@ -51,6 +51,7 @@ import { copyOf, freshOf, isGuid } from "../client/js/core/guid.js";
 import { install } from "../client/js/core/probe.js";
 import { Navigation, navigatorOf } from "../client/js/core/navigation.js";
 import { characterFrom, Hosting } from "../client/js/core/netplay.js";
+import { VIEW_MODES } from "../client/js/core/viewfeed.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { elapsedOf } from "../client/js/core/daytime.js";
 import { RUNNER, WorldRunner } from "../client/js/core/runner.js";
@@ -174,10 +175,23 @@ const metrics = new WorldMetrics({ clock });
 
 install(metrics.probes);
 
-// The view feed (core/viewfeed.js; the scaling plan's 3-14): dark where the server's `replication`
-// setting is, so each player's frames are made and counted beside lockstep and never sent; off
-// otherwise ("on" sends nothing yet, and makes nothing). Followed as the setting changes
-const replicate = (mode) => (hosting.views.mode = mode === "dark" ? "dark" : "off");
+// The view feed (core/viewfeed.js; the scaling plan's 3-14, 3-21): as the server's `replication`
+// setting is. Dark, each player's frames are made and counted beside lockstep, and sent only to
+// a game that asks; on, a world set to replicated is played from them. Off, nothing's made: and
+// whoever's playing from views is sent out, their world saved as it stands (the kill switch).
+// Followed as the setting changes
+const replicate = (mode) => {
+    hosting.views.mode = VIEW_MODES.includes(mode) ? mode : "off";
+
+    if (hosting.views.mode === "off") {
+        for (const peer of [...hosting.session.viewing]) {
+            hosting.session.kick(hosting.session.players.get(peer), "replication");
+        }
+    }
+};
+
+// (How the world's played with those who come in: its own setting, core/netplay.js NETCODES)
+hosting.session.netcode = settings.netcode ?? "lockstep";
 
 replicate(workerData.replication);
 

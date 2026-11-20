@@ -93,10 +93,20 @@ export async function createGame({ view, kit, sound, hud, hero, seed = 1, talks,
 export async function createJoinedGame({ view, kit, sound, hud, hero, welcome, joining, talks, onTalk, onWorldMap, onPing, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels = () => {}, messages = [], onMessages = () => {}, told = [], onTold = () => {}, kept = false }) {
     const { seed = 1, race } = welcome;
     const world = buildWorld({ seed, race, plan: await plans.of(seed) });
-    const host = Host.restore(world, welcome.snapshot);
-    const own = host.players.get(welcome.id)?.own ?? {};
+    // (A replicated world's welcome has no world in it (`mode`: "view", core/viewing.js; the
+    // scaling plan's 3-21): its link's given a Host that plays nothing, which it keeps as the
+    // world's frames say, and the game's made once its hero's in it)
+    const viewed = welcome.mode === "view";
+    const host = viewed ? new Host(world, { populate: false }) : Host.restore(world, welcome.snapshot);
 
-    joining.attach(host);
+    if (viewed) {
+        joining.attach(host, welcome);
+        await joining.started;
+    } else {
+        joining.attach(host);
+    }
+
+    const own = host.players.get(welcome.id)?.own ?? {};
 
     // What's their own of their hero, not the world's (core/host.js OWN), that the world keeps with
     // them, as it last kept them, and told it as it changes: their pin and markers on its map; and

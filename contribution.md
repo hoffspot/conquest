@@ -579,8 +579,8 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      messages or to what both netcodes share bumps `NET_VERSION` alone, a change to the frame
      bumps `VIEW_VERSION` alone, and a game says which views it reads in `speaks`. It's
      1, and never 0 (a message of bytes whose first is 0 is the tests' echo: `server/play.js`
-     `BINARY`). Nothing sends a frame yet, so till the feed does (3-14 onward) a change to the
-     frame's bytes may be made without a bump.
+     `BINARY`). A replicated world's games play from frames (3-21), so from here a change to
+     a frame's bytes bumps it.
    - `SNAPSHOT_VERSION` (`client/js/core/host.js`): what a snapshot of the world holds. A world
      kept by an older version is carried on, not lost (the world server keeps worlds): add a step
      from the version before to `SNAPSHOT_STEPS`, filling in what the new version keeps as it
@@ -669,6 +669,11 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
        40 ms of jitter (`DRAWN_TALLY=1 node --test test/drawn.test.js` prints it). The hero's
        own look ahead from the mirror is held to the copy's limits in `test/forecast.test.js`
        (`playJoined`'s `mirror`, `test/joinedgame.js`).
+     - A replicated world's game holds no copy of the world (`client/js/core/viewing.js`). What
+       the game reads of anyone in sight that isn't in a frame's record or `WHO` goes in what
+       they're drawn as (`dressOf`, `client/js/core/viewfeed.js`), or such a game can't draw
+       them. `test/viewing.test.js` plays two such games in Node, and
+       `e2e/worlds.spec.js` (*a replicated world*) in two browsers.
      - Something new the world keeps that a game shows of the world at large (not of a
        character in sight) is given a part in `client/js/core/summary.js` (`worldParts` for
        what's everyone's, `ownParts` for one player's), or a game sent views never hears of it;

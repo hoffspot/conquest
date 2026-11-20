@@ -3969,6 +3969,34 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     300 ms where it gives 0.59. The debug log counts looks ahead, those from a mirror, and
     times told (`forecast`).
   - **Not yet:** how it looks on a phone, which is the owner's to say (P3).
+- **A replicated world** (`core/viewing.js`; the scaling plan's `3-21`). The first world played
+  from views alone: a world whose `netcode` is `replicated`, on a server whose replication is
+  on. Experimental, for the owner's own server: 8 players at the most, as any world.
+  - **No copy:** the game's welcomed with its own record and the summary (33 KB where a
+    snapshot's 146 KB), and then sent a frame a step. It's sent no world, no ops and no sums,
+    and plays no step itself. A world played this way refuses a game that asks for all of it,
+    and a lockstep world is as it was.
+  - **The link** (`Viewing`, the link seam's second implementation): the game doesn't know
+    which it has. What it reads as its world is a `Host` that's never stepped, kept as the
+    server says. Its battle is the mirror's. Its player's record is the welcome's and what the
+    frames say has changed of it (told as it changes, not a second on). A trade is kept from
+    the events that tell of it, which now carry how it stands.
+  - **Drawn as who they are** (`dressOf`): a frame says, beside who someone is, what they're
+    drawn as where the host knows more than their character does: one of the folk, a soldier,
+    another player's hero and what they wear, a creature's kind.
+  - **Paced as lockstep is:** a few steps are kept in hand (2 to 8, by how late 95 in 100
+    frames come) and everyone's drawn between one step's place and the next's.
+  - **What came of a command** is told its game in a message of its own (`result`), since no
+    copy plays it.
+  - **Its own hero** is where the server last said, with nothing looked ahead: on a slow link
+    it answers the hand late. That's `3-22`.
+  - **The kill switch:** replication turned off, everyone in such a world is sent out and told
+    why, and nobody's let in.
+  - **Not yet**, each a later slice's: the hero looked ahead (`3-22`); insides and dungeons
+    (`3-23`); parties, shops and the war table (`3-24`); the war, props, what's on the ground
+    and what flies (`3-25`); a page hidden and shown, and coming back after a reload (`3-26`).
+    What another player wears is as it was when they came into sight. Outside what's built,
+    such a game shows the world as a new one would be, not as it is.
 - **Who hears of what** (`core/eventscope.js`; the scaling plan's `3-15`). A lockstep copy plays
   the whole world and makes every event itself. A game sent views plays none of it, so it's told
   only the events that are its player's to hear. `SCOPES` gives each of the 184 kinds the battle

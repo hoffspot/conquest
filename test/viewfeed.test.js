@@ -110,7 +110,7 @@ describe("the view feed (core/viewfeed.js)", () => {
         const off = played(120, "off");
         const dark = played(120, "dark");
 
-        assert.deepEqual(VIEW_MODES, ["off", "dark"]);
+        assert.deepEqual(VIEW_MODES, ["off", "dark", "on"]);
         assert.equal(new Hosting(off.host, { send() {} }).views.mode, "off");
         assert.deepEqual(off.hosting.views.totals, { frames: 0, bytes: 0, records: 0, steps: 0 });
         assert.equal(off.hosting.views.viewers.size, 0);

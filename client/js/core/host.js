@@ -3606,6 +3606,19 @@ export class Host {
     }
 
     /**
+     * A player's record as the world holds it while it's played, from one as it's kept
+     * (keptPlayer, a snapshot's): outfitted as they were, their charms and all, and what their
+     * own game keeps of them as it was. Also what a game sent views and no world makes its own
+     * player's record with, from its welcome and what its frames say has changed (core/viewing.js).
+     */
+    static livePlayer(player) {
+        const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, prayed, inRing, discarded, safety, role, lastCommand, away, out, resting, budget, mightPeak, roll } = player;
+        const kept = new Progress(progress, hero);
+
+        return { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, prayed: { ...(prayed ?? {}) }, inRing: inRing ?? null, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept), role, lastCommand, away, out, resting: structuredClone(resting), budget: budget ?? null, mightPeak: structuredClone(mightPeak ?? null), own: ownOf(player), roll: structuredClone(roll ?? []) };
+    }
+
+    /**
      * The world `world` (made again from the snapshot's seed) carrying on from a snapshot: its
      * buildings' insides made again in the same order, and everyone where they were.
      */
@@ -3837,12 +3850,7 @@ export class Host {
         }
 
         for (const player of snapshot.players) {
-            const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, prayed, inRing, discarded, safety, role, lastCommand, away, out, resting, budget, mightPeak, roll } = player;
-            const kept = new Progress(progress, hero);
-
-            // (Outfitted as they were: their actor's carried on as it was, charms and all; and what
-            // their own game keeps of them, as it was)
-            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, prayed: { ...(prayed ?? {}) }, inRing: inRing ?? null, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept), role, lastCommand, away, out, resting: structuredClone(resting), budget: budget ?? null, mightPeak: structuredClone(mightPeak ?? null), own: ownOf(player), roll: structuredClone(roll ?? []) });
+            host.players.set(player.id, Host.livePlayer(player));
         }
 
         host.random.state = snapshot.random ?? host.random.state;
@@ -5871,7 +5879,9 @@ export class Host {
     // Tell both players in a trade how it's going (a "trade" event each: its `change`)
     #tellTrade(trade, change, details = {}) {
         for (const [one, other] of [[trade.from, trade.to], [trade.to, trade.from]]) {
-            this.#event("trade", { id: one, with: other, name: this.players.get(other)?.hero.name ?? null, trade: trade.id, from: trade.from, change, ...details });
+            // (`state`: the trade as it now stands, for a game that holds no copy of the world to
+            // read it from, core/viewing.js)
+            this.#event("trade", { id: one, with: other, name: this.players.get(other)?.hero.name ?? null, trade: trade.id, from: trade.from, change, state: structuredClone(trade), ...details });
         }
     }
 

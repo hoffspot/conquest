@@ -159,7 +159,7 @@ describe("the mirror (core/mirror.js)", () => {
             assert.doesNotThrow(() => hers[field], field);
         }
 
-        assert.deepEqual(WIRED, [...WHO, "x", "y", "square", "facing", "running", "dead", "hp", "target"]);
+        assert.deepEqual(WIRED, [...WHO, "x", "y", "square", "facing", "running", "dead", "hp", "target", "wild"]);
         assert.throws(() => hers.afflictions, /"afflictions", which the wire never says/);
         assert.throws(() => hers.path, /never says/);
         assert.throws(() => hers.enmity, /never says/);

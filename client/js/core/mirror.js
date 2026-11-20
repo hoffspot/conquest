@@ -33,7 +33,7 @@ import { decode } from "./wire.js";
 export const RING = Object.freeze({ kept: 8, delay: 100, carry: 250, apart: 500, fade: 300 });
 
 /** What of a character the wire says: who it is (core/view.js WHO), and how it is, from its records. */
-export const WIRED = Object.freeze([...WHO, "x", "y", "square", "facing", "running", "dead", "hp", "target"]);
+export const WIRED = Object.freeze([...WHO, "x", "y", "square", "facing", "running", "dead", "hp", "target", "wild"]);
 
 const wired = new Set(WIRED);
 
@@ -178,6 +178,9 @@ export class Mirror {
         /** How many frames it's taken. */
         this.frames = 0;
 
+        /** Told, if set, what someone's drawn as when they're told of with it: onDress(actor, as). */
+        this.onDress = null;
+
         /**
          * Those who've lately left, by id: { ring, map, at (ms, the world's: when they left) },
          * kept while they fade (RING.fade) and let go of a while after.
@@ -221,8 +224,19 @@ export class Mirror {
             this.#leave(index, time);
         }
 
-        for (const [index, who] of enters) {
+        for (const [index, who, as] of enters) {
             this.#enter(index, who, time);
+
+            // (What they're drawn as, where they were told with it: core/viewfeed.js dressOf)
+            if (as && this.known[index]) {
+                this.known[index].as = as;
+
+                if (as.wild) {
+                    this.known[index].actor.wild = as.wild;
+                }
+
+                this.onDress?.(this.known[index].actor, as);
+            }
         }
 
         // (Those long gone let go of)

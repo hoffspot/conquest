@@ -5149,6 +5149,8 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
             session: entered.session,
             character,
             hero,
+            // (How the world's played, as its card says: core/netplay.js NETCODES)
+            netcode: entered.card?.netcode ?? "lockstep",
             onWaiting: (place) => tell.waiting(`The server's running as many worlds as it can: yours is ${place === 1 ? "next" : `number ${place}`} in line to open…`),
             onClosed: (reason) => {
                 // (Deleted: nothing to come back to, so what was held for it here's forgotten; and
