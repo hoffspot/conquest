@@ -453,6 +453,11 @@ export class ViewFeed {
                 sections.self = viewer.self = own.hero;
                 any = true;
             }
+
+            // (Either told: and the world's time they're as of, which a look ahead begins from)
+            if (sections.done !== undefined || sections.self !== undefined) {
+                sections.asof = own.time;
+            }
         }
 
         return any ? sections : null;

@@ -21,6 +21,7 @@
 import { TAU } from "./exact.js";
 import { readPatches, Summary } from "./summary.js";
 import { decodeFrame, GOING, NONE, VIEW, WHO } from "./view.js";
+import { decode } from "./wire.js";
 
 /**
  * A character's ring: how many tellings of where it was are kept, and how far behind the world
@@ -32,7 +33,7 @@ import { decodeFrame, GOING, NONE, VIEW, WHO } from "./view.js";
 export const RING = Object.freeze({ kept: 8, delay: 100, carry: 250, apart: 500, fade: 300 });
 
 /** What of a character the wire says: who it is (core/view.js WHO), and how it is, from its records. */
-export const WIRED = Object.freeze([...WHO, "x", "y", "facing", "running", "dead", "hp", "target"]);
+export const WIRED = Object.freeze([...WHO, "x", "y", "square", "facing", "running", "dead", "hp", "target"]);
 
 const wired = new Set(WIRED);
 
@@ -150,9 +151,15 @@ export class Mirror {
         this.step = -1;
         this.origin = null;
 
-        /** The last of its player's commands done, and their hero's own state, as last told (null till they are). */
+        /**
+         * The last of its player's commands done, and their hero's own state, as last told (null
+         * till they are); the world's time those are as of (ms); and how many times it's been
+         * told either.
+         */
         this.done = null;
         this.self = null;
+        this.asof = null;
+        this.selves = 0;
 
         /**
          * What it's been told of the world beside those it knows of (core/summary.js): its own
@@ -235,10 +242,15 @@ export class Mirror {
 
         if (frame.sections.self !== undefined) {
             try {
-                this.self = JSON.parse(frame.sections.self);
+                this.self = decode(frame.sections.self);
             } catch {
                 this.faults.push(`step ${frame.step}: its own state wasn't to be read`);
             }
+        }
+
+        if (frame.sections.asof !== undefined && Number.isFinite(Number(frame.sections.asof))) {
+            this.asof = Number(frame.sections.asof);
+            this.selves++;
         }
 
         this.summary.take(own.map(([key, value]) => ["own", key, value]));
@@ -330,6 +342,7 @@ export class Mirror {
         if (told.x !== undefined) {
             actor.x = told.x / 100;
             actor.y = told.y / 100;
+            actor.square = [Math.floor(actor.x), Math.floor(actor.y)];
         }
 
         if (told.going !== undefined) {

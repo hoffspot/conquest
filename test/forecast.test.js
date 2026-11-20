@@ -87,6 +87,59 @@ describe("your hero, drawn where the rules will have them (app/forecast.js)", ()
         }
     });
 
+    it("is drawn as well looked ahead from the mirror as from the copy (the scaling plan's 3-20): its frames' word of the hero and of the world's time, those near as the frames tell of them, at 150 and at 300 ms; and a cast as they run round a foe shown as it begins", () => {
+        for (const rtt of [150, 300]) {
+            for (const [name, stick, actions] of [
+                ["running", (way) => () => ({ facing: way, run: true }), []],
+                ["stopping and going", (way) => (t) => (t % 2200 < 1500 ? { facing: way, run: true } : null), []],
+                ["sent by a tap", () => () => null, [{ at: 1200, command: null }]],
+            ]) {
+                const [world, copyWorld] = worlds();
+                const way = openWay(world);
+                const tap = actions.map((action) => ({ ...action, command: { type: "move", to: [Math.floor(world.spawns.player[0] + Math.sin(way) * 18), Math.floor(world.spawns.player[1] + Math.cos(way) * 18)], run: true } }));
+                const played = playJoined(world, copyWorld, { character: sword, rtt, ms: 7000, stick: stick(way), actions: tap, mirror: true });
+                const score = within(`${name}, from the mirror at ${rtt} ms`, played);
+                const ran = played.frames.at(-1).host;
+                const { corrections } = played.forecast;
+                const { drawn } = played.joining;
+
+                assert.ok(Math.hypot(ran.x - played.frames[0].host.x, ran.y - played.frames[0].host.y) > 10, `${name}: went some way (${JSON.stringify(score)})`);
+
+                // (Every look ahead but the first few from the mirror; the clock told by every
+                // frame; the hero's own state the frames', not the link's; the copy as ever)
+                assert.ok(corrections.looks > 40 && corrections.mirrored >= corrections.looks - 3, JSON.stringify(corrections));
+                assert.ok(corrections.timed === drawn.frames && drawn.frames > 120, `${corrections.timed} of ${drawn.frames} frames`);
+                assert.ok(drawn.mirror.selves > 40 && played.joining.self.time === drawn.mirror.asof && played.joining.self.seq === drawn.mirror.done);
+                assert.deepEqual(drawn.mirror.faults, []);
+                assert.equal(played.forecast.track.battle === drawn.battle, false, "its battle's its own: the mirror's is never stepped");
+                assert.equal(drawn.battle.time, 0);
+                assert.equal(played.joining.desyncs, 0);
+            }
+        }
+
+        const [world, copyWorld] = worlds();
+        const played = playJoined(world, copyWorld, {
+            character: wand,
+            rtt: 300,
+            ms: 10000,
+            mirror: true,
+            setup: foeAt([4, 0]),
+            stick: (t, { copy, host }) => {
+                const orc = host.battle.actor("orc");
+                const [dx, dy] = [orc.x - copy.x, orc.y - copy.y];
+                const far = Math.hypot(dx, dy);
+
+                return { facing: Math.atan2(dx, dy) + Math.PI / 2 + (far > 4 ? -0.5 : far < 2.5 ? 0.5 : 0), run: true };
+            },
+            actions: [{ at: 300, command: { type: "engage", target: "orc", stand: true, lock: true } }, ...[1500, 4000, 6500, 9000].map((at) => ({ at, command: { type: "cast", spell: "burn", target: "orc" } }))],
+        });
+
+        assert.ok(played.answers.filter((answer) => answer === "ok").length >= 2, `cast (${played.answers})`);
+        within("casting as they run round, from the mirror", played);
+        shownAhead("casting as they run round, from the mirror", played);
+        assert.ok(played.forecast.track.battle.actor("orc"), "the foe's in its battle, as the frames told of it");
+    });
+
     it("holds them as the host does for a power strike struck at a foe as they run past it, and for a burn cast as they run round one, the swing and the cast shown as they begin there", () => {
         {
             const [world, copyWorld] = worlds();
