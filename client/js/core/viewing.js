@@ -99,6 +99,13 @@ export class Viewing extends Joining {
             return;
         }
 
+        // (The world's word of its hero, for a look ahead: nothing's looked ahead from yet)
+        if (text.startsWith('{"kind":"self"')) {
+            this.received.self = (this.received.self ?? 0) + text.length;
+
+            return;
+        }
+
         super.hear(text);
     }
 
@@ -221,6 +228,11 @@ export class Viewing extends Joining {
 
         if (!frame) {
             return [];
+        }
+
+        // (Who's in its world changed: the game draws those come and lets go of those gone)
+        if (frame.leaves.length || frame.sections.enters !== undefined) {
+            this.members++;
         }
 
         this.played = frame.step;

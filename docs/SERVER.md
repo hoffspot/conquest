@@ -835,10 +835,13 @@ never takes more.
 
 ### How a world's played, and the replication switch
 
-Every world is played in **lockstep**: each player's game holds a copy of the whole world and
-plays the server's steps, which is why a world takes 8 at the most. That's a setting of the
-world's own now (**How it's played**, its `netcode`), with the one choice there is; it changes
-only while nobody's in the world (offline, or set aside), as its characters do. A game says which
+A world is played in **lockstep** unless it says otherwise: each player's game holds a copy of
+the whole world and plays the server's steps, which is why a world takes 8 at the most. That's a
+setting of the world's own (**How it's played**, its `netcode`). The other choice is
+**replicated** (the scaling plan's `3-21`): each game is sent views of what's near its hero and
+holds no copy. It's experimental, playable only while **Replicated views** below is on, and still
+takes 8 at the most. The setting changes only while nobody's in the world (offline, or set
+aside), as its characters do. A game says which
 ways it can play when it asks to come in (`speaks`), and one that can't play a world's way is told
 so in words, with what to do (reload for the newest version), where it would otherwise have
 failed to understand what it was sent. A world can also be marked **Experimental**
@@ -857,11 +860,14 @@ being built for worlds of more than 8 (generated/multiplayer_scaling_plan.md). I
   A game that asks is also sent its own player's frames beside lockstep, as bytes on its play
   socket, to hold to its own copy (a shadow: docs/WAR.md, *The shadow*; `views.sent` counts
   their bytes). No game asks unless it's opened with `?shadow`, or is one of the soak's.
-- **On** does nothing more than off does yet: no world is played by views.
+- **On**: a world set to replicated may be played. Every world makes views as dark does, and a
+  replicated world sends each game its frames and nothing of lockstep's. What such a game can
+  do yet is in docs/WAR.md (*A replicated world*): its start town, moving, fighting and trading.
 
-What off already means, and will go on meaning: a world set to be played any other way than lockstep
-lets nobody in, its save kept exactly as it is, until the switch is turned on again or the world
-is set back to lockstep. It's changed on the management page and takes effect at once, with no
+What off means: a world set to be played any other way than lockstep lets nobody in, its save
+kept exactly as it is, until the switch is turned on again or the world is set back to lockstep.
+Turned off while such a world's being played, everyone in it is sent out at once and told why,
+and the world's saved as it stands: that's the kill switch. It's changed on the management page and takes effect at once, with no
 update and no restart: every running world is told as it's changed. Neither setting raises how many a world takes.
 
 ## Crash reports

@@ -193,6 +193,17 @@ describe("a world's netcode and the server's replication, on a world server (ser
         assert.equal((await enter(["lockstep", "views.1"])).json.error, "replication");
         await server.settings.change({ replication: "off" });
 
+        // (A world set to replicated, which this server can play: let in while replication's on,
+        // and by a game that speaks it; refused while it's off, its save kept)
+        await stored.writeMeta({ settings: { ...stored.meta.settings, netcode: "replicated" } });
+        assert.deepEqual([(await enter(["lockstep"])).json.error, (await enter(["lockstep", "replicated"])).json.error], ["netcode", "replication"]);
+        await server.settings.change({ replication: "on" });
+        assert.equal((await enter(["lockstep", "replicated"])).status, 200);
+        assert.equal((await enter(["lockstep"])).json.error, "netcode");
+        await server.settings.change({ replication: "off" });
+        assert.equal((await enter(["lockstep", "replicated"])).json.error, "replication");
+        await stored.writeMeta({ settings: { ...stored.meta.settings, netcode: "views.1" } });
+
         // (Going: how it's played can't change; set aside, it reopens as lockstep, its save as it was)
         assert.equal((await admin("POST", `/worlds/${world.world}/start`, {})).status, 200);
         await until(() => server.registry.lifeOf(world.world).state, "the world open");

@@ -16354,6 +16354,13 @@ export class Game {
     // log if it took long (Steps.slow: a freeze's jobs), by the news it brought: so a freeze in
     // the battle's steps says what took its time
     #handleTimed(events, began = null) {
+        // (A link that keeps no copy of the world (core/viewing.js) has those in it come and go
+        // with its frames, not by events: whoever's new is drawn, whoever's gone let go of)
+        if (this.remote && this.remote.members !== this.membersSeen) {
+            this.membersSeen = this.remote.members;
+            this.#mirror();
+        }
+
         const stepped = performance.now();
 
         this.#handle(events);

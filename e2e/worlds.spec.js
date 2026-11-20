@@ -695,6 +695,159 @@ test("a game opened with ?mirror draws the others where its player's frames say 
     }
 });
 
+test("a replicated world: two players, neither's game holding a copy of it, see each other move, fight a foe and trade", async ({ ownBrowser: browser }) => {
+    const pages = [];
+
+    for (const [name, weapon] of [["Una", "sword"], ["Bram", "sword"]]) {
+        const page = await (await browser.newContext()).newPage();
+
+        await ready(page, save(name, "human", weapon));
+        pages.push(page);
+    }
+
+    const [una, bram] = pages;
+
+    await server.settings.change({ replication: "on" });
+
+    try {
+        const made = await server.createWorld({ name: "Mirrormere", seed: 47, race: "human", heroes: "brought", settings: { open: true, netcode: "replicated", experimental: true } });
+
+        for (const [page, name] of [[una, "Una"], [bram, "Bram"]]) {
+            await page.goto(`${base}/`);
+
+            const row = page.locator(`#titleserver li[data-world="${made.world}"]`);
+
+            await expect(row).toContainText("Mirrormere", { timeout: 30000 });
+            await row.getByRole("button").click();
+            await page.locator("#worldask").getByRole("button", { name: new RegExp(`^${name}`) }).click({ timeout: 60000 });
+            await playing(page, null, LONGER);
+        }
+
+        // What a game has of the world: its link, what it was sent, who it knows of
+        const has = (page) => page.evaluate(() => {
+            const { game, together } = window.pellagos;
+            const link = together.joining;
+            const me = game.host.battle.actor(game.me);
+
+            return { me: game.me, mirror: Boolean(link.mirror), ops: link.received.ops ?? 0, world: link.received.state ?? 0, frames: link.frames, known: game.host.battle.actors.length, faults: link.mirror?.faults.length ?? -1, at: [me.x, me.y], gold: game.progress.gold, time: game.host.battle.time };
+        });
+        const [unaHas, bramHas] = [await has(una), await has(bram)];
+
+        // (No copy: no world sent, no step of it; a few dozen characters, not the thousands the world has)
+        for (const one of [unaHas, bramHas]) {
+            expect(one.mirror).toBe(true);
+            expect(one.ops + one.world).toBe(0);
+            expect(one.faults).toBe(0);
+            expect(one.known).toBeGreaterThanOrEqual(3);
+            expect(one.known).toBeLessThan(400);
+        }
+
+        // Moving: Una walks; her own game and Bram's both have her where she went
+        const where = (page, id) => page.evaluate((who) => {
+            const { game } = window.pellagos;
+            const actor = game.host.battle.actor(who);
+            const avatar = game.avatars.get(who);
+            const [ox, oz] = actor ? game.originOf(actor.map) : [0, 0];
+
+            return actor ? { x: actor.x, y: actor.y, dead: actor.dead, hp: actor.hp, drawn: avatar ? [avatar.object.position.x - ox, avatar.object.position.z - oz] : null, shown: Boolean(avatar?.object.visible) } : null;
+        }, id);
+        const command = (page, sent) => page.evaluate((what) => new Promise((resolve) => {
+            window.pellagos.game.remote.command(what, (result) => resolve(result ?? null));
+        }), sent);
+
+        expect(await command(una, { type: "move", to: [Math.floor(unaHas.at[0]) + 6, Math.floor(unaHas.at[1]) + 3], run: true })).toEqual({ ok: true });
+        await expect.poll(async () => Math.abs((await where(una, unaHas.me)).x - unaHas.at[0]), { timeout: 30000 }).toBeGreaterThan(4);
+        await expect.poll(async () => Math.abs((await where(bram, unaHas.me))?.x - unaHas.at[0]), { timeout: 30000 }).toBeGreaterThan(4);
+
+        const seen = await where(bram, unaHas.me);
+
+        // (Drawn in Bram's game, as herself, where his game has her)
+        expect(seen.shown).toBe(true);
+        expect(Math.hypot(seen.drawn[0] - seen.x, seen.drawn[1] - seen.y)).toBeLessThan(1.5);
+
+        // (And the town's folk and guards about her, each given a body from what the frames said they're drawn as)
+        const drawn = await una.evaluate(() => {
+            const { game } = window.pellagos;
+            const count = (kind) => game.host.battle.actors.filter((actor) => actor.kind === kind && actor.map === game.mapId && game.avatars.get(actor.id)?.object.visible).length;
+
+            return { folk: count("folk"), soldiers: count("soldier"), known: game.host.folk.size };
+        });
+
+        expect(drawn.known).toBeGreaterThanOrEqual(3);
+        expect(drawn.folk + drawn.soldiers).toBeGreaterThanOrEqual(1);
+
+        if (process.env.REPLICATED_SHOT) {
+            await una.screenshot({ path: process.env.REPLICATED_SHOT });
+        }
+
+        // Fighting: Una sets on the orc by the town's edge, and it falls in her game as in the world
+        expect((await command(una, { type: "engage", target: "orc", lock: true })).ok).toBe(true);
+        await expect.poll(async () => (await where(una, "orc"))?.dead ?? false, { timeout: 150000, intervals: [3000] }).toBe(true);
+        expect((await where(una, unaHas.me)).dead).toBe(false);
+        // (Done with it: she stands where she is, so the two stay side by side for the trade)
+        await command(una, { type: "unlock" });
+        await command(una, { type: "stop" });
+
+        // Trading: side by side, one asks, the other takes it up, gold's offered, both agree
+        const beside = await where(una, unaHas.me);
+
+        await command(bram, { type: "move", to: [Math.floor(beside.x) + 1, Math.floor(beside.y)], run: true });
+        await expect.poll(async () => {
+            const [a, b] = [await where(una, unaHas.me), await where(una, bramHas.me)];
+
+            return b ? Math.hypot(a.x - b.x, a.y - b.y) : 99;
+        }, { timeout: 90000, intervals: [2000] }).toBeLessThan(3);
+
+        const trade = (page) => page.evaluate(() => {
+            const { game } = window.pellagos;
+            const now = game.worldview.trade(game.me);
+
+            return now ? { open: now.open, rev: now.rev ?? 0, offers: now.offers } : null;
+        });
+
+        expect((await command(una, { type: "trade", with: bramHas.me })).ok).toBe(true);
+        // (Asked: Bram's game has it, not yet open)
+        await expect.poll(() => bram.evaluate(() => [...window.pellagos.game.host.trades.values()].map(({ open }) => open)), { timeout: 30000 }).toEqual([false]);
+        expect((await command(bram, { type: "trade", with: unaHas.me })).ok).toBe(true);
+        await expect.poll(async () => (await trade(una))?.open, { timeout: 30000 }).toBe(true);
+        expect((await command(una, { type: "offer", gold: 5 })).ok).toBe(true);
+        await expect.poll(async () => JSON.stringify((await trade(bram))?.offers ?? {}), { timeout: 30000 }).toContain("5");
+
+        await expect.poll(async () => JSON.stringify((await trade(una))?.offers ?? {}), { timeout: 30000 }).toContain("5");
+
+        const { rev } = await trade(una);
+        const before = [(await has(una)).gold, (await has(bram)).gold];
+
+        expect(await command(una, { type: "agree", rev })).toMatchObject({ ok: true });
+        expect(await command(bram, { type: "agree", rev })).toMatchObject({ ok: true });
+        await expect.poll(async () => (await has(bram)).gold, { timeout: 30000 }).toBe(before[1] + 5);
+        await expect.poll(async () => (await has(una)).gold, { timeout: 30000 }).toBe(before[0] - 5);
+        expect(await trade(una)).toBe(null);
+
+        // (Still no copy, and nothing the frames said that couldn't be so)
+        for (const one of [await has(una), await has(bram)]) {
+            expect(one.ops + one.world).toBe(0);
+            expect(one.faults).toBe(0);
+        }
+
+        // The kill switch: the server's replication turned off, both are sent out and told why,
+        // and nobody's let back in while it's off (running worlds told as the management page's
+        // change tells them: server/manage.js)
+        await server.settings.change({ replication: "off" });
+
+        for (const { thread } of server.registry.entries.values()) {
+            thread?.replicate("off");
+        }
+
+        for (const page of [una, bram]) {
+            await expect.poll(() => page.evaluate(() => Boolean(window.pellagos.inWorld)), { timeout: 30000 }).toBe(false);
+            await expect(page.locator("body")).toContainText("turned off on its server for now", { timeout: 30000 });
+        }
+    } finally {
+        await server.settings.change({ replication: "off" });
+    }
+});
+
 test("back into a world on a server after the game's reloaded: straight back in, each stage of the way shown as it's come to, as the same character where they stood; a stage that can't be got past says why, to try again; Cancel stops it and lets the world go", async ({ page }) => {
     await ready(page, save("Tamsin", "human", "sword"));
     // (Each stage of the way back in, as it's marked: "reach:now", "reach:done", ...)

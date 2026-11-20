@@ -1948,6 +1948,9 @@ export class Joining {
         this.self = null;
         this.onSelf = null;
 
+        /** How many times who's in its world has changed with no event to say so: never, for a link whose copy plays their coming and going. */
+        this.members = 0;
+
         /** Told the world's time as anything but its word of the hero says it (time, at): a frame, while others are drawn from those (drawing). */
         this.onTimed = null;
 

@@ -25,6 +25,7 @@
 
 import { newNonce, verifyIdentity } from "../core/identity.js";
 import { Joining, NET_VERSION, SPEAKS, versionWords } from "../core/netplay.js";
+import { Viewing } from "../core/viewing.js";
 import { addressOf, DEFAULT_PORT, inviteLink, inviteOf } from "./invites.js";
 import { LINK_TIMING, RelayLink } from "./together.js";
 
@@ -836,7 +837,7 @@ export class ServerClient {
      * as its link drops and comes back, onDrop() if it's lost for good. The server proves itself
      * first, on the same socket.
      */
-    async play({ world, session, character, hero, onWaiting = () => {}, onClosed = () => {}, onLink = () => {}, onDrop = () => {} }) {
+    async play({ world, session, character, hero, netcode = "lockstep", onWaiting = () => {}, onClosed = () => {}, onLink = () => {}, onDrop = () => {} }) {
         let link;
 
         await this.reach();
@@ -856,7 +857,8 @@ export class ServerClient {
             throw error instanceof ServerRefusal ? error : new ServerRefusal(error.message);
         }
 
-        const joining = new Joining({ send: (text) => link.data(text), clock: () => performance.now() });
+        // (A replicated world's link holds no copy of it, and is sent views: core/viewing.js)
+        const joining = new (netcode === "replicated" ? Viewing : Joining)({ send: (text) => link.data(text), clock: () => performance.now() });
 
         link.onData = (text) => joining.hear(text);
         // (A view's frame, where the server sends them: for the game's shadow, if it's asked for one)
