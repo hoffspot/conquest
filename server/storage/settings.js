@@ -57,7 +57,7 @@ export const SETTINGS = Object.freeze({
     replication: {
         kind: "choice",
         of: ["off", "dark", "on"],
-        words: { off: "Off: every world's played in lockstep", dark: "Dark: each player's views built and counted, never sent", on: "On: worlds set to views send them (not built yet: as off)" },
+        words: { off: "Off: every world's played in lockstep", dark: "Dark: each player's views built and counted, never sent", on: "On: worlds set to replicated may be played, each game sent views" },
         default: "off",
         about: "Replicated views, the netcode for worlds of more than 8 (generated/multiplayer_scaling_plan.md): the switch that turns them off for every world at once, with no update. Off, a world set to them lets nobody in, its save kept as it is",
     },

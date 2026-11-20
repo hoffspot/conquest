@@ -99,6 +99,8 @@ export const SERVER_REFUSALS = Object.freeze({
     kicked: "You were sent out of the world.",
     afk: "You were away too long, so you were sent out of the world.",
     elsewhere: "You went into this world on another device, so this one has let go.",
+    // (A replicated world's, when its server's replication's turned off while they're in it;
+    // /enter's refusal of the same name, below, says as much to one coming in)
     "key-revoked": "The key you came in by was revoked.",
     "world-deleted": "That world was deleted.",
     "set-aside": "The world's owner set it aside for now: it's saved, and you can come back in.",

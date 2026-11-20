@@ -47,7 +47,46 @@ export const EVENTS = Object.freeze({ must: 900, may: 160, one: 800, big: 60000 
 export const ENTERS = Object.freeze({ frame: 1000 });
 
 /** How the feed runs: not at all, or dark (frames made and counted, never sent). */
-export const VIEW_MODES = Object.freeze(["off", "dark"]);
+export const VIEW_MODES = Object.freeze(["off", "dark", "on"]);
+
+/** What of one of the wild's creatures a game draws it by (core/wilds.js: its `wild`): the rest is the authority's. */
+export const WILD_SEEN = Object.freeze(["creature", "elite", "champion", "colossus", "worldBoss", "regalia", "companion"]);
+
+/**
+ * What someone's drawn as, where the host knows more of that than their character says (`as`,
+ * told beside who they are when they come into a player's known set): one of the folk as the
+ * host has them (but for their rounds, which are its own), a soldier as their town sent them,
+ * a player's hero and what they wear and wield, a creature's kind. Null for anyone drawn from
+ * their character alone. A game that holds a copy of the world asks its own host; one sent
+ * views has only this (core/viewing.js).
+ */
+export function dressOf(host, actor) {
+    if (actor.kind === "folk") {
+        const folk = { ...host.folk?.get(actor.id) };
+
+        delete folk.routine;
+
+        return folk.id ? { folk } : null;
+    }
+
+    if (actor.kind === "soldier") {
+        const soldier = host.soldiers?.get(actor.id);
+
+        return soldier ? { soldier } : null;
+    }
+
+    if (actor.kind === "player") {
+        const player = host.players?.get(actor.id);
+
+        return player?.hero && player.progress?.worn ? { hero: player.hero, worn: player.progress.worn(), wielded: player.progress.wielded(), role: player.role ?? null } : null;
+    }
+
+    if (actor.wild) {
+        return { wild: Object.fromEntries(WILD_SEEN.filter((key) => actor.wild[key] !== undefined).map((key) => [key, actor.wild[key]])) };
+    }
+
+    return null;
+}
 
 const RANK = Object.freeze({ pinned: 0, hostile: 1, other: 2 });
 
@@ -81,7 +120,10 @@ export class ViewFeed {
     constructor(hosting) {
         this.hosting = hosting;
 
-        /** "off" (nothing's made) or "dark" (VIEW_MODES). Set by whoever runs the world. */
+        /**
+         * "off" (nothing's made), or "dark" or "on" (VIEW_MODES): frames made for whoever's
+         * sent them. Set by whoever runs the world; a world played from views alone is "on".
+         */
         this.mode = "off";
 
         /** How many bytes a frame may take (core/view.js VIEW.budget unless it's set). */
@@ -140,7 +182,7 @@ export class ViewFeed {
      * plays the world's steps tells it (core/runner.js); off, nothing's kept.
      */
     heard(events) {
-        if (this.mode === "dark" && events.length) {
+        if (this.mode !== "off" && events.length) {
             for (const event of events) {
                 this.pending.push(event);
             }
@@ -157,7 +199,7 @@ export class ViewFeed {
      * a frame made for each of what's changed among those they know of, counted, and let go of.
      */
     flush(step) {
-        if (this.mode !== "dark") {
+        if (this.mode === "off") {
             if (this.viewers.size) {
                 this.stop();
             }
@@ -178,6 +220,7 @@ export class ViewFeed {
         const { battle } = host;
         const world = { players: host.players, partyOf: (id) => host.parties?.get(host.partyIds?.get(id))?.members };
         const events = this.pending;
+        const session = this.hosting.session ?? null;
         // (Whose link each player's is, for what the session's told them of their own: none, for
         // a player of the host's own game)
         const peers = new Map();
@@ -233,12 +276,18 @@ export class ViewFeed {
             // (The world's summary, for a game that's sent its frames: looked at once a second
             // for what's changed since that player was last told, the world's parts made once
             // for all of them: core/summary.js)
+            viewer.peer = peers.get(id);
+
             if (step % SUMMARY.every === 0 && this.shadowing.has(id)) {
                 shared ??= worldParts(host);
                 this.#summarise(viewer, { ...shared, ...ownParts(host, id) }, step);
+            } else if (session?.viewing?.has(viewer.peer) && (events.length || session.done.get(viewer.peer) !== viewer.done)) {
+                // (A game played from views alone shows its player's own record as it changes,
+                // not a second on: looked at whenever anything's happened, or a command of
+                // theirs been done)
+                this.#summarise(viewer, ownParts(host, id), null);
             }
 
-            viewer.peer = peers.get(id);
             this.#frame(viewer, hero, step, this.#sections(viewer, hero, events, world, viewer.peer));
         }
 
@@ -252,7 +301,9 @@ export class ViewFeed {
             viewer.patches.set(`${patch[0]}\n${patch[1]}`, patch);
         }
 
-        viewer.summaryAt = step;
+        if (step !== null) {
+            viewer.summaryAt = step;
+        }
     }
 
     /**
@@ -483,7 +534,10 @@ export class ViewFeed {
             for (const entry of viewer.list) {
                 if (!entry.entered) {
                     const who = whoOf(entry.actor);
-                    const text = JSON.stringify([entry.index, who]);
+                    // (And what they're drawn as, where the host has more of that than the
+                    // battle does: for a game with no copy of the world to ask, dressOf)
+                    const as = dressOf(this.hosting.host, entry.actor);
+                    const text = JSON.stringify(as ? [entry.index, who, as] : [entry.index, who]);
                     const length = bytesOf(text) + 1;
 
                     if (size + length > ENTERS.frame && texts.length) {
@@ -562,7 +616,8 @@ export class ViewFeed {
             },
             budget,
             // (A shadow's told of every step, so it knows one had nothing for it)
-            always: this.shadowing.has(viewer.id),
+            // (As is a game played from views alone: its world's time goes by its frames)
+            always: this.shadowing.has(viewer.id) || Boolean(this.hosting.session?.viewing?.has(viewer.peer)),
         };
         const eventsOf = (texts) => (texts.length ? { events: `[${texts.join(",")}]` } : {});
         let made = encodeFrame(this.state, { ...frame, sections: { ...eventsOf(must), ...sections } });

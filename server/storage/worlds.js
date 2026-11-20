@@ -104,7 +104,10 @@ export const ruleOf = ({ heroes, firstHero }) => (heroes === "brought" ? "visiti
 export const isOffline = (meta) => meta?.state === "offline";
 
 /** Each netcode (core/netplay.js NETCODES) as the management page names it. */
-export const NETCODE_WORDS = Object.freeze({ lockstep: "Lockstep: each game holds a copy of the whole world (8 players at most)" });
+export const NETCODE_WORDS = Object.freeze({
+    lockstep: "Lockstep: each game holds a copy of the whole world (8 players at most)",
+    replicated: "Replicated: each game is sent what's near its hero and holds no copy. Experimental: only while the server's replication is on (8 players at most)",
+});
 
 /**
  * How a world's played with those who come into it (core/netplay.js NETCODES): lockstep, for a

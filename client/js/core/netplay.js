@@ -139,10 +139,11 @@ export const NET_VERSION = 234;
 
 /**
  * The ways a world can be played with those who join it (its netcode): `lockstep`, each game
- * holding a whole copy of the world and playing the host's steps, is the only one there is. A
- * name here is never used again for anything else (contribution.md, section 3).
+ * holding a whole copy of the world and playing the host's steps; and `replicated` (the scaling
+ * plan's 3-21), each game sent views of what's near its hero and holding no copy (core/viewing.js).
+ * A name here is never used again for anything else (contribution.md, section 3).
  */
-export const NETCODES = Object.freeze(["lockstep"]);
+export const NETCODES = Object.freeze(["lockstep", "replicated"]);
 
 /**
  * The netcodes this game can play, as it says them (`speaks`) when it asks to join a world
@@ -325,6 +326,7 @@ export function versionShort(other) {
 export const NET_KICKS = Object.freeze({
     afk: "Disconnected for being away.",
     elsewhere: "You went into this world on another device, so this one has let go.",
+    replication: "That world's way of playing has been turned off on its server for now. It's saved: try again later.",
 });
 
 /**
@@ -881,8 +883,10 @@ export class Session {
 
         // (To be sent views and no world: only where the view feed's run and bytes can be sent.
         // Elsewhere it's a way of playing this world isn't played, as any other it doesn't speak)
-        if (hello.mode === VIEW_MODE) {
-            if (this.hosting.views.mode !== "dark" || !this.hosting.sendBinary) {
+        // A world that's replicated is played no other way: a game that asks for the whole world
+        // is refused as one that doesn't speak it
+        if (hello.mode === VIEW_MODE || this.netcode === "replicated") {
+            if (hello.mode !== VIEW_MODE || this.hosting.views.mode === "off" || !this.hosting.sendBinary) {
                 this.hosting.post(peer, "refused", encode({ kind: "refused", reason: "netcode", netcode: this.netcode }));
 
                 return;
@@ -1175,11 +1179,19 @@ export class Session {
 
         this.seq = seq;
 
+        let result;
+
         try {
-            this.host.command(id, command);
+            result = this.host.command(id, command);
         } finally {
             this.seq = null;
             this.done.set(peer, seq);
+        }
+
+        // (A game sent views plays no commands itself, so it's told what came of its own:
+        // a lockstep game finds out as its copy plays the command)
+        if (this.viewing.has(peer)) {
+            this.hosting.post(peer, "result", encode({ kind: "result", seq, result: result ?? null }));
         }
     }
 
@@ -1267,7 +1279,7 @@ export class Session {
         }
 
         this.paused = paused;
-        this.hosting.postAll("paused", encode({ kind: "paused", paused: Boolean(paused), ...paused }));
+        this.hosting.postTo([...this.reached(), ...this.viewing], "paused", encode({ kind: "paused", paused: Boolean(paused), ...paused }));
     }
 
     /** Who's still here (the relay's word, the host's link back): anyone else who'd joined, gone. */
