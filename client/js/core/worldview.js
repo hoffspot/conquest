@@ -81,7 +81,7 @@ export class LocalView {
  */
 export const READS = Object.freeze({
     war: { words: "War and news: who holds each town and works, the realms, the invasions, what's burnt, and who's out on the war's business.", state: ["war", "invasions", "burnt", "soldiers", "fortsOut", "envoys", "convoys", "supplies", "wagons", "quartered"], asks: ["invader", "engagements"] },
-    party: { words: "Party and roster: the players wherever they are, their parties, invitations and ready checks.", state: ["players", "pausable"], asks: ["partyFor", "partyOf", "fellows", "invitation", "waiting"] },
+    party: { words: "Party and roster: the players wherever they are, their parties, invitations and ready checks.", state: ["players", "pausable", "afar"], asks: ["partyFor", "partyOf", "fellows", "invitation", "waiting"] },
     company: { words: "Followers, companions and the hero's own: who follows whom, those mending, and what each may do.", state: ["followers", "companions", "mending"], asks: ["mendingOf", "mostFollowers", "unitAbility", "stance", "recallOffer", "vitalsOf", "capFor", "mightFor", "fightFor", "canFight", "characterOf"] },
     props: { words: "The director's props: caches, finds, strangers, obstacles, trails, what's dropped, campfires, treasures and what's open or shut.", state: ["caches", "finds", "strangers", "obstacles", "ground", "campfires", "ambushes", "treasures", "open", "fresh", "wild", "slain"], asks: ["trailCreatureOf", "treasuresOf", "campRefusal", "shutOf"] },
     rest: { words: "The rest: legends and their threads, the dungeons, hell's rifts, the world's rules, its folk out of doors, and where and when.", state: ["legends", "dungeons", "hellRifts", "rules", "done", "folk", "world"], asks: ["placeOf", "dueTo"] },
@@ -106,6 +106,95 @@ for (const name of ASKS) {
             return typeof this.host[name] === "function" ? (...asked) => this.host[name](...asked) : undefined;
         },
     });
+}
+
+/** What a game that holds no copy of its world asks its server as a talk or a shop opens (`what`). */
+export const ASKED = Object.freeze(["talk", "shop"]);
+
+/** How long what was asked is taken to stand before it's asked again, when next read (ms). */
+export const ASKED_FOR = 750;
+
+/**
+ * The world's answer to what a game asks (`asked`: { what: "talk", id, hirable } or { what:
+ * "shop", keeper }) for a player (`me`): what LocalView would have read, as plain values, or
+ * null for nothing such. The server's side: it reads the world and writes nothing to it.
+ */
+export function answerOf(host, me, asked) {
+    const view = new LocalView(host);
+
+    try {
+        if (asked?.what === "talk" && typeof asked.id === "string" && host.battle.actor(asked.id)) {
+            const talk = view.talk(me, asked.id, { hirable: Boolean(asked.hirable) });
+
+            return { stranger: talk.stranger ?? null, hire: talk.hire ?? null, messenger: talk.messenger ?? null, stock: talk.stock ?? null, times: talk.times ?? 1, hired: [...(host.hired ?? [])], menders: talk.menders(), stable: talk.stable() ?? null };
+        }
+
+        if (asked?.what === "shop" && typeof asked.keeper === "string" && host.battle.actor(asked.keeper)) {
+            const shop = view.shop(asked.keeper);
+
+            return { stock: shop.stock() ?? null, times: shop.times() ?? 1, threadWares: shop.threadWares() ?? null };
+        }
+    } catch {
+        return null;
+    }
+
+    return null;
+}
+
+const NO_TALK = Object.freeze({ stranger: null, hire: null, messenger: null, stock: null, times: 1, hired: [], menders: [], stable: null });
+const NO_SHOP = Object.freeze({ stock: null, times: 1, threadWares: null });
+
+/**
+ * The supplier of a game that holds no copy of its world (a replicated world's:
+ * core/viewing.js): what's read at once is read of the world it keeps as it's told, as
+ * LocalView's; a talk and a shop are asked of the server (`ask(asked)`: a promise of answerOf's
+ * answer) and come a moment later. What a handle reads "whenever asked" is as last answered,
+ * and asked again once it's stood ASKED_FOR (`clock()`: ms), so a shop's stock keeps up with
+ * what's bought of it while it's open.
+ */
+export class ToldView extends LocalView {
+    constructor(host, ask, clock = () => 0) {
+        super(host);
+        this.ask = ask;
+        this.clock = clock;
+    }
+
+    // What was asked, kept up: `told` as last answered (`none` till then, and for no answer)
+    #kept(asked, none, told) {
+        const kept = { told: told ?? none, at: this.clock(), asking: false };
+
+        return () => {
+            if (!kept.asking && this.clock() - kept.at >= ASKED_FOR) {
+                kept.asking = true;
+                this.ask(asked).then((again) => {
+                    Object.assign(kept, { told: again ?? kept.told, at: this.clock(), asking: false });
+                });
+            }
+
+            return kept.told;
+        };
+    }
+
+    talk(me, id, { hirable = false } = {}) {
+        const asked = { what: "talk", id, hirable: Boolean(hirable) };
+
+        return this.ask(asked).then((told) => {
+            const now = this.#kept(asked, NO_TALK, told);
+            const { stranger, hire, messenger, stock, times } = now();
+
+            return { stranger, hire, messenger, stock, times, hired: (folkId) => now().hired.includes(folkId), menders: () => now().menders, stable: () => now().stable };
+        });
+    }
+
+    shop(keeper) {
+        const asked = { what: "shop", keeper };
+
+        return this.ask(asked).then((told) => {
+            const now = this.#kept(asked, NO_SHOP, told);
+
+            return { stock: () => now().stock, times: () => now().times, threadWares: () => now().threadWares };
+        });
+    }
 }
 
 /**

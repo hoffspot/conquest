@@ -38,6 +38,7 @@ export const REMOTE = Object.freeze({
         received: "How many bytes it's heard, by kind (for the debug overlay)",
         members: "How many times who's in its world has changed with no event to say so (a link that keeps no copy; 0 for one whose copy plays their coming and going)",
         drawn: "Where to draw others from the world's frames ({ ready, of(id, now), battle }: core/drawn.js), or null where they're drawn from the copy",
+        ask: "What a talk or a shop needs of the world, asked of its server (ask(asked): a promise of the answer, core/worldview.js), or null where the game reads its copy",
     }),
     /** Set by the game, to be told. */
     hears: Object.freeze({

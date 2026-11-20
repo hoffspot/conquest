@@ -12,6 +12,8 @@ import { asRemote, REMOTE_MEMBERS } from "../client/js/core/remote.js";
 import { dressOf } from "../client/js/core/viewfeed.js";
 import { Viewing } from "../client/js/core/viewing.js";
 import { decode } from "../client/js/core/wire.js";
+import { lookIn } from "./helpers.js";
+import { answerOf, ASKED_FOR, ToldView } from "../client/js/core/worldview.js";
 
 const character = (name, weapon = "sword") => ({ hero: { name, shape: {}, look: {}, weapon, boots: false, race: "human" }, progress: { gold: 50, skills: { blade: 300 } } });
 
@@ -355,5 +357,113 @@ describe("a replicated world's link (core/viewing.js)", () => {
 
         assert.ok(near.length > 0, "there are foes near her on it");
         assert.deepEqual(near.filter((id) => !kept.battle.actor(id)), [], "each of them in her game");
+    });
+
+    it("has the parties, everyone in the world, who's asked whom, where its party is and the war as its summary says, and asks its server what a shop needs", async () => {
+        const world = replicated();
+        const [ann, bea, cal] = [world.come("a", character("Ann")), world.come("b", character("Bea")), world.come("c", character("Cal"))];
+
+        world.play(40);
+
+        const { host } = world;
+        const [annId, beaId, calId] = [ann.link.me, bea.link.me, cal.link.me];
+        const mine = ann.link.host;
+
+        // Everyone in the world, by name; and the world's not hers alone to stop
+        assert.deepEqual([annId, beaId, calId].map((id) => mine.players.get(id)?.hero.name), ["Ann", "Bea", "Cal"]);
+        assert.equal(mine.pausable, false);
+
+        // A party: asked, the asking known to both; taken up, the party known to all
+        ann.link.command({ type: "party", do: "invite", who: beaId });
+        world.play(30);
+        assert.equal(bea.link.host.invitation(beaId)?.from, annId, "Bea's game knows she's asked");
+        assert.equal(mine.invitation(beaId)?.from, annId, "and Ann's that she asked");
+        assert.equal(cal.link.host.invitation(beaId), null, "which is no one else's to know");
+        bea.link.command({ type: "party", do: "accept" });
+        world.play(30);
+        assert.deepEqual(mine.partyFor(annId)?.members, host.partyFor(annId).members);
+        assert.deepEqual(mine.fellows(annId), [beaId]);
+        assert.deepEqual(cal.link.host.partyFor(beaId)?.members, host.partyFor(annId).members, "a party's anyone's to know of");
+        assert.equal(mine.invitation(beaId), null);
+        assert.ok(bea.events.some((event) => event.type === "party" && event.change === "joined"), "and its events are its members' to hear");
+
+        // One of her party gone far out of sight: no longer in her game's battle, and where they are still told
+        const there = host.battle.actor(annId);
+
+        assert.equal(mine.afar.get(beaId)?.map, "town", "told of while in sight too");
+        host.battle.place(beaId, "town", [Math.floor(there.x) + 700, Math.floor(there.y) + 20]);
+        world.play(60);
+        assert.ok(!mine.battle.actor(beaId), "Bea's out of sight");
+
+        const [far, truth] = [mine.afar.get(beaId), host.battle.actor(beaId)];
+
+        assert.ok(far && Math.abs(far.x - truth.x) <= 1 && Math.abs(far.y - truth.y) <= 1 && far.hp === Math.round(truth.hp) && far.dead === false, JSON.stringify(far));
+        assert.equal(cal.link.host.afar.size, 0, "no one's told where another's party is");
+        assert.equal(mine.players.get(beaId).hero.name, "Bea", "and she's still on the roster");
+
+        // A ping's heard by the party alone
+        ann.events.length = 0;
+        cal.events.length = 0;
+        bea.link.command({ type: "party", do: "ping", at: [Math.floor(truth.x), Math.floor(truth.y)] });
+        world.play(10);
+        assert.ok(ann.events.some((event) => event.type === "party" && event.change === "ping"));
+        assert.ok(!cal.events.some((event) => event.type === "party"));
+
+        // The war, as the world has it
+        assert.equal(mine.war.turn, host.war.turn);
+        assert.deepEqual(mine.war.towns.map(({ id, owner }) => [id, owner]), host.war.towns.map(({ id, owner }) => [id, owner]));
+        assert.deepEqual(mine.war.realms.map(({ id }) => id), host.war.realms.map(({ id }) => id));
+        assert.equal(mine.war.town(host.war.towns[0].id).owner, host.war.towns[0].owner);
+
+        // A shop: asked of the server as it opens, answered as the world has it, and asked again once that's stood a while
+        // (The folk of the buildings round her made, as they are when a player's told to go in)
+        lookIn(host, [annId]);
+        world.play(2);
+
+        const keeper = [...host.folk.keys()].find((id) => host.battle.actor(id) && host.stockOf(id));
+
+        assert.ok(keeper, "a shopkeeper with a day's stock");
+        assert.deepEqual(await ann.link.ask({ what: "shop", keeper }), answerOf(host, annId, { what: "shop", keeper }));
+        assert.equal(await ann.link.ask({ what: "shop", keeper: "no one" }), null);
+        assert.equal(await ann.link.ask({ what: "world" }), null);
+
+        let now = 0;
+        const view = new ToldView(mine, (asked) => ann.link.ask(asked), () => now);
+        const shop = await view.shop(keeper);
+        const stocked = JSON.stringify(host.stockOf(keeper));
+
+        assert.equal(JSON.stringify(shop.stock()), stocked);
+        assert.equal(shop.times(), host.shopTimes(keeper));
+
+        // (Something of it sold: read as it stood till it's asked again, then as it stands)
+        const ware = host.stockOf(keeper).wares[0];
+
+        host.players.get(annId).progress.gold += 100000;
+        host.battle.place(annId, host.battle.actor(keeper).map, host.battle.actor(keeper).square.map((v, k) => v + (k ? 1 : 0)));
+
+        const bought = host.command(annId, { type: "buy", item: ware, from: keeper });
+
+        assert.deepEqual(bought, { ok: true });
+
+        {
+            assert.notEqual(JSON.stringify(host.stockOf(keeper)), stocked, "the world's stock's less");
+            assert.equal(JSON.stringify(shop.stock()), stocked, "her game's is as it was told");
+            now += ASKED_FOR;
+            shop.stock();
+            await Promise.resolve();
+            await Promise.resolve();
+            assert.equal(JSON.stringify(shop.stock()), JSON.stringify(host.stockOf(keeper)), "and, asked again, as it stands");
+        }
+
+        // A talk the same way: what the world would have said, with its reads
+        const talk = await view.talk(annId, keeper);
+        const said = answerOf(host, annId, { what: "talk", id: keeper });
+
+        assert.deepEqual([talk.stranger, talk.hire, talk.messenger, talk.times], [said.stranger, said.hire, said.messenger, said.times]);
+        assert.deepEqual(talk.menders(), said.menders);
+        assert.equal(talk.hired("no one"), false);
+
+        // (A lockstep link asks nothing: its game reads its copy)
+        assert.equal(new Joining({ send: () => {} }).ask, null);
     });
 });

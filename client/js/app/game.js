@@ -58,7 +58,7 @@ import { CHUNK } from "../core/worldplan/plan.js";
 import { atPortal, beforePortal, branchesFrom, branchOf, fareOff, portalOn } from "../core/portals.js";
 import { atStrongroom, beforeStrongroom, strongroomOn } from "../core/strongroom.js";
 import { atWarTable, beforeWarTable, mayRead, warTableOn } from "../core/wartable.js";
-import { after, LocalView } from "../core/worldview.js";
+import { after, LocalView, ToldView } from "../core/worldview.js";
 import { atWriting, beforeWriting, keepRead, WRITINGS, writingOn } from "../core/writings.js";
 import { ambienceOf, doorOf, TOLLS, tolled } from "../audio/ambience.js";
 import { footing } from "../audio/footing.js";
@@ -1430,7 +1430,9 @@ export class Game {
         this.me = me;
         this.host = host ?? new Host(world, { populate: false, war, legends });
         /** The world's rules as the game reads them (core/worldview.js): its own Host's. */
-        this.worldview = new LocalView(this.host);
+        // (A world it holds no copy of, core/viewing.js: what a talk or a shop needs is asked of
+        // its server; the rest is read of the world it keeps as it's told)
+        this.worldview = viewed && remote?.ask ? new ToldView(this.host, (asked) => remote.ask(asked), () => performance.now()) : new LocalView(this.host);
         this.onWar = onWar;
 
         // Playing its own world: what moves it on, step by step as the frames give the time, and
@@ -8519,14 +8521,17 @@ export class Game {
         const party = this.worldview.partyFor(this.me);
 
         return (party?.members ?? []).flatMap((id) => {
-            const actor = id === this.me ? null : this.battle.actor(id);
+            // (One not in sight, in a world a server tells of: where they were last said to be,
+            // core/host.js afar)
+            const far = id === this.me || this.battle.actor(id) ? null : this.worldview.afar?.get(id);
+            const actor = id === this.me ? null : (this.battle.actor(id) ?? far);
 
             if (!actor) {
                 return [];
             }
 
-            const [x, z] = this.#outside(actor);
-            const name = this.world.maps?.[actor.map]?.name ?? this.world.interiors?.of(actor.map)?.name ?? null;
+            const [x, z] = far && far.map !== "town" ? (far.out ?? [far.x, far.y]) : this.#outside(actor);
+            const name = far?.inside ?? this.world.maps?.[actor.map]?.name ?? this.world.interiors?.of(actor.map)?.name ?? null;
 
             return [{ id, name: this.worldview.players.get(id)?.hero.name ?? actor.name ?? "", colour: partyColour(party.members, id), x, z, map: actor.map, inside: actor.map === "town" ? null : name ? `in ${name.replace(/^The /, "the ")}` : "indoors", dead: Boolean(actor.dead) }];
         });
