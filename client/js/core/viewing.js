@@ -12,7 +12,11 @@
 //   - its player's own record is the welcome's, and what the frames say has changed of it;
 //   - who those in sight are drawn as (the folk, soldiers, other players' heroes, a creature's
 //     kind) is what the frames say as each comes into sight (core/viewfeed.js dressOf);
-//   - a trade the player's in is kept from the events that tell of it.
+//   - a trade the player's in is kept from the events that tell of it;
+//   - the buildings and dungeons near its hero are got ready here as the world has them, from
+//     its seed and what its summary says of each dungeon (Host.keepNear; the plan's 3-23): so
+//     the hero goes through a door onto floors already made, and who's on them comes in the
+//     frames, those of the map left let go of with the same frame.
 //
 // `step()` plays one frame, a step of the world's, into that: a few are kept in hand so they
 // go by evenly however they come (the same pacing a lockstep link has), and the game draws
@@ -21,8 +25,9 @@
 // them and of the world's time as it comes, over the mirror's battle.
 //
 // Not yet (each a later slice's): the rest of the world's summary put where the game reads it
-// (the war, parties, props: 3-24, 3-25), insides and dungeons (3-23), and being hidden and
-// shown again (3-26). Pure: no DOM, no network of its own.
+// (the war, parties, props: 3-24, 3-25: a dungeon's chests and a building's wares among them),
+// a dungeon's sealed rooms, and being hidden and shown again or coming back in while inside
+// (3-26). Pure: no DOM, no network of its own.
 
 import { STEP_MS } from "./battle.js";
 import { Host } from "./host.js";
@@ -38,6 +43,9 @@ import { decode, encode } from "./wire.js";
  */
 export const VIEWING = Object.freeze({ kept: 60, late: 0.95, least: 2, most: 8 });
 
+/** How many steps played between looks at which buildings are near its hero (as a host's own look: RELEVANCE.every). */
+export const LOOKS = 5;
+
 export class Viewing extends Joining {
     // Frames come and not yet played: [{ step, bytes }], in their order
     #frames = [];
@@ -52,6 +60,19 @@ export class Viewing extends Joining {
     #done = null;
 
     #hero = null;
+
+    // The map its hero was on when the buildings near them were last looked at, and the steps
+    // played since
+    #map = null;
+
+    #sinceLook = 0;
+
+    // Who's in each building that's always there (#people), by its key
+    #always = new Map();
+
+    // The buildings got ready before there was a game to hear of it (#begin): told with the
+    // first step it plays
+    #early = [];
 
     constructor({ send, clock = () => 0 }) {
         super({ send, clock });
@@ -123,7 +144,36 @@ export class Viewing extends Joining {
         this.played = welcome.step ?? -1;
         host.battle.time = Math.max(0, this.played) * STEP_MS;
         this.#own();
+        this.#world();
         this.#begin();
+    }
+
+    // What the world's summary says of its dungeons (how many times each is made, how strong,
+    // what's slain and opened in it), put where the game and the making of their floors read it
+    #world() {
+        const dungeons = this.mirror.summary.parts.get("dungeons");
+
+        if (dungeons) {
+            this.host.dungeons = new Map(structuredClone([...dungeons]));
+        }
+    }
+
+    // The buildings near its hero got ready and those far let go (Host.keepNear), every few
+    // steps and at once when the hero's on another map: what the game's to hear of it, as a
+    // copy's host tells ("open" before anything else of the step, "close" after)
+    #look() {
+        const mine = this.host.battle.actor(this.me);
+
+        if (!mine || (mine.map === this.#map && ++this.#sinceLook < LOOKS)) {
+            return [[], []];
+        }
+
+        this.#map = mine.map;
+        this.#sinceLook = 0;
+
+        const { opened, closed } = this.host.keepNear(this.me);
+
+        return [opened.map((key) => ({ type: "open", key, folk: [] })), closed.map((key) => ({ type: "close", key, folk: [] }))];
     }
 
     // Its player's record, as the mirror's summary now has it (core/summary.js: the part "own",
@@ -167,7 +217,8 @@ export class Viewing extends Joining {
     // comes over the first few), and whoever waits for that told
     #begin() {
         while (this.#started && this.#frames.length) {
-            this.step();
+            // (The buildings got ready meanwhile are told to the game once there is one: #early)
+            this.#early.push(...(this.#stepped() ?? []).filter(({ type }) => type === "open"));
         }
     }
 
@@ -253,6 +304,19 @@ export class Viewing extends Joining {
      * are played at once, their events let go of.
      */
     step() {
+        const heard = this.#stepped();
+
+        if (!heard || !this.#early.length) {
+            return heard;
+        }
+
+        // (Those still ready, of the buildings got ready before the game was there)
+        const early = this.#early.splice(0).filter(({ key }) => this.host.open.has(key));
+
+        return [...early, ...heard];
+    }
+
+    #stepped() {
         if (!this.mirror || !this.#frames.length) {
             return null;
         }
@@ -286,18 +350,65 @@ export class Viewing extends Joining {
             this.#own();
         }
 
+        if (frame.sections.world !== undefined) {
+            this.#world();
+        }
+
+        // (A dungeon made again: said here at once, its summary's word of it a little behind)
         for (const event of mirror.events) {
             if (event.type === "trade") {
                 this.#trade(event);
+            } else if (event.type === "dungeon" && event.change === "remade") {
+                const said = host.dungeons.get(event.site);
+                const building = host.world.interiors?.buildings.get(`site:${event.site}`);
+
+                // (Unless its summary's word came with this very frame, and is of the new making)
+                if (said && building?.made && said.generation === building.generation) {
+                    Object.assign(said, { generation: building.generation + 1, awake: [], dead: [], opened: [], cleared: false });
+                }
+
+                host.open.delete(`site:${event.site}`);
             }
         }
+
+        // (The world's own word of a building got ready or let go is of everyone's being near
+        // it: the game hears of this hero's, from the look here)
+        const [opened, closed] = this.#look();
+        const peopled = opened.length || frame.leaves.length || frame.sections.enters !== undefined ? this.#people() : [];
+        const told = mirror.events.filter(({ type }) => type !== "open" && type !== "close" && type !== "peopled" && type !== "vacated");
+        const heard = [...opened, ...told, ...peopled, ...closed];
 
         if (this.#started && host.battle.actor(this.me) && host.players.has(this.me)) {
             this.#started();
             this.#started = null;
         }
 
-        return mirror.events;
+        return heard;
+    }
+
+    // Who's in each building got ready, as the game asks (Host.open: a copy's are those its host
+    // made there; here, the folk and soldiers the frames have brought on its floors), and what
+    // the game's to hear where that's changed: "peopled", to dress those come; "vacated", once
+    // none's left. A building always there, with no door of its own to be got ready by (a
+    // home town's tavern), is told of the same way, though Host.open has none such
+    #people() {
+        const { host } = this;
+        const interiors = host.world.interiors;
+        const events = [];
+        const always = [...(interiors?.buildings.values() ?? [])].filter((building) => !building.entrance && building.made).map(({ key }) => key);
+
+        for (const key of [...host.open.keys(), ...always]) {
+            const maps = interiors.buildings.get(key)?.maps ?? [];
+            const had = host.open.get(key) ?? this.#always.get(key) ?? [];
+            const folk = host.battle.actors.filter(({ kind, map }) => (kind === "folk" || kind === "soldier") && maps.includes(map)).map(({ id }) => id).sort();
+
+            if (folk.length !== had.length || folk.some((id, k) => id !== had[k])) {
+                (host.open.has(key) ? host.open : this.#always).set(key, folk);
+                events.push(folk.length ? { type: "peopled", key, folk } : { type: "vacated", key, folk: had });
+            }
+        }
+
+        return events;
     }
 
     // A trade the player's in, as the events that tell of it say it stands: kept where the game

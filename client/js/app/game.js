@@ -3291,7 +3291,9 @@ export class Game {
             node.castShadow = false;
         });
 
-        avatar.actions.setSeated(Boolean(one.routine.seated));
+        // (Standing, where their routine isn't known: in a world a server tells of, who they're
+        // drawn as comes without it, core/viewfeed.js dressOf)
+        avatar.actions.setSeated(Boolean(one.routine?.seated));
 
         // (Their face at rest: their part's, a smile for some)
         if (character.expressions) {
@@ -16980,7 +16982,9 @@ export class Game {
             case "peopled": {
                 // (A building's people made, a player going in: core/host.js Host.peopling. If
                 // the player's own going in was seen before they were made, they're dressed now)
-                const visit = this.visits.get(event.key);
+                // (The home town's tavern among them, in a world a server tells of: its folk
+                // come with the frames once the player's in, core/viewing.js)
+                const visit = this.visits.get(event.key) ?? (this.tavernFolk?.key === event.key ? this.tavernFolk : null);
 
                 if (visit?.welcomed) {
                     visit.welcomed = false;
