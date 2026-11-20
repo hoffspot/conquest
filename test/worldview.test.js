@@ -136,6 +136,7 @@ describe("the world view's first group: shops, talk, hires and trades (core/worl
         const direct = [...game.matchAll(/\bhost\??\.(stockOf|shopTimes|threadWaresOf|hireOffer|stableOffer|trades|hired|messengerSaysOf|strangerOf)\b/g)].map(([, name]) => name);
 
         assert.deepEqual(direct, []);
-        assert.ok(game.includes("this.worldview = new LocalView(this.host)"));
+        // (Its own Host's, or, of a world it holds no copy of, the same with a talk and a shop asked of its server)
+        assert.ok(game.includes("this.worldview = viewed && remote?.ask ? new ToldView(this.host, (asked) => remote.ask(asked), () => performance.now()) : new LocalView(this.host)"));
     });
 });

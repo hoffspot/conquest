@@ -4014,11 +4014,27 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     what the frames bring ("peopled", "vacated"), the home town's tavern's too, so they're
     dressed as they come. Measured in `test/viewing.test.js`: into the tavern and out, and
     into a dungeon whose first floor is the world's own, its foes on it.
-  - **Not yet**, each a later slice's: parties, shops and the war table (`3-24`); the war,
-    props, what's on the ground and what flies, a dungeon's chests among them (`3-25`); a
-    page hidden and shown, and coming back after a reload, or in while inside (`3-26`). A
-    dungeon's sealed rooms aren't made. A building's folk stand, where a copy's would sit:
-    who they're drawn as comes without their routine.
+  - **Parties, everyone in the world, and the war** (the plan's `3-24`). The summary's
+    parts are put where the game reads them: the parties and which each player's in; a
+    record for everyone in the world, wherever they are, with their name, people, realm and
+    whether they're away; who's asked whom to a party, known only to the two; and the war's
+    turn, realms, towns, works, forces and forts, set in a war never stepped. Those of the
+    player's own party are told of wherever they are (the summary's `fellows`, a part of
+    one's own: where to the metre, and inside what, and how they fare), so they're on the
+    maps when out of sight. That part is new in a frame, so `VIEW_VERSION` is 2.
+  - **Talks and shops asked for** (`core/worldview.js`). A game with no world to read them
+    of has `ToldView` in place of `LocalView`: a talk and a shop are asked of the server as
+    they open (`{ type: "ask", what }`, a command the session answers with `answerOf` and
+    does nothing by; it's told to no copy) and come with the command's result. What a
+    handle reads later is as last answered, and asked again once that's stood 750 ms, so a
+    shop's stock keeps up while it's open. Buying, selling and trading are the commands
+    they always were.
+  - **Not yet**, each a later slice's: the war's camps, depots and news, props, what's on
+    the ground and what flies, a dungeon's chests among them (`3-25`); a page hidden and
+    shown, and coming back after a reload, or in while inside (`3-26`). A dungeon's sealed
+    rooms aren't made. A building's folk stand, where a copy's would sit: who they're drawn
+    as comes without their routine. Another player's followers and companions aren't told
+    of beyond those in sight.
     What another player wears is as it was when they came into sight. Outside what's built,
     such a game shows the world as a new one would be, not as it is.
 - **Who hears of what** (`core/eventscope.js`; the scaling plan's `3-15`). A lockstep copy plays

@@ -127,6 +127,7 @@ import { count, lap } from "./probe.js";
 import { selfOf } from "./selfstate.js";
 import { STARTING_WEAPONS } from "./weapons.js";
 import { decode, encode, encodePlain, fromBase64, toBase64 } from "./wire.js";
+import { answerOf } from "./worldview.js";
 import { RACE, startFor } from "./worldplan/plan.js";
 import { CREATURES, TIERS } from "./creatures.js";
 import { WARY } from "./wary.js";
@@ -1182,7 +1183,10 @@ export class Session {
         let result;
 
         try {
-            result = this.host.command(id, command);
+            // (What a game sent views asks as a talk or a shop opens, core/worldview.js: read of
+            // the world and answered with its commands' results; nothing's done, and no copy's
+            // told of it)
+            result = this.viewing.has(peer) && command?.type === "ask" ? { ok: true, answer: answerOf(this.host, id, command) } : this.host.command(id, command);
         } finally {
             this.seq = null;
             this.done.set(peer, seq);
@@ -2001,6 +2005,9 @@ export class Joining {
          * it's asked for (drawing): null, as it is unless it is.
          */
         this.drawn = null;
+
+        /** What a talk or a shop needs, asked of the server (core/remote.js): null here, where the game reads its copy. */
+        this.ask = null;
 
         /**
          * The host's latest step heard; how late its steps come (ms: all but the latest few,

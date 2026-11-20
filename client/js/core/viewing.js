@@ -13,6 +13,9 @@
 //   - who those in sight are drawn as (the folk, soldiers, other players' heroes, a creature's
 //     kind) is what the frames say as each comes into sight (core/viewfeed.js dressOf);
 //   - a trade the player's in is kept from the events that tell of it;
+//   - the parties, who's in the world, who's asked whom, where the player's own party is, and
+//     the war's realms, towns, works, forces and forts are the summary's, put where the game
+//     reads them (the plan's 3-24); what a talk or a shop needs is asked of the server (`ask`);
 //   - the buildings and dungeons near its hero are got ready here as the world has them, from
 //     its seed and what its summary says of each dungeon (Host.keepNear; the plan's 3-23): so
 //     the hero goes through a door onto floors already made, and who's on them comes in the
@@ -25,7 +28,7 @@
 // them and of the world's time as it comes, over the mirror's battle.
 //
 // Not yet (each a later slice's): the rest of the world's summary put where the game reads it
-// (the war, parties, props: 3-24, 3-25: a dungeon's chests and a building's wares among them),
+// (the war's camps and news, props: 3-25: a dungeon's chests among them),
 // a dungeon's sealed rooms, and being hidden and shown again or coming back in while inside
 // (3-26). Pure: no DOM, no network of its own.
 
@@ -42,6 +45,9 @@ import { decode, encode } from "./wire.js";
  * them that came no later than that allows for; and the fewest and most steps kept in hand.
  */
 export const VIEWING = Object.freeze({ kept: 60, late: 0.95, least: 2, most: 8 });
+
+// What one not in sight wears and wields, as far as the game's told: nothing
+const UNSEEN = Object.freeze({ worn: () => [], wielded: () => null });
 
 /** How many steps played between looks at which buildings are near its hero (as a host's own look: RELEVANCE.every). */
 export const LOOKS = 5;
@@ -87,6 +93,15 @@ export class Viewing extends Joining {
         /** How many frames it's played, and how many it let go by unplayed to catch up. */
         this.frames = 0;
         this.dropped = 0;
+
+        /**
+         * What a talk or a shop needs of the world, asked of the server and answered with its
+         * commands' results (core/worldview.js ToldView, answerOf): a promise of the answer,
+         * null for none.
+         */
+        this.ask = (asked) => new Promise((resolve) => {
+            this.command({ ...asked, type: "ask" }, (result) => resolve(result?.answer ?? null));
+        });
 
         /** Resolves once its hero's in its world (the first frames played): a game can be made. */
         this.started = new Promise((resolve) => {
@@ -144,6 +159,7 @@ export class Viewing extends Joining {
         this.played = welcome.step ?? -1;
         host.battle.time = Math.max(0, this.played) * STEP_MS;
         this.#own();
+        this.#mine();
         this.#world();
         this.#begin();
     }
@@ -151,10 +167,80 @@ export class Viewing extends Joining {
     // What the world's summary says of its dungeons (how many times each is made, how strong,
     // what's slain and opened in it), put where the game and the making of their floors read it
     #world() {
-        const dungeons = this.mirror.summary.parts.get("dungeons");
+        const { parts } = this.mirror.summary;
+        const { host } = this;
+        const dungeons = parts.get("dungeons");
 
         if (dungeons) {
-            this.host.dungeons = new Map(structuredClone([...dungeons]));
+            host.dungeons = new Map(structuredClone([...dungeons]));
+        }
+
+        this.#parties(parts.get("parties"));
+        this.#roster(parts.get("roster"));
+        this.#war(parts);
+    }
+
+    // The players' parties as the summary has them, and which each player's in (the plan's 3-24)
+    #parties(parties) {
+        const { host } = this;
+
+        host.parties = new Map(structuredClone([...(parties ?? [])]));
+        host.partyIds = new Map();
+
+        for (const party of host.parties.values()) {
+            for (const id of party.members ?? []) {
+                host.partyIds.set(id, party.id);
+            }
+        }
+    }
+
+    // Everyone in the world, wherever they are, as anyone may know them: a record for each the
+    // game can list (their name, people, realm, whether they're away), beside what's known of
+    // those who've come into sight (#dress) and the player's own (#own); one who's left is gone
+    #roster(roster) {
+        const { host } = this;
+
+        if (!roster) {
+            return;
+        }
+
+        for (const [id, said] of roster) {
+            if (id !== this.me) {
+                const had = host.players.get(id);
+
+                host.players.set(id, { id, progress: UNSEEN, ...had, hero: { name: said.name ?? "", race: said.race ?? null, ...had?.hero }, realm: said.realm ?? null, role: said.role ?? had?.role ?? "player", away: Boolean(said.away) });
+            }
+        }
+
+        for (const id of [...host.players.keys()]) {
+            if (id !== this.me && !roster.has(id) && !host.battle.actor(id)) {
+                host.players.delete(id);
+            }
+        }
+    }
+
+    // The war as the summary has it, put in the world's own (never stepped: a war begun, whose
+    // turn, realms, towns, works, forces and forts are as they're told). Its camps, depots and
+    // news aren't told yet (the plan's 3-25)
+    #war(parts) {
+        const { war } = this.host;
+        const clock = parts.get("clock")?.get("");
+        const relations = parts.get("relations")?.get("");
+
+        if (!war || !clock) {
+            return;
+        }
+
+        Object.assign(war, { turn: clock.turn, clock: clock.clock, stage: clock.stage, might: clock.might, victor: clock.victor ?? null });
+
+        for (const part of ["realms", "towns", "works", "forces", "forts"]) {
+            if (parts.has(part)) {
+                war[part] = [...parts.get(part).values()];
+            }
+        }
+
+        if (relations) {
+            Object.assign(war, { relations: relations.relations, known: relations.known });
         }
     }
 
@@ -194,6 +280,16 @@ export class Viewing extends Joining {
         this.host.players.set(this.me, Host.livePlayer(kept));
     }
 
+    // What else of the summary is the player's own: who's asked whom to a party, and where
+    // those of their party are who aren't in sight (Host.afar: the plan's 3-24)
+    #mine() {
+        const { parts } = this.mirror.summary;
+        const { host } = this;
+
+        host.invites = new Map(structuredClone([...(parts.get("invites") ?? [])]));
+        host.afar = new Map(structuredClone([...(parts.get("fellows") ?? [])]));
+    }
+
     // Someone come into sight with what they're drawn as: put where the game asks
     #dress(actor, as) {
         const { host } = this;
@@ -209,7 +305,8 @@ export class Viewing extends Joining {
         } else if (as.hero && actor.id !== this.me) {
             const [worn, wielded] = [as.worn ?? [], as.wielded ?? null];
 
-            host.players.set(actor.id, { id: actor.id, hero: as.hero, role: as.role ?? "player", progress: { worn: () => worn, wielded: () => wielded } });
+            // (Their realm and whether they're away, as the roster says: #roster)
+            host.players.set(actor.id, { ...host.players.get(actor.id), id: actor.id, hero: as.hero, role: as.role ?? "player", progress: { worn: () => worn, wielded: () => wielded } });
         }
     }
 
@@ -348,6 +445,7 @@ export class Viewing extends Joining {
 
         if (frame.sections.own !== undefined) {
             this.#own();
+            this.#mine();
         }
 
         if (frame.sections.world !== undefined) {

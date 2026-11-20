@@ -695,7 +695,7 @@ test("a game opened with ?mirror draws the others where its player's frames say 
     }
 });
 
-test("a replicated world: two players, neither's game holding a copy of it, see each other move, fight a foe, trade and go in at a door", async ({ ownBrowser: browser }) => {
+test("a replicated world: two players, neither's game holding a copy of it, see each other move, fight a foe, trade, go in at a door and make a party", async ({ ownBrowser: browser }) => {
     const pages = [];
 
     for (const [name, weapon] of [["Una", "sword"], ["Bram", "sword"]]) {
@@ -866,6 +866,21 @@ test("a replicated world: two players, neither's game holding a copy of it, see 
         await expect.poll(async () => (await inside(una)).folk, { timeout: 60000, intervals: [1000] }).toBeGreaterThanOrEqual(1);
         await expect.poll(() => where(bram, unaHas.me), { timeout: 30000 }).toBeNull();
 
+        // What a talk and a shop need of the world (the plan's 3-24): asked of the server, by
+        // a game that has no world to read them of, and answered as the world has them
+        const asked = await una.evaluate(async () => {
+            const { game } = window.pellagos;
+            const keeper = game.host.battle.actors.find(({ kind, map, id }) => kind === "folk" && map === "taproom" && /keep|wife/.test(id))?.id ?? null;
+            const [talk, shop] = keeper ? [await game.worldview.talk(game.me, keeper), await game.worldview.shop(keeper)] : [null, null];
+
+            return { view: game.worldview.constructor.name, keeper, talk: talk && { times: talk.times, hired: talk.hired(keeper), menders: talk.menders().length }, shop: shop && { times: shop.times(), stock: shop.stock() === null || Array.isArray(shop.stock().wares) } };
+        });
+
+        expect(asked.view).toBe("ToldView");
+        expect(asked.keeper).not.toBeNull();
+        expect(asked.talk).toEqual({ times: 1, hired: false, menders: 0 });
+        expect(asked.shop).toEqual({ times: 1, stock: true });
+
         // (And out again, to the town and to Bram's sight)
         expect((await command(una, { type: "enter", link: "tavern-door", run: true })).ok).toBe(true);
         await expect.poll(() => inside(una), { timeout: 60000, intervals: [1000] }).toMatchObject({ map: "town", shown: "town", room: false, town: true, others: 0 });
@@ -877,6 +892,21 @@ test("a replicated world: two players, neither's game holding a copy of it, see 
                 return seen?.drawn ? Math.hypot(seen.drawn[0] - seen.x, seen.drawn[1] - seen.y) : 99;
             }, { timeout: 30000 }).toBeLessThan(1.5);
         }
+
+        // A party (the plan's 3-24): asked and taken up, each game has it and the other on its
+        // maps; everyone in the world is on each game's roster, and its war is the world's
+        const partied = (page) => page.evaluate(() => {
+            const { game } = window.pellagos;
+
+            return { members: game.worldview.partyFor(game.me)?.members.length ?? 0, asked: Boolean(game.worldview.invitation(game.me)), onMaps: game.partyView().map(({ name }) => name), roster: [...game.worldview.players.values()].map(({ hero }) => hero.name).sort(), towns: game.worldview.war?.towns.length ?? 0, turn: game.worldview.war?.turn ?? -1 };
+        });
+
+        expect((await command(una, { type: "party", do: "invite", who: bramHas.me })).ok).toBe(true);
+        await expect.poll(async () => (await partied(bram)).asked, { timeout: 30000 }).toBe(true);
+        expect((await command(bram, { type: "party", do: "accept" })).ok).toBe(true);
+        await expect.poll(() => partied(una), { timeout: 30000 }).toMatchObject({ members: 2, onMaps: ["Bram"], roster: ["Bram", "Una"] });
+        await expect.poll(() => partied(bram), { timeout: 30000 }).toMatchObject({ members: 2, asked: false, onMaps: ["Una"], roster: ["Bram", "Una"] });
+        expect((await partied(una)).towns).toBeGreaterThanOrEqual(10);
 
         // (Still no copy, and nothing the frames said that couldn't be so)
         for (const one of [await has(una), await has(bram)]) {

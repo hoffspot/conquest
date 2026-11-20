@@ -10,7 +10,7 @@ import { Host } from "../client/js/core/host.js";
 import { Hosting, NET_VERSION } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { COUNTERS } from "../client/js/core/probe.js";
-import { decodeFrame, encodeFrame, originFor, SECTION, VIEW, ViewState } from "../client/js/core/view.js";
+import { decodeFrame, encodeFrame, originFor, SECTION, VIEW, VIEW_VERSION, ViewState } from "../client/js/core/view.js";
 import { EVENTS, ViewFeed } from "../client/js/core/viewfeed.js";
 import { encode } from "../client/js/core/wire.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
@@ -147,7 +147,7 @@ describe("a frame's sections (core/view.js)", () => {
         // (Sections alone: a frame all the same)
         const alone = encodeFrame(state, { step: 9, origin, sections: { events, done: 41, self } });
 
-        assert.deepEqual(decodeFrame(alone.bytes), { version: 1, step: 9, origin, leaves: [], records: [], sections: { events, done: 41, self } });
+        assert.deepEqual(decodeFrame(alone.bytes), { version: VIEW_VERSION, step: 9, origin, leaves: [], records: [], sections: { events, done: 41, self } });
         assert.deepEqual(decodeFrame(encodeFrame(state, { step: 9, origin, sections: { done: 4294967295 } }).bytes).sections, { done: 4294967295 });
         assert.equal(encodeFrame(state, { step: 9, origin, sections: {} }).bytes, null, "none of them: no frame");
         assert.deepEqual(SECTION, { events: 1, done: 2, self: 3, enters: 4, own: 5, world: 6, asof: 7 });

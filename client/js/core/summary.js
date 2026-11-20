@@ -3,7 +3,8 @@
 // the realms, who holds each town and works, the forces abroad), the parties and who's in the
 // world, the invasions and what's burnt, the hell's rifts, the legends, the rules; and the
 // director's props near its hero (what's on the ground, campfires, caches, finds, strangers,
-// obstacles, treasures, ambushes).
+// obstacles, treasures, ambushes); and where those of its party are, wherever that is, for its
+// maps and its party's rows (`fellows`: the scaling plan's 3-24).
 //
 // It's in parts, each a table of small entries by key, so that what changes is told and nothing
 // else: a town taken is that town's entry, not the war. A part's entries are the world's own
@@ -25,7 +26,7 @@ export const SUMMARY = Object.freeze({ every: 20, frame: 6000, near: 512 });
 
 /** The parts that are every player's alike (worldParts), and those that are one player's (ownParts). */
 export const WORLD_PARTS = Object.freeze(["rules", "clock", "realms", "towns", "works", "forces", "forts", "relations", "parties", "roster", "invasions", "burnt", "rifts", "legends", "done", "dungeons"]);
-export const OWN_PARTS = Object.freeze(["own", "invites", "props"]);
+export const OWN_PARTS = Object.freeze(["own", "invites", "props", "fellows"]);
 
 /** The director's props a player's told of when near: each a table of the host's, by its name there. */
 export const PROPS = Object.freeze(["ground", "campfires", "caches", "finds", "strangers", "obstacles", "treasures", "ambushes"]);
@@ -141,10 +142,28 @@ export function ownParts(host, me) {
         }
     }
 
+    // (Those of their party, wherever in the world they are: where, and how they fare, to the
+    // metre and the point; one in sight is told of far finer by the frames)
+    const fellows = new Map();
+
+    for (const id of host.fellows?.(me) ?? []) {
+        const actor = host.battle.actor(id);
+
+        if (actor) {
+            // (One inside: where that is out in the world, and its name, which a game that hasn't
+            // the building can't tell)
+            const building = actor.map === "town" ? null : host.world.interiors?.of(actor.map);
+            const out = building ? (building.at ?? building.door?.ends[0].arrive ?? null) : null;
+
+            put(fellows, id, { map: actor.map, x: Math.round(actor.x), y: Math.round(actor.y), ...(actor.map === "town" ? {} : { out: out ? [Math.round(out[0]), Math.round(out[1])] : null, inside: building?.name ?? host.world.maps?.[actor.map]?.name ?? null }), hp: Math.max(0, Math.round(actor.hp)), maxHp: actor.maxHp, dead: Boolean(actor.dead) });
+        }
+    }
+
     return {
         own: byKey(Object.entries(host.keptPlayer(player, (value) => value))),
         invites: byKey([...host.invites.entries()].filter(([to, invite]) => to === me || invite?.from === me || invite?.to === me)),
         props,
+        fellows,
     };
 }
 

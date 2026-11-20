@@ -1821,6 +1821,12 @@ export class Host {
         this.partyIds = new Map();
         this.invites = new Map();
         this.nextParty = 1;
+        /**
+         * Those of the player's party who aren't in the battle here, by id: { map, x, y, hp,
+         * maxHp, dead, and, inside, out ([x, y] in the world) and inside (its name) }, as last told. Only a world kept as a server tells it has any
+         * (core/viewing.js, the summary's `fellows`): a world that's played has everyone.
+         */
+        this.afar = new Map();
 
         /**
          * The players, by id: { id, hero (their character: { name, shape, look, weapon, boots,

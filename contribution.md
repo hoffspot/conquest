@@ -578,9 +578,10 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      moves only when the frame's bytes do, and never with `NET_VERSION`: a change to lockstep's
      messages or to what both netcodes share bumps `NET_VERSION` alone, a change to the frame
      bumps `VIEW_VERSION` alone, and a game says which views it reads in `speaks`. It's
-     1, and never 0 (a message of bytes whose first is 0 is the tests' echo: `server/play.js`
+     2, and never 0 (a message of bytes whose first is 0 is the tests' echo: `server/play.js`
      `BINARY`). A replicated world's games play from frames (3-21), so from here a change to
-     a frame's bytes bumps it.
+     a frame's bytes bumps it: a new part of the summary does (3-24's `fellows`), as a new
+     section or field would.
    - `SNAPSHOT_VERSION` (`client/js/core/host.js`): what a snapshot of the world holds. A world
      kept by an older version is carried on, not lost (the world server keeps worlds): add a step
      from the version before to `SNAPSHOT_STEPS`, filling in what the new version keeps as it
@@ -679,6 +680,11 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
        Anything new that a floor's making depends on and the seed doesn't give goes in the
        summary, or the game's floor won't be the world's (`test/viewing.test.js` compares
        them).
+     - What such a game reads of the world at once, it reads of the summary's parts put in
+       the world it keeps (`Viewing`, `client/js/core/viewing.js`: parties, the roster, the
+       war). What a talk or a shop needs is asked of the server as it opens
+       (`client/js/core/worldview.js`: `ToldView` asks, `answerOf` answers): something new a
+       talk or a shop reads goes in both, or such a game's talk has none of it.
      - Something new the world keeps that a game shows of the world at large (not of a
        character in sight) is given a part in `client/js/core/summary.js` (`worldParts` for
        what's everyone's, `ownParts` for one player's), or a game sent views never hears of it;
