@@ -20003,6 +20003,110 @@ export class Host {
         count("lookAround.pairs", measured);
     }
 
+    /**
+     * For a world kept as a server tells it and never stepped (core/viewing.js; the scaling
+     * plan's 3-23): the buildings near where a player's hero is (`id`) got ready as the world
+     * itself has them, and those far from the hero let go. Their floors are made from the
+     * world's seed and, a dungeon's, from how many times it's said to be made and how strong
+     * (`dungeons`, kept as the world's summary says: one not yet said of waits). No one's made
+     * in them: who's there is told. The buildings got ready and let go, by key.
+     */
+    keepNear(id) {
+        const interiors = this.world.interiors;
+        const actor = this.battle.actor(id);
+        const [opened, closed] = [[], []];
+
+        if (!interiors || !actor) {
+            return { opened, closed };
+        }
+
+        const out = actor.map === "town";
+        const within = out ? null : this.#buildingOfMap(actor.map);
+        const door = within?.entrance?.door ?? this.world.tavern?.door;
+        const at = out ? [actor.x, actor.y] : door ? [door.x, door.z] : null;
+
+        // (The settlements and dungeons round the hero laid out, as #lookAround and #dungeons do)
+        if (out) {
+            const settlements = this.world.maps?.town?.settlements;
+            const [cx, cy] = [Math.floor(actor.x / CHUNK), Math.floor(actor.y / CHUNK)];
+
+            for (let dy = -1; settlements && dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    settlements.settle(cx + dx, cy + dy);
+                }
+            }
+        }
+
+        if (this.world.plan) {
+            for (const site of this.#dungeonSites()) {
+                if (site.parent ? this.#byKeepDoors(actor, site, DELVES.near) : out && hypot(actor.x - site.at[0], actor.y - site.at[1]) < DELVES.near) {
+                    this.#building(`site:${site.id}`);
+                }
+            }
+        }
+
+        for (const building of [...interiors.buildings.values()]) {
+            if (!building.entrance) {
+                continue;
+            }
+
+            const { x, z } = building.entrance.door;
+            const far = at ? hypot(x - at[0], z - at[1]) : 0;
+            const wanted = building === within || (actor.order?.type === "enter" && this.battle.links.find((link) => link.id === actor.order.link)?.building === building.key);
+
+            if (this.open.has(building.key)) {
+                if (!wanted && far > RELEVANCE.far) {
+                    this.open.delete(building.key);
+                    closed.push(building.key);
+                }
+            } else if ((wanted || (out && far < RELEVANCE.near)) && this.#makeAsSaid(building)) {
+                this.open.set(building.key, []);
+                opened.push(building.key);
+            }
+        }
+
+        return { opened, closed };
+    }
+
+    // The building a map's of, laid out if it isn't yet: a floor's map begins with its
+    // building's key (insides.js)
+    #buildingOfMap(map) {
+        const interiors = this.world.interiors;
+
+        for (let key = map; !interiors.of(map) && key.includes("/");) {
+            key = key.slice(0, key.lastIndexOf("/"));
+            this.#building(key);
+        }
+
+        return interiors.of(map) ?? null;
+    }
+
+    // A building's floors made as the world's said to have them (keepNear): a dungeon's at the
+    // making and tier said of it, made again if it was made otherwise. False for a dungeon not
+    // yet said of
+    #makeAsSaid(building) {
+        const interiors = this.world.interiors;
+
+        if (building.kind === "dungeon") {
+            const said = this.dungeons.get(building.site);
+
+            if (!said || !Number.isFinite(said.tier)) {
+                return false;
+            }
+
+            if (building.made && (building.generation !== said.generation || building.tier !== said.tier)) {
+                interiors.remake(building.key);
+            }
+
+            interiors.setGeneration(building.key, said.generation ?? 0);
+            interiors.setTier(building.key, said.tier);
+        }
+
+        interiors.make(building.key);
+
+        return true;
+    }
+
     // A building (by key), added to the world's if it's in a settlement not laid out yet
     #building(key) {
         const interiors = this.world.interiors;

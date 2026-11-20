@@ -695,7 +695,7 @@ test("a game opened with ?mirror draws the others where its player's frames say 
     }
 });
 
-test("a replicated world: two players, neither's game holding a copy of it, see each other move, fight a foe and trade", async ({ ownBrowser: browser }) => {
+test("a replicated world: two players, neither's game holding a copy of it, see each other move, fight a foe, trade and go in at a door", async ({ ownBrowser: browser }) => {
     const pages = [];
 
     for (const [name, weapon] of [["Una", "sword"], ["Bram", "sword"]]) {
@@ -843,6 +843,40 @@ test("a replicated world: two players, neither's game holding a copy of it, see 
         await expect.poll(async () => (await has(bram)).gold, { timeout: 30000 }).toBe(before[1] + 5);
         await expect.poll(async () => (await has(una)).gold, { timeout: 30000 }).toBe(before[0] - 5);
         expect(await trade(una)).toBe(null);
+
+        // Going in at a door (the scaling plan's 3-23): Una's game has made the tavern's floors
+        // itself, from the world's seed; she's shown its taproom and those in it, and no one of
+        // the town's left in her game; to Bram, out in the town, she's gone from sight
+        const inside = (page) => page.evaluate(() => {
+            const { game } = window.pellagos;
+            const me = game.host.battle.actor(game.me);
+
+            return {
+                map: me.map,
+                shown: game.mapId,
+                room: game.interiors.get("taproom")?.object.visible ?? false,
+                town: game.town.object.visible,
+                folk: game.host.battle.actors.filter(({ kind, map, id }) => kind === "folk" && map === "taproom" && game.avatars.get(id)?.object.visible).length,
+                others: game.host.battle.actors.filter(({ map }) => map !== me.map).length,
+            };
+        });
+
+        expect((await command(una, { type: "enter", link: "tavern-door", run: true })).ok).toBe(true);
+        await expect.poll(() => inside(una), { timeout: 120000, intervals: [1000] }).toMatchObject({ map: "taproom", shown: "taproom", room: true, town: false, others: 0 });
+        await expect.poll(async () => (await inside(una)).folk, { timeout: 60000, intervals: [1000] }).toBeGreaterThanOrEqual(1);
+        await expect.poll(() => where(bram, unaHas.me), { timeout: 30000 }).toBeNull();
+
+        // (And out again, to the town and to Bram's sight)
+        expect((await command(una, { type: "enter", link: "tavern-door", run: true })).ok).toBe(true);
+        await expect.poll(() => inside(una), { timeout: 60000, intervals: [1000] }).toMatchObject({ map: "town", shown: "town", room: false, town: true, others: 0 });
+        // (Each has the other's body again where they stand: shown once they're in the camera's view)
+        for (const [page, id] of [[bram, unaHas.me], [una, bramHas.me]]) {
+            await expect.poll(async () => {
+                const seen = await where(page, id);
+
+                return seen?.drawn ? Math.hypot(seen.drawn[0] - seen.x, seen.drawn[1] - seen.y) : 99;
+            }, { timeout: 30000 }).toBeLessThan(1.5);
+        }
 
         // (Still no copy, and nothing the frames said that couldn't be so)
         for (const one of [await has(una), await has(bram)]) {

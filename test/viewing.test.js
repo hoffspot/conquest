@@ -273,4 +273,87 @@ describe("a replicated world's link (core/viewing.js)", () => {
         assert.equal(dressOf(host, host.battle.actor("orc")), null);
         assert.deepEqual(dressOf(host, { kind: "beast", id: "b", wild: { creature: "wolf", elite: true, ai: { anything: 1 } } }), { wild: { creature: "wolf", elite: true } });
     });
+
+    it("goes in at doors and into a dungeon on floors made here as the world has them, those of the map left let go of with the crossing", () => {
+        const { host, come, play } = replicated();
+        const ann = come("a", character("Ann"));
+        const bob = come("b", character("Bob"));
+
+        play(20);
+
+        const [a, b] = [ann.welcome.id, bob.welcome.id];
+        const { link } = ann;
+        const kept = link.host;
+
+        // (The buildings round her in the town, got ready as she came in: told with the first steps her game played)
+        assert.ok(kept.open.size > 0, "buildings near her are ready in her game");
+        assert.deepEqual([...kept.open.keys()].filter((key) => !ann.events.some((event) => event.type === "open" && event.key === key)), [], "each told to her game");
+        const mine = () => kept.battle.actor(a);
+        const plan = (world, map) => JSON.stringify([world.maps[map]?.width, world.maps[map]?.height, world.maps[map]?.rows ?? world.maps[map]?.grid ?? null]);
+        // (Her commands go by her link, as a game's do: one who says nothing's taken to be away.)
+        // (The world plays till her hero's on `map` there, and her game's played it too)
+        const until = (map) => {
+            for (let k = 0; k < 600 && !(host.battle.actor(a).map === map && mine()?.map === map); k++) {
+                play();
+            }
+
+            assert.equal(mine()?.map, map, `her hero's on ${map} in her game (in the world: ${host.battle.actor(a).map}, order ${JSON.stringify(host.battle.actor(a).order)})`);
+        };
+
+        // A building: the tavern's door, then its stairs
+        assert.ok(kept.battle.actor(b), "Bob's with her in the town");
+        ann.events.length = 0;
+        link.command({ type: "enter", link: "tavern-door", run: true });
+        until("taproom");
+        play(3);
+        assert.ok(ann.events.some((event) => event.type === "cross" && event.id === a && event.to === "taproom"), "her game hears of her crossing");
+        assert.ok(kept.world.maps.taproom, "the floor she's on is there in her game");
+        assert.ok(ann.events.some((event) => event.type === "peopled" && event.key === "home:tavern" && event.folk.length > 0), "and her game's told who's come on it, to dress them");
+        assert.ok(!kept.battle.actor(b), "Bob, out in the town, isn't in her game's battle now");
+        assert.deepEqual(kept.battle.actors.filter((actor) => actor.map !== "taproom").map(({ id }) => id), [], "nor is anyone else of the town");
+        assert.deepEqual([mine().x, mine().y], [host.battle.actor(a).x, host.battle.actor(a).y]);
+
+        // (Those inside come in her frames, on the floor she's on)
+        const inside = host.battle.actors.filter((actor) => actor.map === "taproom" && actor.id !== a).map(({ id }) => id).sort();
+
+        assert.deepEqual(kept.battle.actors.filter((actor) => actor.id !== a).map(({ id }) => id).sort(), inside);
+
+        link.command({ type: "enter", link: "tavern-door", run: true });
+        until("town");
+        play(3);
+        assert.ok(kept.battle.actor(b), "back out, Bob's there again");
+
+        // A dungeon: set down by its way in, she's told how strong it's made, and its floors
+        // are made in her game as they are in the world before she goes in
+        const site = host.world.plan.sites.find(({ id }) => id === "dungeon-28");
+        const key = `site:${site.id}`;
+
+        ann.events.length = 0;
+        host.battle.place(a, "town", [Math.floor(site.at[0]) + 3, Math.floor(site.at[1]) + 3]);
+        play(12);
+
+        const door = host.world.interiors.buildings.get(key).door;
+
+        assert.ok(host.open.has(key), "the world's got it ready");
+        play(8);
+        assert.equal(kept.dungeons.get(site.id)?.tier, host.dungeons.get(site.id).tier, "how strong it's made is said");
+        assert.ok(kept.open.has(key), "and her game has it ready");
+        assert.ok(ann.events.some((event) => event.type === "open" && event.key === key), "which her game's told, as a copy's host tells it");
+        assert.equal(ann.events.some((event) => event.type === "close" || event.type === "open") && ann.events.filter((event) => event.type === "open").every((event) => kept.world.interiors.buildings.has(event.key)), true, "of buildings it has");
+        link.command({ type: "enter", link: door.id, run: true });
+
+        const first = host.world.interiors.buildings.get(key).maps[0];
+
+        until(first);
+        play(40);
+        assert.deepEqual(kept.world.interiors.buildings.get(key).maps, host.world.interiors.buildings.get(key).maps, "the same floors");
+        assert.equal(plan(kept.world, first), plan(host.world, first), "made the same");
+        assert.equal(kept.battle.actors.every((actor) => actor.map === first), true, "and only those on her floor in her game");
+        // (Its foes among them: every one standing within sight of her)
+        const hers = host.battle.actor(a);
+        const near = host.battle.actors.filter((actor) => actor.map === first && actor.id !== a && !actor.dead && Math.hypot(actor.x - hers.x, actor.y - hers.y) < 100).map(({ id }) => id);
+
+        assert.ok(near.length > 0, "there are foes near her on it");
+        assert.deepEqual(near.filter((id) => !kept.battle.actor(id)), [], "each of them in her game");
+    });
 });
