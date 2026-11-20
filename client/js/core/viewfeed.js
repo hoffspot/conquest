@@ -78,7 +78,7 @@ export function dressOf(host, actor) {
     if (actor.kind === "player") {
         const player = host.players?.get(actor.id);
 
-        return player?.hero && player.progress?.worn ? { hero: player.hero, worn: player.progress.worn(), wielded: player.progress.wielded(), role: player.role ?? null } : null;
+        return player?.hero && player.progress?.worn ? { hero: player.hero, worn: player.progress.worn(), wielded: player.progress.wielded(), role: player.role ?? null, maxStamina: actor.maxStamina ?? null } : null;
     }
 
     if (actor.wild) {

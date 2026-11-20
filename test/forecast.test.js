@@ -140,6 +140,82 @@ describe("your hero, drawn where the rules will have them (app/forecast.js)", ()
         assert.ok(played.forecast.track.battle.actor("orc"), "the foe's in its battle, as the frames told of it");
     });
 
+    it("looks ahead as well in a replicated world, where the game holds no copy (the scaling plan's 3-22): at 150 and at 300 ms; with their breath and a spell's cooldown as they will be, the cast counted from when it's sent", () => {
+        for (const rtt of [150, 300]) {
+            for (const [name, stick, actions] of [
+                ["running", (way) => () => ({ facing: way, run: true }), []],
+                ["stopping and going", (way) => (t) => (t % 2200 < 1500 ? { facing: way, run: true } : null), []],
+                ["sent by a tap", () => () => null, [{ at: 1200, command: null }]],
+            ]) {
+                const [world, copyWorld] = worlds();
+                const way = openWay(world);
+                const tap = actions.map((action) => ({ ...action, command: { type: "move", to: [Math.floor(world.spawns.player[0] + Math.sin(way) * 18), Math.floor(world.spawns.player[1] + Math.cos(way) * 18)], run: true } }));
+                const played = playJoined(world, copyWorld, { character: sword, rtt, ms: 7000, stick: stick(way), actions: tap, replicated: true });
+                const score = within(`${name}, replicated at ${rtt} ms`, played);
+                const ran = played.frames.at(-1).host;
+                const { forecast, joining, host, me } = played;
+
+                assert.ok(Math.hypot(ran.x - played.frames[0].host.x, ran.y - played.frames[0].host.y) > 10, `${name}: went some way (${JSON.stringify(score)})`);
+
+                // (No copy: no world sent, no step of it; the hero's word and the world's time
+                // from its frames as they come, and no message of the hero beside them)
+                assert.ok(joining.mirror && joining.received.ops === undefined && joining.received.self === undefined);
+                assert.ok(forecast.corrections.looks > 40 && forecast.corrections.timed > 120, JSON.stringify(forecast.corrections));
+                assert.ok(joining.self.seq >= joining.mirror.done, "the latest word to come, not the latest played");
+                assert.deepEqual(joining.mirror.faults, []);
+
+                // (Their breath as the world has it, near enough, and the most they have)
+                const truth = host.battle.actor(me);
+
+                assert.equal(forecast.maxStamina, truth.maxStamina);
+                assert.ok(Math.abs(forecast.stamina - truth.stamina) < 1.5, `${name}: ${forecast.stamina} of breath, and the world has ${truth.stamina}`);
+            }
+        }
+
+        // Casting as they run round a foe: shown as it begins; and its cooldown counted from the
+        // sending, well before the world's word of it could have come back
+        const [world, copyWorld] = worlds();
+        const cooling = [];
+        let sentAt = null;
+        const played = playJoined(world, copyWorld, {
+            character: wand,
+            rtt: 300,
+            ms: 10000,
+            replicated: true,
+            setup: foeAt([4, 0]),
+            stick: (t, { copy, host }) => {
+                const orc = host.battle.actor("orc");
+                const [dx, dy] = [orc.x - copy.x, orc.y - copy.y];
+                const far = Math.hypot(dx, dy);
+
+                return { facing: Math.atan2(dx, dy) + Math.PI / 2 + (far > 4 ? -0.5 : far < 2.5 ? 0.5 : 0), run: true };
+            },
+            actions: [
+                { at: 300, command: { type: "engage", target: "orc", stand: true, lock: true } },
+                // (Three seconds apart: clear of the spell's own cooldown, so the world takes each)
+                ...[1500, 4500, 7500].map((at) => ({ at, command: { type: "cast", spell: "burn", target: "orc" } })),
+                { when: ({ t }) => t >= 4500 && (sentAt ??= t) !== null, every: 50, command: null, watch: ({ forecast, t }) => cooling.push([t - sentAt, forecast.cooldown("burn")]) },
+            ],
+        });
+
+        assert.deepEqual(played.answers, ["ok", "ok", "ok"], "each cast taken, and its game told so");
+        within("casting as they run round, replicated", played);
+
+        // (Each cast shown as the look ahead began it, well before its frame came. With three
+        // seconds between them there's room for a shot of the wand's, which is left to the
+        // frames as it is to a copy: the one thing of theirs shown late)
+        const { shown } = played;
+
+        assert.deepEqual([shown.begun, shown.claimed], [3, 3], JSON.stringify(shown));
+        assert.ok(shown.late <= 1, JSON.stringify(shown));
+        assert.ok(shown.ahead.every((ms) => ms >= 300), `shown ${shown.ahead.map(Math.round)} ms before their frames`);
+
+        const soon = cooling.find(([since]) => since >= 100 && since <= 200);
+
+        assert.ok(soon && soon[1] > 0.5, `cooling a moment after it's sent: ${JSON.stringify(cooling.slice(0, 6))}`);
+        assert.equal(new Forecast().cooldown("burn"), null, "and nothing said where nothing's looked ahead");
+    });
+
     it("holds them as the host does for a power strike struck at a foe as they run past it, and for a burn cast as they run round one, the swing and the cast shown as they begin there", () => {
         {
             const [world, copyWorld] = worlds();

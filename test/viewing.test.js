@@ -2,6 +2,7 @@
 // of a world and holding no copy of it, each kept by what the world says, moving, fighting and
 // trading; a replicated world refusing a game that asks for all of it; and lockstep as ever
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { Host } from "../client/js/core/host.js";
@@ -82,9 +83,7 @@ describe("a replicated world's link (core/viewing.js)", () => {
 
         assert.equal(asRemote(link), link);
         assert.ok(REMOTE_MEMBERS.every((name) => name in link));
-        assert.equal(link.self, null, "nothing looked ahead from: its hero's where the world says");
-        link.self = { time: 1 };
-        assert.equal(link.self, null);
+        assert.equal(link.self, null, "no word of its hero till a frame brings one");
         link.hello(character("Ann"));
         assert.deepEqual([said[0].kind, said[0].mode, said[0].speaks], ["hello", "view", ["replicated"]]);
         assert.deepEqual(NETCODES, ["lockstep", "replicated"]);
@@ -189,6 +188,14 @@ describe("a replicated world's link (core/viewing.js)", () => {
         assert.equal(mine.trades.size, 0, "the trade done, and let go of");
         assert.ok(said.every(([, ok]) => ok), JSON.stringify(said));
 
+        // (Its hero's word for the look ahead: from its frames, as the session last had them,
+        // with what a copy would have had for itself; and no message of it beside)
+        assert.equal(ann.link.received.self, undefined);
+        assert.equal(ann.link.self.seq, world.hosting.session.done.get("a"));
+        assert.equal(ann.link.self.hero.maxStamina, host.battle.actor(annId).maxStamina);
+        assert.ok(Math.abs(ann.link.self.hero.x - host.battle.actor(annId).x) < 1 && ann.link.self.time <= host.battle.time);
+        assert.equal(mine.battle.actor(annId).maxStamina, host.battle.actor(annId).maxStamina);
+
         // (Nothing of lockstep's was ever sent either; and neither world was ever stepped but by frames)
         assert.equal(ann.link.received.ops, undefined);
         assert.equal(ann.link.dropped, 0);
@@ -236,6 +243,20 @@ describe("a replicated world's link (core/viewing.js)", () => {
         assert.equal(lockstep.refused.get("x")?.reason, "netcode");
     });
 
+    it("has the game show its own hero's breath and cooldowns as the look ahead has them, in a replicated world alone (app/game.js)", async () => {
+        const game = await readFile(new URL("../client/js/app/game.js", import.meta.url), "utf8");
+        const session = await readFile(new URL("../client/js/app/session.js", import.meta.url), "utf8");
+
+        assert.match(session, /const viewed = welcome\.mode === "view";/);
+        assert.match(session, /me: welcome\.id, viewed, remote: asRemote\(joining\)/);
+        assert.match(game, /this\.viewed = Boolean\(viewed && remote\);/, "never a solo or a lockstep game's");
+        assert.match(game, /actor\.id === this\.me && this\.viewed && Number\.isFinite\(this\.forecast\?\.stamina\)/);
+        assert.match(game, /\(this\.viewed \? this\.forecast\?\.cooldown\(action\.spell\) : null\) \?\? this\.battle\.cooldown\(this\.me, action\.spell\)/);
+        assert.match(game, /const now = this\.viewed \? \(this\.forecast\?\.present \?\? this\.battle\.time\) : this\.battle\.time;/);
+        assert.match(game, /const cooling = this\.viewed && command\.type === "ability"/);
+        assert.equal(game.match(/this\.viewed/g).length, 5, "and nowhere else");
+    });
+
     it("says what each newcomer's drawn as from what the host has of them, and nothing for one drawn from their character alone", () => {
         const world = replicated();
         const { host } = world;
@@ -248,7 +269,7 @@ describe("a replicated world's link (core/viewing.js)", () => {
         assert.equal(dressOf(host, folk).folk.id, folk.id);
         assert.equal(dressOf(host, folk).folk.routine, undefined, "their rounds are the host's own");
         assert.deepEqual(dressOf(host, soldier).soldier, host.soldiers.get(soldier.id));
-        assert.deepEqual(Object.keys(dressOf(host, host.battle.actor("host"))), ["hero", "worn", "wielded", "role"]);
+        assert.deepEqual(Object.keys(dressOf(host, host.battle.actor("host"))), ["hero", "worn", "wielded", "role", "maxStamina"]);
         assert.equal(dressOf(host, host.battle.actor("orc")), null);
         assert.deepEqual(dressOf(host, { kind: "beast", id: "b", wild: { creature: "wolf", elite: true, ai: { anything: 1 } } }), { wild: { creature: "wolf", elite: true } });
     });

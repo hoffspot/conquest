@@ -765,6 +765,19 @@ test("a replicated world: two players, neither's game holding a copy of it, see 
         expect(seen.shown).toBe(true);
         expect(Math.hypot(seen.drawn[0] - seen.x, seen.drawn[1] - seen.y)).toBeLessThan(1.5);
 
+        // (Her own hero looked ahead, from her frames' word of them: the scaling plan's 3-22)
+        const ahead = await una.evaluate(() => {
+            const { game, together } = window.pellagos;
+
+            return { looks: game.forecast.corrections.looks, timed: game.forecast.corrections.timed, self: together.joining.self !== null, viewed: game.viewed, stamina: game.forecast.stamina, most: game.forecast.maxStamina };
+        });
+
+        expect(ahead.viewed && ahead.self).toBe(true);
+        expect(ahead.looks).toBeGreaterThanOrEqual(5);
+        expect(ahead.timed).toBeGreaterThanOrEqual(100);
+        expect(ahead.stamina).toBeGreaterThan(0);
+        expect(ahead.stamina).toBeLessThanOrEqual(ahead.most);
+
         // (And the town's folk and guards about her, each given a body from what the frames said they're drawn as)
         const drawn = await una.evaluate(() => {
             const { game } = window.pellagos;
