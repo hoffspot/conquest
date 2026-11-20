@@ -824,15 +824,22 @@ test("a replicated world: two players, neither's game holding a copy of it, see 
         expect((await command(bram, { type: "trade", with: unaHas.me })).ok).toBe(true);
         await expect.poll(async () => (await trade(una))?.open, { timeout: 30000 }).toBe(true);
         expect((await command(una, { type: "offer", gold: 5 })).ok).toBe(true);
-        await expect.poll(async () => JSON.stringify((await trade(bram))?.offers ?? {}), { timeout: 30000 }).toContain("5");
-
-        await expect.poll(async () => JSON.stringify((await trade(una))?.offers ?? {}), { timeout: 30000 }).toContain("5");
+        // (Her own offer's gold, by her id: an id may well have a 5 in it, so the offers' text isn't looked through for one)
+        await expect.poll(async () => (await trade(bram))?.offers?.[unaHas.me]?.gold, { timeout: 30000 }).toBe(5);
+        await expect.poll(async () => (await trade(una))?.offers?.[unaHas.me]?.gold, { timeout: 30000 }).toBe(5);
 
         const { rev } = await trade(una);
         const before = [(await has(una)).gold, (await has(bram)).gold];
 
-        expect(await command(una, { type: "agree", rev })).toMatchObject({ ok: true });
-        expect(await command(bram, { type: "agree", rev })).toMatchObject({ ok: true });
+        // (An agreeing refused says why, and how the two and their trade stood in that game just after)
+        const agree = async (page) => {
+            const result = await command(page, { type: "agree", rev });
+
+            return result?.ok ? result : { ...result, rev, una: await where(page, unaHas.me), bram: await where(page, bramHas.me), trade: await trade(page) };
+        };
+
+        expect(await agree(una)).toEqual({ ok: true });
+        expect(await agree(bram)).toEqual({ ok: true });
         await expect.poll(async () => (await has(bram)).gold, { timeout: 30000 }).toBe(before[1] + 5);
         await expect.poll(async () => (await has(una)).gold, { timeout: 30000 }).toBe(before[0] - 5);
         expect(await trade(una)).toBe(null);
