@@ -674,6 +674,11 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
        they're drawn as (`dressOf`, `client/js/core/viewfeed.js`), or such a game can't draw
        them. `test/viewing.test.js` plays two such games in Node, and
        `e2e/worlds.spec.js` (*a replicated world*) in two browsers.
+     - Such a game makes a building's or dungeon's floors itself, from the world's seed and
+       what the summary says of each dungeon (`Host.keepNear`, `client/js/core/host.js`).
+       Anything new that a floor's making depends on and the seed doesn't give goes in the
+       summary, or the game's floor won't be the world's (`test/viewing.test.js` compares
+       them).
      - Something new the world keeps that a game shows of the world at large (not of a
        character in sight) is given a part in `client/js/core/summary.js` (`worldParts` for
        what's everyone's, `ownParts` for one player's), or a game sent views never hears of it;

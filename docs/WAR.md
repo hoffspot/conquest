@@ -4002,9 +4002,23 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     were.
   - **The kill switch:** replication turned off, everyone in such a world is sent out and told
     why, and nobody's let in.
-  - **Not yet**, each a later slice's: insides and dungeons
-    (`3-23`); parties, shops and the war table (`3-24`); the war, props, what's on the ground
-    and what flies (`3-25`); a page hidden and shown, and coming back after a reload (`3-26`).
+  - **Doors and dungeons** (the plan's `3-23`). Such a game makes the floors itself, as the
+    world has them: every few steps `Viewing` has its world get ready the buildings near its
+    hero and let go of those far (`Host.keepNear`, by the distances a host's own look uses),
+    each made from the world's seed. A dungeon is made at the making and tier the world's
+    summary says of it, so it waits till that's said, and is made again when the world says
+    it has been. The game hears "open" and "close" of these as a copy's host tells them, so
+    it builds and bakes them as ever. Going through a door, the frame that puts the hero on
+    the new map lets go of everyone on the old one, and those on the new come over the next
+    frames: behind the crossing's dip to black. Who's on a building's floors is kept from
+    what the frames bring ("peopled", "vacated"), the home town's tavern's too, so they're
+    dressed as they come. Measured in `test/viewing.test.js`: into the tavern and out, and
+    into a dungeon whose first floor is the world's own, its foes on it.
+  - **Not yet**, each a later slice's: parties, shops and the war table (`3-24`); the war,
+    props, what's on the ground and what flies, a dungeon's chests among them (`3-25`); a
+    page hidden and shown, and coming back after a reload, or in while inside (`3-26`). A
+    dungeon's sealed rooms aren't made. A building's folk stand, where a copy's would sit:
+    who they're drawn as comes without their routine.
     What another player wears is as it was when they came into sight. Outside what's built,
     such a game shows the world as a new one would be, not as it is.
 - **Who hears of what** (`core/eventscope.js`; the scaling plan's `3-15`). A lockstep copy plays
