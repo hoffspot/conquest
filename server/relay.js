@@ -150,6 +150,8 @@ export class Socket {
         /** Hears each message (text), and when it's closed. */
         this.onMessage = () => {};
         this.onClose = () => {};
+        /** Told once everything waiting to go has been written (null: no one's asked). */
+        this.onDrain = null;
 
         socket.setNoDelay?.(true);
         socket.on("data", (data) => {
@@ -165,6 +167,8 @@ export class Socket {
             this.incomingLength = 0;
             this.#read();
         });
+        // (Everything waiting written: whoever held back for it is told, onDrain)
+        socket.on("drain", () => this.onDrain?.());
         socket.on("close", () => this.#closed());
         socket.on("error", () => this.#closed());
         socket.on("end", () => this.#closed());
@@ -172,6 +176,11 @@ export class Socket {
         if (head.length) {
             this.#read();
         }
+    }
+
+    /** How many bytes wait to go: sent, and not yet written to its connection. */
+    get waiting() {
+        return this.socket.writableLength;
     }
 
     /** Send a message (text). One too slow to take what's sent (too much waiting to go) is let go. */

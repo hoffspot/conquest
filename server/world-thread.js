@@ -157,6 +157,11 @@ export class WorldThread {
         this.#post({ type: "meta", changes });
     }
 
+    /** How many bytes wait unwritten on a player's socket (play.js: as it changes between none and some), for its view feed to hold back by. */
+    waiting(peer, bytes) {
+        this.#post({ type: "waiting", peer, bytes });
+    }
+
     /**
      * The server's `replication` setting as it stands now ("off", "dark" or "on"), followed at
      * once: dark, the world's view feed makes and counts each player's frames; else it makes none.
