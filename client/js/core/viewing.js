@@ -13,6 +13,10 @@
 //   - who those in sight are drawn as (the folk, soldiers, other players' heroes, a creature's
 //     kind) is what the frames say as each comes into sight (core/viewfeed.js dressOf);
 //   - a trade the player's in is kept from the events that tell of it;
+//   - the invasions, what's burnt, hell's rifts, the legends, the rules, the war's camps,
+//     depots and news, the battles on, and the director's props near its hero (what's on the
+//     ground, campfires, caches and the rest) are the summary's too; a shot in flight is kept
+//     from its event and flown here (the plan's 3-25);
 //   - the parties, who's in the world, who's asked whom, where the player's own party is, and
 //     the war's realms, towns, works, forces and forts are the summary's, put where the game
 //     reads them (the plan's 3-24); what a talk or a shop needs is asked of the server (`ask`);
@@ -36,6 +40,8 @@ import { STEP_MS } from "./battle.js";
 import { Host } from "./host.js";
 import { Mirror } from "./mirror.js";
 import { Joining, NET_VERSION, PACE } from "./netplay.js";
+import { Legends } from "./rare.js";
+import { PROPS } from "./summary.js";
 import { decodeFrame } from "./view.js";
 import { VIEW_MODE } from "./viewfeed.js";
 import { decode, encode } from "./wire.js";
@@ -45,6 +51,10 @@ import { decode, encode } from "./wire.js";
  * them that came no later than that allows for; and the fewest and most steps kept in hand.
  */
 export const VIEWING = Object.freeze({ kept: 60, late: 0.95, least: 2, most: 8 });
+
+// How far a shot kept here flies at the most before it's let go of (m): one the world never
+// said the end of
+const FLIES = 200;
 
 // What one not in sight wears and wields, as far as the game's told: nothing
 const UNSEEN = Object.freeze({ worn: () => [], wielded: () => null });
@@ -72,6 +82,9 @@ export class Viewing extends Joining {
     #map = null;
 
     #sinceLook = 0;
+
+    // The legends as last told (the summary's own value: made again only when that's another)
+    #legends = null;
 
     // Who's in each building that's always there (#people), by its key
     #always = new Map();
@@ -178,6 +191,32 @@ export class Viewing extends Joining {
         this.#parties(parts.get("parties"));
         this.#roster(parts.get("roster"));
         this.#war(parts);
+        this.#abroad(parts);
+    }
+
+    // What else of the world at large the summary tells, put where the game reads it (the
+    // plan's 3-25): the invasions, what's burnt, hell's rifts, what's been done, the rules, the
+    // legends (made again only when they're told anew), and the battles on that aren't an
+    // invasion's (each a field's, as the game asks: Host.engagements)
+    #abroad(parts) {
+        const { host } = this;
+        const one = (part) => parts.get(part)?.get("");
+        const list = (part) => structuredClone([...(parts.get(part)?.values() ?? [])]);
+
+        host.invasions = list("invasions");
+        host.burnt = list("burnt");
+        host.hellRifts = structuredClone(one("rifts") ?? host.hellRifts);
+        host.done = structuredClone(one("done") ?? []);
+        host.fields = structuredClone(one("battles") ?? []).map((engagement) => ({ engagement }));
+
+        if (one("rules")) {
+            host.rules = Object.freeze(structuredClone(one("rules")));
+        }
+
+        if (one("legends") && one("legends") !== this.#legends) {
+            this.#legends = one("legends");
+            host.legends = new Legends(structuredClone(this.#legends));
+        }
     }
 
     // The players' parties as the summary has them, and which each player's in (the plan's 3-24)
@@ -221,7 +260,7 @@ export class Viewing extends Joining {
 
     // The war as the summary has it, put in the world's own (never stepped: a war begun, whose
     // turn, realms, towns, works, forces and forts are as they're told). Its camps, depots and
-    // news aren't told yet (the plan's 3-25)
+    // news are told too (the plan's 3-25)
     #war(parts) {
         const { war } = this.host;
         const clock = parts.get("clock")?.get("");
@@ -242,6 +281,16 @@ export class Viewing extends Joining {
         if (relations) {
             Object.assign(war, { relations: relations.relations, known: relations.known });
         }
+
+        // (Its camps and depots, the places cleared, and its latest news: the plan's 3-25)
+        for (const part of ["camps", "depots"]) {
+            if (parts.has(part)) {
+                war[part] = [...parts.get(part).values()];
+            }
+        }
+
+        war.places = parts.get("places")?.get("") ?? war.places;
+        war.log = [...(parts.get("news")?.values() ?? [])];
     }
 
     // The buildings near its hero got ready and those far let go (Host.keepNear), every few
@@ -288,6 +337,25 @@ export class Viewing extends Joining {
 
         host.invites = new Map(structuredClone([...(parts.get("invites") ?? [])]));
         host.afar = new Map(structuredClone([...(parts.get("fellows") ?? [])]));
+        this.#props(parts.get("props"));
+    }
+
+    // The director's props near its hero, as the summary has them (`name:id` each), put in the
+    // world's own tables: what's on the ground, caches, finds, strangers, obstacles, treasures
+    // and ambushes by their ids, the campfires a list (the plan's 3-25)
+    #props(props) {
+        const { host } = this;
+        const tables = Object.fromEntries(PROPS.map((name) => [name, []]));
+
+        for (const [key, thing] of props ?? []) {
+            const cut = key.indexOf(":");
+
+            tables[key.slice(0, cut)]?.push([key.slice(cut + 1), structuredClone(thing)]);
+        }
+
+        for (const name of PROPS) {
+            host[name] = Array.isArray(host[name]) ? tables[name].map(([, thing]) => thing) : new Map(tables[name]);
+        }
     }
 
     // Someone come into sight with what they're drawn as: put where the game asks
@@ -298,7 +366,11 @@ export class Viewing extends Joining {
             actor.maxStamina = as.maxStamina;
         }
 
-        if (as.folk) {
+        if (as.fort) {
+            host.fortsOut.set(actor.id, as.fort);
+        } else if (as.wagon) {
+            host.wagons.set(actor.id, as.wagon);
+        } else if (as.folk) {
             host.folk.set(actor.id, as.folk);
         } else if (as.soldier) {
             host.soldiers.set(actor.id, as.soldier);
@@ -456,6 +528,10 @@ export class Viewing extends Joining {
         for (const event of mirror.events) {
             if (event.type === "trade") {
                 this.#trade(event);
+            } else if (event.type === "projectile") {
+                this.#loose(event);
+            } else if (event.type === "fizzle") {
+                host.battle.projectiles = host.battle.projectiles.filter(({ id }) => id !== event.projectile);
             } else if (event.type === "dungeon" && event.change === "remade") {
                 const said = host.dungeons.get(event.site);
                 const building = host.world.interiors?.buildings.get(`site:${event.site}`);
@@ -468,6 +544,9 @@ export class Viewing extends Joining {
                 host.open.delete(`site:${event.site}`);
             }
         }
+
+        // (Shots flown a step, one just loosed with them: as the world flies its own)
+        this.#fly();
 
         // (The world's own word of a building got ready or let go is of everyone's being near
         // it: the game hears of this hero's, from the look here)
@@ -507,6 +586,51 @@ export class Viewing extends Joining {
         }
 
         return events;
+    }
+
+    // A shot let fly, as its event says: kept in the battle as the game reads those in flight
+    // (app/game.js), which no frame tells of. It's flown here, a step at a time, as the world
+    // flies its own (core/battle.js #fly): straight at whoever it's for, where the frames have
+    // them, till it's there, or they're gone, or the world says it came to nothing ("fizzle")
+    #loose(event) {
+        const { battle } = this.host;
+        const from = battle.actor(event.id);
+
+        if (from && Number.isFinite(event.speed) && !battle.projectiles.some(({ id }) => id === event.projectile)) {
+            battle.projectiles.push({ id: event.projectile, kind: event.kind, speed: event.speed, from: event.id, target: event.target, map: from.map, x: event.x, y: event.y, flown: 0 });
+        }
+    }
+
+    #fly() {
+        const { battle } = this.host;
+
+        if (!battle.projectiles.length) {
+            return;
+        }
+
+        const travelled = (speed) => (speed * STEP_MS) / 1000;
+
+        battle.projectiles = battle.projectiles.filter((projectile) => {
+            const target = battle.actor(projectile.target);
+
+            if (!target || target.dead || target.map !== projectile.map) {
+                return false;
+            }
+
+            const [dx, dy] = [target.x - projectile.x, target.y - projectile.y];
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const travel = travelled(projectile.speed);
+
+            if (distance <= travel || projectile.flown > FLIES) {
+                return false;
+            }
+
+            projectile.x += (dx / distance) * travel;
+            projectile.y += (dy / distance) * travel;
+            projectile.flown += travel;
+
+            return true;
+        });
     }
 
     // A trade the player's in, as the events that tell of it say it stands: kept where the game

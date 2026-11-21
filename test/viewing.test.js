@@ -9,6 +9,7 @@ import { Host } from "../client/js/core/host.js";
 import { Hosting, Joining, NETCODES } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { asRemote, REMOTE_MEMBERS } from "../client/js/core/remote.js";
+import { SUMMARY, worldParts } from "../client/js/core/summary.js";
 import { dressOf } from "../client/js/core/viewfeed.js";
 import { Viewing } from "../client/js/core/viewing.js";
 import { decode } from "../client/js/core/wire.js";
@@ -465,5 +466,119 @@ describe("a replicated world's link (core/viewing.js)", () => {
 
         // (A lockstep link asks nothing: its game reads its copy)
         assert.equal(new Joining({ send: () => {} }).ask, null);
+    });
+
+    it("has the director's props near its hero, the world at large and the rest of the war as its summary says, and flies a shot from its event", () => {
+        const world = replicated();
+        const [ann, bea] = [world.come("a", character("Ann")), world.come("b", character("Bea", "bow"))];
+
+        world.play(40);
+
+        const { host } = world;
+        const [annId, beaId] = [ann.link.me, bea.link.me];
+        const mine = ann.link.host;
+        const hero = host.battle.actor(annId);
+        const near = [Math.floor(hero.x) + 3, Math.floor(hero.y) + 2];
+
+        // Props: what's on the ground and a campfire near her, by their ids; one far off, not;
+        // gone from her game when it's gone from the world
+        host.ground.set("g1", { id: "g1", map: hero.map, square: near, item: { id: "potion", count: 1 }, until: null, by: beaId });
+        host.ground.set("g2", { id: "g2", map: hero.map, square: [near[0] + 2000, near[1]], item: { id: "potion", count: 1 }, until: null, by: beaId });
+        host.campfires.push({ id: "c1", player: beaId, people: "human", fire: [near[0] + 5, near[1]], tent: { at: [near[0] + 6, near[1]], facing: 0 }, until: host.battle.time + 3600000 });
+        host.campfires.push({ id: "c2", player: beaId, people: "human", fire: [near[0] + 2000, near[1]], tent: { at: [near[0] + 2001, near[1]], facing: 0 }, until: host.battle.time + 3600000 });
+        host.caches.set("k1", { id: "k1", at: [near[0] + 20, near[1]], chest: near, band: "bandits", tier: 1, ids: [], opened: false });
+        world.play(25);
+        assert.deepEqual(mine.ground.get("g1"), host.ground.get("g1"));
+        assert.ok(mine.ground instanceof Map && !mine.ground.has("g2"), "what's far off isn't told");
+        assert.deepEqual(mine.campfires, [host.campfires[0]], "a campfire's told by where its fire is");
+        assert.deepEqual(mine.caches.get("k1"), host.caches.get("k1"));
+        host.ground.delete("g1");
+        world.play(25);
+        assert.ok(!mine.ground.has("g1"), "picked up in the world, gone from her game");
+
+        // The world at large: what's burnt, a hell's rift, the rules, the legends
+        host.burnt.push({ place: "p1", name: "Ashby", pieces: [], at: [near[0] + 900, near[1]] });
+        // (When the last of hell's rifts was: the world's own word of them, whole)
+        host.hellRifts = { ...host.hellRifts, last: 7 };
+        world.play(25);
+        assert.deepEqual(mine.burnt, host.burnt);
+        assert.deepEqual(mine.hellRifts, host.hellRifts);
+        assert.equal(mine.hellRifts.last, 7);
+        assert.deepEqual(mine.rules, host.rules);
+        assert.deepEqual(mine.done, host.done);
+        assert.deepEqual(mine.invasions, host.invasions);
+
+        // (The legends' clocks run on between one telling and the next: held to the world's at a step they're told at)
+        do {
+            world.play(1);
+        } while (world.hosting.step() % SUMMARY.every);
+
+        assert.deepEqual(mine.legends.toJSON(), host.legends.toJSON());
+        assert.equal(typeof mine.legends.stepOf, "function", "the legends themselves, to ask");
+
+        // The rest of the war: a camp, a depot, a place cleared, its news, and a battle on in the field
+        host.war.camps.push({ id: "camp-t", realm: host.war.realms[0].id, at: [near[0] + 400, near[1]], toward: host.war.towns[0].id, front: 0, broken: [] });
+        host.war.depots.push({ id: "depot-t", realm: host.war.realms[0].id, at: [near[0] + 500, near[1]] });
+        host.war.places = { ...host.war.places, cleared: { ...host.war.places?.cleared, lair: host.war.turn } };
+        host.war.log.push({ turn: host.war.turn, type: "told", town: host.war.towns[0].id }, { turn: host.war.turn, type: "told", town: host.war.towns[1].id });
+        // (A battle that isn't an invasion's is in the summary as the game asks for it: read of the world, not played with a made-up one in it)
+        host.leaders.set("stand-t", { engagement: { id: "e-t", phase: "march", sides: [] } });
+        assert.deepEqual(decode(worldParts(host).battles.get("")), [{ id: "e-t", phase: "march", sides: [] }]);
+        host.leaders.delete("stand-t");
+        world.play(25);
+        assert.deepEqual(mine.war.camps.at(-1), host.war.camps.at(-1));
+        assert.deepEqual(mine.war.depots.at(-1), host.war.depots.at(-1));
+        assert.deepEqual(mine.war.places, host.war.places);
+        assert.deepEqual(mine.war.log.slice(-2), host.war.log.slice(-2), "its latest news, in the order it happened");
+        assert.ok(mine.war.log.length <= SUMMARY.news);
+        assert.deepEqual(mine.engagements(), host.engagements(), "the battles on, as the game asks");
+        host.war.camps.pop();
+        host.war.depots.pop();
+        world.play(25);
+        assert.deepEqual(mine.engagements(), host.engagements());
+        assert.ok(!mine.war.camps.some(({ id }) => id === "camp-t"));
+
+        // A fort out in the world and a wagon: told with what they're drawn as, when they come into sight
+        host.fortsOut.set("orc", { realm: host.war.realms[0].id, kind: "tower" });
+        assert.deepEqual(dressOf(host, host.battle.actor("orc")), { fort: { realm: host.war.realms[0].id, kind: "tower" } });
+        host.fortsOut.delete("orc");
+        host.wagons.set("orc", { convoy: "c", people: "human", load: "grain", seed: 5 });
+        assert.deepEqual(dressOf(host, host.battle.actor("orc")), { wagon: host.wagons.get("orc") });
+        host.wagons.delete("orc");
+
+        // A shot: Bea looses at a foe set a way off; in Ann's game it's in the battle from its
+        // event, flown a step at a time where the world has it, and gone when it lands
+        const orc = host.battle.actor("orc");
+        const shooter = host.battle.actor(beaId);
+        const at = [Math.floor(shooter.x) + 9, Math.floor(shooter.y)];
+
+        Object.assign(orc, { map: shooter.map, x: at[0] + 0.5, y: at[1] + 0.5, square: at, path: [], order: null, hp: 400, maxHp: 400, patrol: [at], dead: false, respawnAt: Infinity, stunnedUntil: Infinity });
+        ann.events.length = 0;
+        bea.link.command({ type: "engage", target: "orc", stand: true, lock: true });
+
+        let [flown, worst] = [0, 0];
+
+        for (let k = 0; k < 200; k++) {
+            world.play(1);
+
+            for (const theirs of host.battle.projectiles) {
+                const hers = mine.battle.projectiles.find(({ id }) => id === theirs.id);
+
+                if (hers) {
+                    flown++;
+                    worst = Math.max(worst, Math.hypot(hers.x - theirs.x, hers.y - theirs.y));
+                }
+            }
+
+            // (None kept in her game that the world's let go of a step or more ago)
+            assert.ok(mine.battle.projectiles.every(({ id, flown: far }) => host.battle.projectiles.some((one) => one.id === id) || far < 60), "no shot's left hanging");
+        }
+
+        assert.ok(ann.events.some((event) => event.type === "projectile" && event.id === beaId), "a shot's event is hers to hear");
+        assert.ok(flown >= 3, `${flown} steps of a shot in flight seen in both`);
+        assert.ok(worst < 0.5, `within ${worst.toFixed(2)} m of where the world has it`);
+        bea.link.command({ type: "stop" });
+        world.play(40);
+        assert.deepEqual(mine.battle.projectiles, [], "and none's left once the shooting's done");
     });
 });

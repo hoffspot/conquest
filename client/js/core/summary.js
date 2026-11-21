@@ -20,12 +20,13 @@ import { decode, encode } from "./wire.js";
 /**
  * How often a world's summary is looked at for what's changed (steps: once a second); how many
  * bytes of patches a frame takes at the most, beside its budget; and how near the hero a prop
- * must be to be told of (m, on the hero's map).
+ * must be to be told of (m, on the hero's map); and how many of the war's latest events are
+ * told as its news (whole turns of them).
  */
-export const SUMMARY = Object.freeze({ every: 20, frame: 6000, near: 512 });
+export const SUMMARY = Object.freeze({ every: 20, frame: 6000, near: 512, news: 60 });
 
 /** The parts that are every player's alike (worldParts), and those that are one player's (ownParts). */
-export const WORLD_PARTS = Object.freeze(["rules", "clock", "realms", "towns", "works", "forces", "forts", "relations", "parties", "roster", "invasions", "burnt", "rifts", "legends", "done", "dungeons"]);
+export const WORLD_PARTS = Object.freeze(["rules", "clock", "realms", "towns", "works", "forces", "forts", "relations", "parties", "roster", "invasions", "burnt", "rifts", "legends", "done", "dungeons", "camps", "depots", "places", "news", "battles"]);
 export const OWN_PARTS = Object.freeze(["own", "invites", "props", "fellows"]);
 
 /** The director's props a player's told of when near: each a table of the host's, by its name there. */
@@ -92,7 +93,35 @@ export function worldParts(host) {
         legends: one(host.legends.toJSON()),
         done: one(host.done),
         dungeons: byKey(host.dungeons),
+        // (The rest of the war a game shows, the plan's 3-25: the camps and depots on its maps,
+        // the places cleared, its latest news, and the battles on that aren't an invasion's)
+        camps: byId(war?.camps),
+        depots: byId(war?.depots),
+        places: one(war?.places ?? null),
+        news: newsOf(war),
+        battles: one([...(host.fields ?? []), ...(host.clashes?.values() ?? []), ...(host.leaders?.values() ?? [])].map(({ engagement }) => engagement).filter(Boolean)),
     };
+}
+
+// The war's latest events (SUMMARY.news of them, from the start of a turn), each by its turn
+// and its place among that turn's: so what's new is told, and what's told stays as it was
+function newsOf(war) {
+    const log = war?.log ?? [];
+    const counts = new Map();
+    const keyed = log.map((event) => {
+        const seen = (counts.get(event.turn) ?? 0) + 1;
+
+        counts.set(event.turn, seen);
+
+        return [`${event.turn}:${seen}`, event, seen];
+    });
+    let from = Math.max(0, keyed.length - SUMMARY.news);
+
+    while (from < keyed.length && from > 0 && keyed[from][2] !== 1) {
+        from++;
+    }
+
+    return byKey(keyed.slice(from));
 }
 
 // Where something is, as far as it says: { map, x, y }, or null
@@ -101,7 +130,8 @@ function placeOf(thing) {
         return null;
     }
 
-    const at = Array.isArray(thing.at) ? thing.at : Array.isArray(thing.square) ? thing.square : typeof thing.x === "number" && typeof thing.y === "number" ? [thing.x, thing.y] : null;
+    // (A campfire's is its fire's, an ambush's its heart's)
+    const at = Array.isArray(thing.at) ? thing.at : Array.isArray(thing.square) ? thing.square : Array.isArray(thing.fire) ? thing.fire : Array.isArray(thing.heart) ? thing.heart : typeof thing.x === "number" && typeof thing.y === "number" ? [thing.x, thing.y] : null;
 
     return at && typeof at[0] === "number" && typeof at[1] === "number" ? { map: typeof thing.map === "string" ? thing.map : null, x: at[0], y: at[1] } : null;
 }

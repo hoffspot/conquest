@@ -4029,9 +4029,28 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     handle reads later is as last answered, and asked again once that's stood 750 ms, so a
     shop's stock keeps up while it's open. Buying, selling and trading are the commands
     they always were.
-  - **Not yet**, each a later slice's: the war's camps, depots and news, props, what's on
-    the ground and what flies, a dungeon's chests among them (`3-25`); a page hidden and
-    shown, and coming back after a reload, or in while inside (`3-26`). A dungeon's sealed
+  - **The world at large, the props about, and what flies** (the plan's `3-25`). The rest
+    of the summary is put where the game reads it: the invasions, what's burnt, hell's
+    rifts, what's been done, the rules, and the legends (made again only when they're told
+    anew). The war gains its camps and depots, the places cleared, its latest news
+    (`SUMMARY.news`: 60 events, from the start of a turn, each told once by its turn and
+    place in it) and the battles on that aren't an invasion's: five new parts, so
+    `VIEW_VERSION` is 3. The director's props within 512 m of the hero go into the world's
+    own tables by their ids: what's on the ground (a dungeon's chests among them), caches,
+    finds, strangers, obstacles, treasures, ambushes, and the campfires. A campfire's place
+    is its fire's and an ambush's its heart's, so they're told of only when near, where
+    before they were told of anywhere. A fort out in the world and a wagon are told with
+    what they're drawn as, when they come into sight (`dressOf`). A shot in flight is in no
+    frame: its event puts it in the battle, and `Viewing` flies it a step at a time as the
+    world flies its own, at whoever it's for where the frames have them, till it lands, or
+    they're gone, or the world says it came to nothing. In `test/viewing.test.js` a shot is
+    within half a metre of the world's at every step. A hazard on the ground was drawn from
+    its events already.
+  - **Not yet**: a page hidden and
+    shown, and coming back after a reload, or in while inside (`3-26`). Bait thrown down
+    and a bomb in the air aren't kept (the battle's own lists, as shots were). The legends
+    are told whole each second while their clocks run. Convoys, supply trains and who's
+    quartered where aren't told beyond those in sight. A dungeon's sealed
     rooms aren't made. A building's folk stand, where a copy's would sit: who they're drawn
     as comes without their routine. Another player's followers and companions aren't told
     of beyond those in sight.
