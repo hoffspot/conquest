@@ -4046,8 +4046,29 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     they're gone, or the world says it came to nothing. In `test/viewing.test.js` a shot is
     within half a metre of the world's at every step. A hazard on the ground was drawn from
     its events already.
-  - **Not yet**: a page hidden and
-    shown, and coming back after a reload, or in while inside (`3-26`). Bait thrown down
+  - **Hidden and shown, and its link come back** (the plan's `3-26`). Such a game's view is
+    told again from nothing, and it never plays fast to catch up. Its page shown after
+    being hidden, its link back after dropping (`RelayLink` `onFound`), or more frames
+    waiting than it may catch up (`PACE.tooFar`): `Viewing.resync()` lets go of the frames
+    in hand, takes none, and asks with `again`, as a lockstep game asks for its world.
+    `Session` answers one sent views with `viewed`, what its welcome held (`Hosting`
+    `views.welcome`: the feed forgets what it had told, so everyone near is told whole),
+    no oftener than `VIEW_AGAIN` (1.5 s); unanswered, it's asked again after `VIEW_ASKS`
+    (3 s). On `viewed` the mirror begins again over the battle as it stands
+    (`Mirror.reset`): whoever's told of again keeps the body they're drawn with, whoever
+    isn't in `RESET.wait` (3 s) is let go (`expire`). The summary's put where the game
+    reads it, and once its hero's told of the game puts everyone where they are
+    (`onState`: `rehost`, as a lockstep game does on its world come again). The open
+    trades a player's in are in their own summary (`trades`), so one's there after.
+    In `test/viewing.test.js` a game hidden 30 s is right within a second of being shown,
+    playing none of the 600 frames.
+    A link that died while its page was hidden says nothing, and a browser may never say
+    it closed: shown again, `RelayLink.woke()` (app/together.js) asks the relay at once,
+    and with no word in `LINK_TIMING.woken` (2.5 s) takes the link for dropped and makes
+    another, in both netcodes (`test/together.test.js`). A page reloaded comes in as
+    anyone does, by the view's welcome; inside a building, its floor's made as it comes
+    (`3-23`).
+  - **Not yet**: bait thrown down
     and a bomb in the air aren't kept (the battle's own lists, as shots were). The legends
     are told whole each second while their clocks run. Convoys, supply trains and who's
     quartered where aren't told beyond those in sight. A dungeon's sealed
