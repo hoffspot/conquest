@@ -10,6 +10,7 @@
 // Pure: no DOM, no network, no trigonometry.
 
 import { sift } from "./eventscope.js";
+import { EventPacker } from "./hotevents.js";
 import { interestOf } from "./interest.js";
 import { count } from "./probe.js";
 import { ownParts, patchesText, SUMMARY, summaryOf, Told, worldParts } from "./summary.js";
@@ -116,6 +117,9 @@ export function dressOf(host, actor) {
 
     return null;
 }
+
+// A step of the world, in ms (core/battle.js STEP_MS): the time a frame's of, by its step
+const STEP = 50;
 
 const RANK = Object.freeze({ pinned: 0, hostile: 1, other: 2 });
 
@@ -321,6 +325,14 @@ export class ViewFeed {
                 this.#summarise(viewer, ownParts(host, id), null);
             }
 
+            // (Its events put into bytes where they can be, core/hotevents.js: this frame's
+            // begun, and whom it may name by their index those it's been told of)
+            viewer.packer.begin(step * STEP, (who) => {
+                const entry = viewer.byActor.get(battle.actor(who));
+
+                return entry?.entered ? entry.index : undefined;
+            });
+
             if (session?.viewing?.has(viewer.peer) && this.#holds(viewer, step)) {
                 this.#owe(viewer, hero, events, world);
             } else {
@@ -421,9 +433,7 @@ export class ViewFeed {
 
         const heard = sift(events, { id: viewer.id, hero, knows: (id) => viewer.ids.has(id) }, world);
 
-        for (const event of heard.must) {
-            viewer.owed.push(JSON.stringify(event));
-        }
+        viewer.owed.push(...heard.must);
 
         if (heard.may.length) {
             viewer.dropped += heard.may.length;
@@ -481,7 +491,7 @@ export class ViewFeed {
     }
 
     #viewer(id) {
-        const viewer = { id, phase: this.#joined++ % KNOWN.every, list: [], byActor: new Map(), byIndex: new Array(KNOWN.most).fill(null), free: Array.from({ length: KNOWN.most }, (_, k) => KNOWN.most - 1 - k), leaves: [], owed: [], ids: new Set(), done: null, self: null, entering: 0, told: new Told(), patches: new Map(), summaryAt: null, atTold: null, frames: 0, bytes: 0, records: 0, events: 0, dropped: 0, enters: 0, lag: { level: 0, waiting: 0, seen: -1, unsaid: [], sent: -Infinity, changed: -Infinity, calm: 0, over: null, least: Infinity, before: Infinity, next: Infinity, since: 0 } };
+        const viewer = { id, phase: this.#joined++ % KNOWN.every, list: [], byActor: new Map(), byIndex: new Array(KNOWN.most).fill(null), free: Array.from({ length: KNOWN.most }, (_, k) => KNOWN.most - 1 - k), leaves: [], owed: [], ids: new Set(), done: null, self: null, entering: 0, told: new Told(), patches: new Map(), summaryAt: null, atTold: null, frames: 0, bytes: 0, records: 0, events: 0, dropped: 0, enters: 0, packer: new EventPacker(), lag: { level: 0, waiting: 0, seen: -1, unsaid: [], sent: -Infinity, changed: -Infinity, calm: 0, over: null, least: Infinity, before: Infinity, next: Infinity, since: 0 } };
 
         this.viewers.set(id, viewer);
 
@@ -601,24 +611,27 @@ export class ViewFeed {
 
         if (events.length || viewer.owed.length) {
             const heard = events.length ? sift(events, { id: viewer.id, hero, knows: (id) => viewer.ids.has(id) }, world) : { must: [], may: [] };
-            const told = [];
-            let [size, k] = [2, 0];
+            const { packer } = viewer;
+            let [size, k, told] = [2, 0, 0];
 
-            for (const event of heard.must) {
-                viewer.owed.push(JSON.stringify(event));
-            }
+            viewer.owed.push(...heard.must);
 
+            // (Each as it's told, in bytes or as JSON: how much of the frame it takes is known
+            // once it's put there, and it's taken back out if that's too much)
             for (; k < viewer.owed.length; k++) {
-                const one = viewer.owed[k];
-                const length = bytesOf(one);
+                const mark = packer.mark();
+                const length = packer.add(viewer.owed[k]);
 
                 if (length > EVENTS.big) {
+                    packer.back(mark);
                     viewer.dropped++;
                     count("views.dropped");
-                } else if (size + length + 1 <= EVENTS.must || !told.length) {
-                    told.push(one);
-                    size += length + 1;
+                } else if (size + length <= EVENTS.must || !told) {
+                    told++;
+                    size += length;
                 } else {
+                    packer.back(mark);
+
                     break;
                 }
             }
@@ -627,7 +640,7 @@ export class ViewFeed {
 
             // (Those that may be told wait on the frame: how much room it has is known once
             // those known of are told, #frame)
-            if (told.length || heard.may.length) {
+            if (told || heard.may.length) {
                 sections.must = told;
                 sections.may = heard.may;
                 any = true;
@@ -663,7 +676,8 @@ export class ViewFeed {
             entry.slot = this.state.touch(battle, entry.actor, step);
         }
 
-        const { must = [], may = [], ...sections } = given ?? {};
+        const { must = 0, may = [], ...sections } = given ?? {};
+        const { packer } = viewer;
         // (Half as much, and half again, for a link that isn't keeping up: LAG)
         let [known, budget] = [viewer.list, Math.max(VIEW.header + 32, this.budget >> viewer.lag.level)];
 
@@ -762,40 +776,41 @@ export class ViewFeed {
             // (As is a game played from views alone: its world's time goes by its frames)
             always: this.shadowing.has(viewer.id) || Boolean(this.hosting.session?.viewing?.has(viewer.peer)),
         };
-        const eventsOf = (texts) => (texts.length ? { events: `[${texts.join(",")}]` } : {});
-        let made = encodeFrame(this.state, { ...frame, sections: { ...eventsOf(must), ...sections } });
+        // (Its events: those that must be told are with the packer already, #sections)
+        let made = encodeFrame(this.state, { ...frame, sections: { ...(must ? packer.sections : {}), ...sections } });
 
         // (Those that may be told: in what the budget has left with those known of told, and
         // EVENTS.may at the least; the frame made again with them, the same records in it or,
         // where only that least was left, fewer)
         if (may.length) {
-            const texts = [...must];
-            let room = Math.max(EVENTS.may, budget - (made.bytes?.length ?? VIEW.header)) - (must.length ? 0 : 5);
+            let room = Math.max(EVENTS.may, budget - (made.bytes?.length ?? VIEW.header)) - (must ? 0 : 5);
+            let added = 0;
 
             for (const event of may) {
-                const one = JSON.stringify(event);
-                const length = bytesOf(one) + 1;
+                const mark = packer.mark();
+                const length = packer.add(event);
 
                 if (length <= room && length <= EVENTS.one) {
-                    texts.push(one);
+                    added++;
                     room -= length;
                 } else {
+                    packer.back(mark);
                     viewer.dropped++;
                     count("views.dropped");
                 }
             }
 
-            if (texts.length > must.length) {
-                made = encodeFrame(this.state, { ...frame, sections: { ...eventsOf(texts), ...sections } });
+            if (added) {
+                made = encodeFrame(this.state, { ...frame, sections: { ...packer.sections, ...sections } });
             }
 
-            viewer.events += texts.length - must.length;
-            count("views.events", texts.length - must.length);
+            viewer.events += added;
+            count("views.events", added);
         }
 
-        if (must.length) {
-            viewer.events += must.length;
-            count("views.events", must.length);
+        if (must) {
+            viewer.events += must;
+            count("views.events", must);
         }
 
         const { bytes, told } = made;

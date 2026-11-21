@@ -32,7 +32,7 @@
 //
 // A section is what else a player's told in a step, each at most once a frame, in this order:
 //
-//   tag      uint8    SECTION: events, done, self, enters, own, world or asof
+//   tag      uint8    SECTION: events, done, self, enters, own, world, asof or hot
 //   length   uint16   how many bytes follow
 //   ...               events: the step's events that are this player's to hear, as JSON text
 //                     (an array; core/eventscope.js says whose each is). done: uint32, the last
@@ -44,7 +44,9 @@
 //                     records, wherever each lies in it. own, world: what's changed of the
 //                     player's own record, and of the world's summary (core/summary.js), as JSON
 //                     text: own [[field, value or null]], world { p: [[part, key, value or
-//                     null]], at: the step everything was told as of (where it's all been) }
+//                     null]], at: the step everything was told as of (where it's all been) }.
+//                     hot: those of the step's events told as bytes and not as JSON, a fight's
+//                     eight commonest kinds (core/hotevents.js), read after the enters
 //
 // A place is where it is, never how far it's moved: a record means the same whatever was sent
 // before it, so one that's dropped, or never sent to a player who came late, is made up for by
@@ -59,7 +61,7 @@ import { TAU } from "./exact.js";
  * What a frame holds: its first byte. It moves only when a frame's bytes do, never with
  * NET_VERSION (contribution.md, section 3, the version numbers).
  */
-export const VIEW_VERSION = 4;
+export const VIEW_VERSION = 5;
 
 /**
  * A frame's origin is a corner of a square of `origin` metres, `lead` metres south-west of the
@@ -85,7 +87,7 @@ export const PLACED = 300;
 export const GOING = Object.freeze({ moving: 1, running: 2, fighting: 4, dead: 8 });
 
 /** A frame's sections, by tag: what else a player's told beside those they know of. */
-export const SECTION = Object.freeze({ events: 1, done: 2, self: 3, enters: 4, own: 5, world: 6, asof: 7 });
+export const SECTION = Object.freeze({ events: 1, done: 2, self: 3, enters: 4, own: 5, world: 6, asof: 7, hot: 8 });
 
 const TEXTS = Object.freeze({ [SECTION.events]: "events", [SECTION.self]: "self", [SECTION.enters]: "enters", [SECTION.own]: "own", [SECTION.world]: "world", [SECTION.asof]: "asof" });
 
@@ -377,6 +379,11 @@ export function encodeFrame(state, { step, origin, leaves = [], known = [], inde
         extra.push([SECTION.asof, utf8.encode(String(sections.asof))]);
     }
 
+    // (The events told as bytes: core/hotevents.js)
+    if (sections?.hot !== undefined) {
+        extra.push([SECTION.hot, sections.hot]);
+    }
+
     const more = extra.reduce((sum, [, bytes]) => sum + 3 + bytes.length, 0);
     const room = Math.min(budget, VIEW.frame) - more;
     const [ox, oy] = origin;
@@ -598,6 +605,8 @@ export function decodeFrame(bytes) {
         try {
             if (tag === SECTION.done) {
                 sections.done = view.getUint32(at + 3, true);
+            } else if (tag === SECTION.hot) {
+                sections.hot = held.slice();
             } else {
                 sections[TEXTS[tag]] = text.decode(held);
             }

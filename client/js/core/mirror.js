@@ -19,6 +19,7 @@
 // Drawn from only where a game's asked to (app/mirrordraw.js, `?mirror`). Pure: no DOM, no network, no trigonometry.
 
 import { TAU } from "./exact.js";
+import { EventUnpacker } from "./hotevents.js";
 import { readPatches, Summary } from "./summary.js";
 import { decodeFrame, GOING, NONE, VIEW, WHO } from "./view.js";
 import { decode } from "./wire.js";
@@ -197,6 +198,7 @@ export class Mirror {
     #byId;
 
     // Those kept in the battle since its view was asked for again, by id, and when that was (reset)
+    #unpacker = new EventUnpacker();
     #waiting = new Map();
 
     #waitingSince = 0;
@@ -282,6 +284,22 @@ export class Mirror {
 
             if (Number.isInteger(world.at)) {
                 this.summary.at = world.at;
+            }
+        }
+
+        // (Those told as bytes read back among the rest, now that whoever came with this frame
+        // is known by their index: core/hotevents.js)
+        if (frame.sections.hot !== undefined) {
+            const read = this.#unpacker.unpack(frame.sections.hot, events, time, (index) => this.known[index]?.who.id);
+
+            if (!read) {
+                this.faults.push(`step ${frame.step}: its events in bytes weren't to be read`);
+            } else {
+                events = read.events;
+
+                if (read.unknown) {
+                    this.faults.push(`step ${frame.step}: ${read.unknown} of its events were of someone who isn't known of`);
+                }
             }
         }
 
@@ -441,6 +459,8 @@ export class Mirror {
     }
 
     welcome({ step, own = {}, world = {} }) {
+        // (Its view begun: the texts its events' bytes are read by, begun with it)
+        this.#unpacker = new EventUnpacker();
         this.summary = new Summary();
         this.summary.take(Object.entries(own).map(([key, value]) => ["own", key, value]));
 

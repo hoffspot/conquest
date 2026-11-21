@@ -7,6 +7,7 @@ import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { AUDIENCES, CLASSES, hears, NEAR, scopeOf, SCOPES, sift } from "../client/js/core/eventscope.js";
 import { Host } from "../client/js/core/host.js";
+import { EventUnpacker } from "../client/js/core/hotevents.js";
 import { Hosting, NET_VERSION } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { COUNTERS } from "../client/js/core/probe.js";
@@ -27,6 +28,26 @@ let made = 0;
 
 // Someone standing somewhere, with what the feed and its frames read
 const someone = (x, y, more = {}) => ({ id: `e${made++}`, map: "town", x, y, facing: 0, progress: null, dead: false, running: false, pace: 1.4, attack: null, target: null, order: null, hp: 20, maxHp: 20, ...more });
+
+// A frame's events as its player's game reads them: those told as bytes (core/hotevents.js)
+// among those told as JSON, read by the texts kept since that player's view began
+const readers = new WeakMap();
+
+function eventsOf(feed, id, frame) {
+    const viewer = feed.viewers.get(id);
+    const cold = JSON.parse(frame.sections.events ?? "[]");
+
+    if (frame.sections.hot === undefined) {
+        return cold;
+    }
+
+    const reader = readers.get(viewer) ?? readers.set(viewer, new EventUnpacker()).get(viewer);
+    const read = reader.unpack(frame.sections.hot, cold, frame.step * STEP_MS, (index) => viewer.byIndex[index]?.actor.id);
+
+    assert.ok(read && read.unknown === 0, "its events' bytes read");
+
+    return read.events;
+}
 
 describe("who hears of what (core/eventscope.js)", () => {
     it("has a scope for every kind of event the battle and the host tell of, and for nothing else", async () => {
@@ -150,7 +171,7 @@ describe("a frame's sections (core/view.js)", () => {
         assert.deepEqual(decodeFrame(alone.bytes), { version: VIEW_VERSION, step: 9, origin, leaves: [], records: [], sections: { events, done: 41, self } });
         assert.deepEqual(decodeFrame(encodeFrame(state, { step: 9, origin, sections: { done: 4294967295 } }).bytes).sections, { done: 4294967295 });
         assert.equal(encodeFrame(state, { step: 9, origin, sections: {} }).bytes, null, "none of them: no frame");
-        assert.deepEqual(SECTION, { events: 1, done: 2, self: 3, enters: 4, own: 5, world: 6, asof: 7 });
+        assert.deepEqual(SECTION, { events: 1, done: 2, self: 3, enters: 4, own: 5, world: 6, asof: 7, hot: 8 });
 
         // (With those known: the records have what room the sections leave)
         const actors = Array.from({ length: 100 }, (_, k) => someone(k, 0));
@@ -221,7 +242,9 @@ describe("a player's events in their frames (core/viewfeed.js)", () => {
             const frame = decodeFrame(bytes);
 
             assert.ok(frame, `${bytes.length} bytes that read as a frame`);
-            frames.get(id).push({ ...frame.sections, events: frame.sections.events === undefined ? undefined : JSON.parse(frame.sections.events), length: bytes.length });
+            const { hot, ...sections } = frame.sections;
+
+            frames.get(id).push({ ...sections, events: sections.events === undefined && hot === undefined ? undefined : eventsOf(feed, id, frame), length: bytes.length });
         };
 
         return { ann, bea, wolf, feed, frames, toldSelf, hosting };
@@ -348,7 +371,7 @@ describe("a player's events in their frames (core/viewfeed.js)", () => {
             hosting.views.onFrame = (id, bytes) => {
                 const { sections } = decodeFrame(bytes);
 
-                heard.set(id, { events: [...(heard.get(id)?.events ?? []), ...JSON.parse(sections.events ?? "[]")], self: sections.self ?? heard.get(id)?.self, done: sections.done ?? heard.get(id)?.done });
+                heard.set(id, { events: [...(heard.get(id)?.events ?? []), ...eventsOf(hosting.views, id, decodeFrame(bytes))], self: sections.self ?? heard.get(id)?.self, done: sections.done ?? heard.get(id)?.done });
             };
             hosting.hear("a", encode({ kind: "hello", version: NET_VERSION, character: { hero: hero("Ann", "human") } }));
 

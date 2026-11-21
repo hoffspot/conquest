@@ -351,7 +351,7 @@ export class Shadow {
 
         // (Longer than a frame may be, but for one event that must be told and is long itself;
         // the summary's patches are beside that, a frame's worth of their own)
-        if (bytes.length - (frame.sections.own?.length ?? 0) - (frame.sections.world?.length ?? 0) > SHADOW.most + Math.max(0, (frame.sections.events?.length ?? 0) - 900)) {
+        if (bytes.length - (frame.sections.own?.length ?? 0) - (frame.sections.world?.length ?? 0) > SHADOW.most + Math.max(0, (frame.sections.events?.length ?? 0) + (frame.sections.hot?.length ?? 0) - 900)) {
             this.#say("over", step, `a frame of ${bytes.length} bytes`);
         }
 
