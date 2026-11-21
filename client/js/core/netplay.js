@@ -224,8 +224,9 @@ const HOLE_TEXT = JSON.stringify(HOLE);
  * a game says its words take is held to `rtt` ms. And a game may ask its hero to walk no further
  * at once than `walk` metres from where the world has them (further, and it's that far towards
  * there: a world server keeps the ground made 160 m round each player, server/ahead.js, and a
- * square named beyond it had the world make the ground there as it was heard, 20 to 60 ms of
- * everyone's time; a run across the world is asked for 72 m at a time, app/journey.js).
+ * square named beyond it had the world make the ground there as it was heard, to look for
+ * somewhere to stand, 20 to 90 ms of everyone's time, before finding it too far to walk to; a
+ * run across the world is asked for 72 m at a time, app/journey.js).
  */
 export const HEARD = Object.freeze({ most: 256 * 1024, commands: 30, burst: 60, rtt: 60000, walk: 128 });
 

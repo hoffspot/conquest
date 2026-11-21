@@ -4100,19 +4100,21 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     - **Its number**: higher than the last from that game, or it's let go of (`unordered`).
       A command's done once however often it's said.
     - **Its reach**: a game's hero is walked no further at one asking than `HEARD.walk`
-      (128 m: the server keeps the ground made 160 m round each player), and anyone no
-      further than `MOVE_REACH` (256 m). An "ahead" order's way is looked along a leg at a
+      (128 m: the server keeps the ground made 160 m round each player; further, and it's
+      that far towards there). An "ahead" order's way is looked along a leg at a
       time (`AHEAD_LEG`, 48 m) where the tiles of the rest aren't made, the rest as the
       walker gets there; it's this every copy does, so `NET_VERSION` is 235.
     - **Who may**: the six debug commands (`DEBUG_COMMANDS`) are the world's debugger's
       alone, by the role the server gave, never by what a game says.
       `test/hardening.test.js` reads the host's own cases to hold the list to them.
-    - **What it says of itself**: a device's `budget` is held to what an invasion may be, a
-      round trip to a minute, and `own` is counted with commands.
+    - **What it says of itself**: a device's `budget` is a size an invasion may be or it's
+      not taken (as it was), a round trip is held to a minute, and `own` is counted with
+      commands.
     - **What it asks** (`ask`, of a game sent views): only of those it's been told of.
     What that test's hundred thousand hostile messages found, each fixed: an "ahead" order
     made up to 110 navigation tiles as it was heard, a second of the world's time; a walk
-    asked a world away made the ground there, 20 to 90 ms each; and
+    asked a world away made the ground there to look for somewhere to stand, 20 to 90 ms
+    each, before finding it too far; and
     `{ type: "abandon", thread: "__proto__" }` gave up the thread every object is, and set
     what a thread keeps on all of them, spoiling the whole process. Now none throws, and
     the longest holds the world 37 ms.

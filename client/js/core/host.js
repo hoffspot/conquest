@@ -14,7 +14,6 @@
 //
 // Pure JavaScript, no DOM: it runs in the browser of the player who's hosting, or in Node.
 
-import { nearer } from "./commandshape.js";
 import { AFFLICTIONS, curedWith } from "./afflictions.js";
 import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH, TAUNT } from "./battle.js";
 import { count, lap, probing } from "./probe.js";
@@ -49,7 +48,7 @@ import { DEN, DENS, denOf, densOf, denTier } from "./dens.js";
 import { GIFT_BOONS, giftId, sanctuaryAt, SHRINE, shrineOf } from "./shrines.js";
 import { FULL_MOON, moonRoad, nightOf, phaseOfNight, RING, ringNear, ringOf, TRIAL, trialOf } from "./rings.js";
 import { BRIMSTONE, HELL_RIFT, inRift, RIFT_GUARDS, riftDemon, riftDue, riftSite, riftTier, tearsOf } from "./hellrift.js";
-import { bandFor, BANDS, behemothReward, behemothSides, BEHEMOTH, bombersOf, COAST, dueAfter, ENGINES, INVASION, isBehemoth, isDue, isSize, raiderArms, raiderName, REWARD, rewardOf, sidesOf, SIZE } from "./invasions.js";
+import { bandFor, BANDS, behemothReward, behemothSides, BEHEMOTH, bombersOf, COAST, dueAfter, ENGINES, INVASION, isBehemoth, isDue, isSize, raiderArms, raiderName, REWARD, rewardOf, sidesOf } from "./invasions.js";
 import { burntCount, burntIn, housesToBurn, wholeAt } from "./burnt.js";
 import { waysOut, wayToward } from "./settlements.js";
 import { cellIndex, WATER } from "./worldplan/terrain.js";
@@ -1034,15 +1033,6 @@ export const SHOP_REACH = TALK_REACH.across + 3;
  * tiles at the most, a fifth of what's looked for across at once (navigation.js MOST_ASKED).
  * test/farway.test.js holds it to the camera's numbers.
  */
-/**
- * How far from where they stand a player may ask to walk at once (metres): further, and it's
- * towards there they go, this far. A tap on the ground is no further than the camera sees, and a
- * run across the world is asked for a leg at a time (app/journey.js LEGS.reach, 72 m); a square
- * named a world away had the host make the ground there to look for somewhere to stand, 20 to
- * 90 ms of everyone's time for each (the scaling plan's 3-29).
- */
-export const MOVE_REACH = 256;
-
 export const ENTER_REACH = 224;
 
 /**
@@ -2398,7 +2388,7 @@ export class Host {
                     return refuse("command");
                 }
 
-                return this.#order(actor, { type: "move", to: nearer(actor, command.to, MOVE_REACH), run });
+                return this.#order(actor, { type: "move", to: [...command.to], run });
             case "ahead":
                 if (!Number.isFinite(command.facing)) {
                     return refuse("command");
@@ -2636,13 +2626,11 @@ export class Host {
             case "budget":
                 // (How big an invasion their device can draw, as their game's measured it: core/
                 // invasions.js sizeFor)
-                // (Held to what an invasion may be, whatever's said: a game can't ask for one
-                // bigger than any device draws, nor for none at all)
-                if (!Number.isFinite(command.invasion)) {
+                if (!isSize(command.invasion)) {
                     return refuse("command");
                 }
 
-                player.budget = Math.max(SIZE.least, Math.min(Math.max(...Object.values(SIZE.most)), Math.round(command.invasion)));
+                player.budget = command.invasion;
 
                 return OK;
             default:

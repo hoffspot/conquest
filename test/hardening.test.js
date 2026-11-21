@@ -8,7 +8,7 @@ import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import { AHEAD, AHEAD_LEG, STEP_MS } from "../client/js/core/battle.js";
 import { COMMAND_SHAPES, DEBUG_COMMANDS, misshapen, MISSHAPEN, SHAPE } from "../client/js/core/commandshape.js";
-import { Host, MOVE_REACH } from "../client/js/core/host.js";
+import { Host } from "../client/js/core/host.js";
 import { SIZE } from "../client/js/core/invasions.js";
 import { navigatorOf } from "../client/js/core/navigation.js";
 import { HEARD, Hosting, NET_VERSION } from "../client/js/core/netplay.js";
@@ -235,25 +235,36 @@ describe("what a world takes from another's game (core/netplay.js Session)", () 
         const { host, hosting, ids } = world;
         const most = Math.max(...Object.values(SIZE.most));
 
-        for (const [said, kept] of [[160, 160], [1e9, most], [0, SIZE.least], [-50, SIZE.least], [99.6, 100]]) {
-            assert.deepEqual(host.command(ids.a, { type: "budget", invasion: said }), { ok: true });
-            assert.equal(host.players.get(ids.a).budget, kept, `${said}`);
+        // (A size an invasion may be, or it's not taken: none bigger than any device draws,
+        // none smaller than the least there is)
+        assert.deepEqual(host.command(ids.a, { type: "budget", invasion: 160 }), { ok: true });
+
+        for (const said of [1e9, most + 1, 0, -50, SIZE.least - 1, 99.6, "big", NaN]) {
+            assert.equal(host.command(ids.a, { type: "budget", invasion: said }).ok, false, `${said}`);
+            assert.equal(host.players.get(ids.a).budget, 160);
         }
 
-        assert.equal(host.command(ids.a, { type: "budget", invasion: "big" }).ok, false);
-        assert.equal(host.command(ids.a, { type: "budget", invasion: NaN }).ok, false);
         hosting.hear("a", encode({ kind: "ping", t: 1, rtt: 1e12 }));
         assert.equal(hosting.session.rtts.get("a"), HEARD.rtt);
     });
 
-    it("walks a player no further at one asking than MOVE_REACH, and looks ahead of one a leg at a time", () => {
-        const { host, ids } = hosted();
+    it("walks another's hero no further at one asking than HEARD.walk, and looks ahead of anyone a leg at a time", () => {
+        const world = hosted();
+        const { host, ids } = world;
         const actor = host.battle.actor(ids.a);
         const [x, y] = [actor.x, actor.y];
+        const asked = [];
+        const real = host.command.bind(host);
 
-        assert.deepEqual(host.command(ids.a, { type: "move", to: [Math.floor(x) + 9000, Math.floor(y)] }), { ok: true });
-        assert.ok(actor.order.to[0] - x <= MOVE_REACH + 30, `${actor.order.to[0] - x} m off`);
-        assert.ok(MOVE_REACH >= 160 + 72, "further than the camera sees, and a journey's leg");
+        // (Asked a world away: given the world as that far towards there, which every copy's told)
+        host.command = (id, command) => (asked.push(command), real(id, command));
+        world.say("a", 1, { type: "move", to: [Math.floor(x) + 9000, Math.floor(y)], run: true });
+        world.say("a", 2, { type: "move", to: [Math.floor(x) + 20, Math.floor(y) + 3] });
+        host.command = real;
+        assert.deepEqual(asked.map(({ type, run }) => [type, run]), [["move", true], ["move", undefined]]);
+        assert.ok(Math.abs(asked[0].to[0] - (x + HEARD.walk)) <= 1 && Math.abs(asked[0].to[1] - y) <= 1, `${asked[0].to}`);
+        assert.deepEqual(asked[1].to, [Math.floor(x) + 20, Math.floor(y) + 3], "one within it as it was asked");
+        assert.ok(HEARD.walk > 72 && HEARD.walk < 160, "further than a journey's leg, within the ground a server keeps made");
 
         // (Ahead, with none of the way's tiles made but those beside them: a leg, the rest kept
         // for when they've walked it. No second of the world's time making a hundred tiles)

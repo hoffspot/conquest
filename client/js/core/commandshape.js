@@ -122,8 +122,8 @@ export const MISSHAPEN = Object.freeze({ type: "misshapen" });
 
 /**
  * A square no further than `reach` metres from someone (`from`: { x, y }): the one asked for
- * ([x, y]), or the one that far towards it. Where a player may ask to walk at once: core/host.js
- * MOVE_REACH for anyone, and nearer for one heard from another's game (core/netplay.js HEARD).
+ * ([x, y]), or the one that far towards it. Where one heard from another's game may ask to
+ * walk at once (core/netplay.js HEARD.walk).
  */
 export function nearer(from, [x, y], reach) {
     const [dx, dy] = [x + 0.5 - from.x, y + 0.5 - from.y];
