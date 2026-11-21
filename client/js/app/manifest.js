@@ -274,7 +274,7 @@ export const MANIFEST = Object.freeze([
             ["js/core/trails.js", 14732, "eec83447d4"],
             ["js/core/variety.js", 1431, "b76cb33e16"],
             ["js/core/view.js", 23512, "cf1d0477e3"],
-            ["js/core/viewfeed.js", 34802, "174c549d7a"],
+            ["js/core/viewfeed.js", 35094, "e5f2f2957f"],
             ["js/core/war/armies.js", 6415, "365228f2c5"],
             ["js/core/war/forts.js", 11737, "e322539893"],
             ["js/core/war/muster.js", 6984, "90a9625f87"],
