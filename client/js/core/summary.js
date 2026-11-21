@@ -26,8 +26,8 @@ import { decode, encode } from "./wire.js";
 export const SUMMARY = Object.freeze({ every: 20, frame: 6000, near: 512, news: 60 });
 
 /** The parts that are every player's alike (worldParts), and those that are one player's (ownParts). */
-export const WORLD_PARTS = Object.freeze(["rules", "clock", "realms", "towns", "works", "forces", "forts", "relations", "parties", "roster", "invasions", "burnt", "rifts", "legends", "done", "dungeons", "camps", "depots", "places", "news", "battles"]);
-export const OWN_PARTS = Object.freeze(["own", "invites", "props", "fellows", "trades"]);
+export const WORLD_PARTS = Object.freeze(["rules", "clock", "realms", "towns", "works", "forces", "forts", "relations", "parties", "roster", "invasions", "burnt", "rifts", "done", "dungeons", "camps", "depots", "places", "news", "battles"]);
+export const OWN_PARTS = Object.freeze(["own", "invites", "props", "fellows", "trades", "lore"]);
 
 /** The director's props a player's told of when near: each a table of the host's, by its name there. */
 export const PROPS = Object.freeze(["ground", "campfires", "caches", "finds", "strangers", "obstacles", "treasures", "ambushes"]);
@@ -90,7 +90,6 @@ export function worldParts(host) {
         invasions: byId(host.invasions),
         burnt: byId(host.burnt),
         rifts: one(host.hellRifts),
-        legends: one(host.legends.toJSON()),
         done: one(host.done),
         dungeons: byKey(host.dungeons),
         // (The rest of the war a game shows, the plan's 3-25: the camps and depots on its maps,
@@ -134,6 +133,35 @@ function placeOf(thing) {
     const at = Array.isArray(thing.at) ? thing.at : Array.isArray(thing.square) ? thing.square : Array.isArray(thing.fire) ? thing.fire : Array.isArray(thing.heart) ? thing.heart : typeof thing.x === "number" && typeof thing.y === "number" ? [thing.x, thing.y] : null;
 
     return at && typeof at[0] === "number" && typeof at[1] === "number" ? { map: typeof thing.map === "string" ? thing.map : null, x: at[0], y: at[1] } : null;
+}
+
+/**
+ * The world's rare encounters (core/rare.js Legends, as kept: toJSON) as one player may know
+ * them (the scaling plan's 3-29). The legends keep a good deal by player: each one's clocks
+ * (how long they've been indoors and out), what each is owed, what each is marked with, who
+ * the encounter out now was dealt to, who's seen it and where it is, and who's taken part in
+ * each thread and vault. Told whole to everyone, as they were, each game had all of that of
+ * every player. Here: their own clocks, dues and marks; the one out now only if it's theirs to
+ * know of (dealt to them, seen by them or taken part in by them), and of the others in it none;
+ * and of what's done, of the threads and of the vaults, no one's id but their own. What the
+ * world's story is, where its threads stand and whose names are on them, is everyone's.
+ */
+export function loreOf(legends, me) {
+    const mine = (ids) => (Array.isArray(ids) ? ids.filter((id) => id === me) : ids);
+    const own = (byId) => (byId && Object.hasOwn(byId, me) ? { [me]: byId[me] } : {});
+    const { active } = legends;
+    const theirs = active && (active.to === me || active.told?.includes(me) || active.took?.includes(me));
+
+    return {
+        ...legends,
+        clocks: own(legends.clocks),
+        owed: own(legends.owed),
+        marks: own(legends.marks),
+        active: theirs ? { ...active, to: active.to === me ? me : null, told: mine(active.told), took: mine(active.took) } : null,
+        done: (legends.done ?? []).map((one) => ({ ...one, by: mine(one.by) })),
+        threads: Object.fromEntries(Object.entries(legends.threads ?? {}).map(([id, thread]) => [id, { ...thread, took: mine(thread.took), left: mine(thread.left), fell: mine(thread.fell) }])),
+        vaults: Object.fromEntries(Object.entries(legends.vaults ?? {}).map(([n, vault]) => [n, { ...vault, took: mine(vault.took) }])),
+    };
 }
 
 /**
@@ -197,6 +225,9 @@ export function ownParts(host, me) {
         // (The trades they're in, asked or open, as they stand: a view told again has them,
         // which the events that told of them wouldn't be heard again to say; the plan's 3-26)
         trades: byKey([...(host.trades?.entries() ?? [])].filter(([, trade]) => trade?.from === me || trade?.to === me)),
+        // (The world's rare encounters, as much of them as is this player's to know: loreOf. A
+        // field an entry, so a second's telling is of their clocks and no more)
+        lore: byKey(Object.entries(loreOf(host.legends.toJSON(), me))),
     };
 }
 

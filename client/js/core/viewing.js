@@ -251,10 +251,6 @@ export class Viewing extends Joining {
             host.rules = Object.freeze(structuredClone(one("rules")));
         }
 
-        if (one("legends") && one("legends") !== this.#legends) {
-            this.#legends = one("legends");
-            host.legends = new Legends(structuredClone(this.#legends));
-        }
     }
 
     // The players' parties as the summary has them, and which each player's in (the plan's 3-24)
@@ -379,6 +375,16 @@ export class Viewing extends Joining {
         // sooner, and this is what a view told again begins from)
         host.trades = new Map(structuredClone([...(parts.get("trades") ?? [])]));
         this.#props(parts.get("props"));
+
+        // (The legends, as much of them as is this player's to know, core/summary.js loreOf:
+        // made again when they're told anew)
+        const lore = parts.get("lore");
+        const told = lore?.size ? JSON.stringify([...lore]) : null;
+
+        if (told && told !== this.#legends) {
+            this.#legends = told;
+            host.legends = new Legends(structuredClone(Object.fromEntries(lore)));
+        }
     }
 
     // The director's props near its hero, as the summary has them (`name:id` each), put in the

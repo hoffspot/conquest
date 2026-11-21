@@ -123,6 +123,7 @@ import { compareMotion, MOTION, packMotion, unpackMotion } from "./motion.js";
 import { Drawn } from "./drawn.js";
 import { Shadow } from "./shadow.js";
 import { SHADOW_KIND, VIEW_MODE, ViewFeed } from "./viewfeed.js";
+import { misshapen, MISSHAPEN, nearer } from "./commandshape.js";
 import { count, lap } from "./probe.js";
 import { selfOf } from "./selfstate.js";
 import { STARTING_WEAPONS } from "./weapons.js";
@@ -136,7 +137,7 @@ import { WARY } from "./wary.js";
  * Bumped whenever what's said changes: a game of another version can't join. (Not for what's
  * added and opted into: contribution.md, section 3.)
  */
-export const NET_VERSION = 234;
+export const NET_VERSION = 235;
 
 /**
  * The ways a world can be played with those who join it (its netcode): `lockstep`, each game
@@ -219,9 +220,14 @@ const HOLE_TEXT = JSON.stringify(HOLE);
  * coming in is the longest thing said, and the world server's broker and play socket hold one
  * they relay to the same: a hero with six tabs of their stash and their pack full of the longest
  * pieces there are says about 82 KB coming in, test/strongroom.test.js), and commands no faster than `commands` a second, `burst` at once (a stick turning sends
- * 16 a second; each command done is sent on to everyone). More is let go of unanswered.
+ * 16 a second; each command done is sent on to everyone). More is let go of unanswered. How long
+ * a game says its words take is held to `rtt` ms. And a game may ask its hero to walk no further
+ * at once than `walk` metres from where the world has them (further, and it's that far towards
+ * there: a world server keeps the ground made 160 m round each player, server/ahead.js, and a
+ * square named beyond it had the world make the ground there as it was heard, 20 to 60 ms of
+ * everyone's time; a run across the world is asked for 72 m at a time, app/journey.js).
  */
-export const HEARD = Object.freeze({ most: 256 * 1024, commands: 30, burst: 60 });
+export const HEARD = Object.freeze({ most: 256 * 1024, commands: 30, burst: 60, rtt: 60000, walk: 128 });
 
 /** The most players in a world (its host too). */
 export const MOST_PLAYERS = 8;
@@ -560,6 +566,10 @@ export class Session {
         this.allowance = new Map();
         this.dropped = 0;
 
+        /** How many commands have been let go of for coming out of their turn (a number no higher than the last: #command), and how many refused for their shape (core/commandshape.js). */
+        this.unordered = 0;
+        this.misshapen = 0;
+
         /** Those whose page is hidden, as they've said (by peer): away, their hero as they left it. */
         this.hidden = new Set();
 
@@ -668,6 +678,8 @@ export class Session {
 
     // When each game sent views was last told its view again (#viewAgain), by peer
     #viewedAt = new Map();
+    // The number of the last command taken from each (by peer): the next is higher
+    #seqs = new Map();
 
     #admitting = false;
 
@@ -756,14 +768,15 @@ export class Session {
                     this.hosting.post(peer, "pong", encode({ kind: "pong", t: message.t, step: this.hosting.step() }));
 
                     if (Number.isFinite(message.rtt) && message.rtt >= 0) {
-                        this.rtts.set(peer, message.rtt);
+                        // (No longer than a link's kept waiting for: whatever's said)
+                        this.rtts.set(peer, Math.min(message.rtt, HEARD.rtt));
                     }
                 }
 
                 break;
             case "own":
                 // (What their game keeps of their hero, not the world's: kept with them)
-                if (this.players.has(peer)) {
+                if (this.players.has(peer) && this.#allowed(peer)) {
                     this.host.own(this.players.get(peer), message.own);
                     this.feed.changed();
                 }
@@ -972,6 +985,8 @@ export class Session {
         this.hosting.flush();
         this.#fresh(peer);
         this.players.set(peer, id);
+        // (Come in, or back: their commands numbered from the first again)
+        this.#seqs.delete(peer);
         this.#entering.set(peer, { id, took: false });
 
         return true;
@@ -1186,6 +1201,8 @@ export class Session {
 
         this.#fresh(peer);
         this.players.set(peer, id);
+        // (Come in, or back: their commands numbered from the first again)
+        this.#seqs.delete(peer);
         this.#entering.set(peer, { id, took: true });
     }
 
@@ -1211,11 +1228,40 @@ export class Session {
     #command(peer, { seq, command }) {
         const id = this.players.get(peer);
 
-        if (!id || !Number.isInteger(seq) || !this.#allowed(peer)) {
+        // (Each of a game's commands numbered on from its last: one that isn't, sent twice or
+        // out of its turn, is let go of, so a command's done once however often it's said)
+        if (!id || !Number.isSafeInteger(seq) || seq <= (this.#seqs.get(peer) ?? 0)) {
+            if (id) {
+                this.unordered++;
+                count("heard.unordered");
+            }
+
             return;
         }
 
+        if (!this.#allowed(peer)) {
+            return;
+        }
+
+        this.#seqs.set(peer, seq);
         this.seq = seq;
+
+        // (Its shape, as a command's may be: core/commandshape.js. One that isn't is refused as
+        // one there's no such kind of; and what a game sent views asks is only of those it's
+        // been told of: nothing's said of a keeper's shop from across the world)
+        const viewed = this.viewing.has(peer);
+        const wrong = misshapen(command);
+        const asking = viewed && !wrong && command.type === "ask";
+        const known = asking && this.hosting.views.viewers.get(id)?.ids.has(command.id ?? command.keeper);
+
+        if (wrong) {
+            this.misshapen++;
+            count("heard.misshapen");
+        }
+
+        // (No further at once than HEARD.walk: every copy's told where that came to)
+        const walker = !wrong && command.type === "move" ? this.host.battle.actor(id) : null;
+        const given = wrong ? MISSHAPEN : walker ? { ...command, to: nearer(walker, command.to, HEARD.walk) } : command;
 
         let result;
 
@@ -1223,7 +1269,7 @@ export class Session {
             // (What a game sent views asks as a talk or a shop opens, core/worldview.js: read of
             // the world and answered with its commands' results; nothing's done, and no copy's
             // told of it)
-            result = this.viewing.has(peer) && command?.type === "ask" ? { ok: true, answer: answerOf(this.host, id, command) } : this.host.command(id, command);
+            result = asking ? (known ? { ok: true, answer: answerOf(this.host, id, command) } : { ok: false, reason: "target" }) : this.host.command(id, given);
         } finally {
             this.seq = null;
             this.done.set(peer, seq);
@@ -1231,7 +1277,7 @@ export class Session {
 
         // (A game sent views plays no commands itself, so it's told what came of its own:
         // a lockstep game finds out as its copy plays the command)
-        if (this.viewing.has(peer)) {
+        if (viewed) {
             this.hosting.post(peer, "result", encode({ kind: "result", seq, result: result ?? null }));
         }
     }
@@ -1367,6 +1413,7 @@ export class Session {
     gone(peer) {
         this.viewing.delete(peer);
         this.#viewedAt.delete(peer);
+        this.#seqs.delete(peer);
 
         // (One who was waiting to come in: no longer)
         this.waiting.delete(peer);
