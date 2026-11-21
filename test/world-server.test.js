@@ -660,6 +660,10 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         } finally {
             Object.defineProperty(Socket.prototype, "waiting", real);
         }
+
+        // (Let go, its place is kept a while for it to come back to: the world taken offline,
+        // so the next has room)
+        assert.equal((await server.call("POST", `/worlds/${made.json.world}/offline`, { auth: `Key ${server.adminKey}` })).status, 200);
     });
 
     it("makes each player's views dark where the server's replication is, counted with the world's work and never sent; and stops when it's turned off, with no restart", async () => {
