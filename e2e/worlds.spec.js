@@ -908,6 +908,14 @@ test("a replicated world: two players, neither's game holding a copy of it, see 
         await expect.poll(() => partied(bram), { timeout: 30000 }).toMatchObject({ members: 2, asked: false, onMaps: ["Una"], roster: ["Bram", "Una"] });
         expect((await partied(una)).towns).toBeGreaterThanOrEqual(10);
 
+        // The world at large and the props near her (the plan's 3-25): read of the summary,
+        // each as the game reads it
+        expect(await una.evaluate(() => {
+            const view = window.pellagos.game.worldview;
+
+            return { ground: view.ground instanceof Map, campfires: Array.isArray(view.campfires), legends: typeof view.legends.stepOf, invasions: Array.isArray(view.invasions), rifts: typeof view.hellRifts.next, camps: Array.isArray(view.war.camps), news: Array.isArray(view.war.log), battles: Array.isArray(view.engagements()), rules: typeof view.rules.rest };
+        })).toEqual({ ground: true, campfires: true, legends: "function", invasions: true, rifts: "number", camps: true, news: true, battles: true, rules: typeof (await una.evaluate(() => window.pellagos.game.worldview.rules.rest)) });
+
         // (Still no copy, and nothing the frames said that couldn't be so)
         for (const one of [await has(una), await has(bram)]) {
             expect(one.ops + one.world).toBe(0);
