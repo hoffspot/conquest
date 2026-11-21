@@ -612,6 +612,10 @@ parentPort.on("message", async (message) => {
             replicate(message.mode);
 
             break;
+        case "waiting":
+            hosting.views.waiting(message.peer, message.bytes);
+
+            break;
         case "save":
             await keeper.save(message.why);
             post({ type: "saved", id: message.id, ok: !keeper.failed });

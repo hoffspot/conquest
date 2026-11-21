@@ -11,7 +11,7 @@ import { Hosting, Joining, NETCODES } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { asRemote, REMOTE_MEMBERS } from "../client/js/core/remote.js";
 import { SUMMARY, worldParts } from "../client/js/core/summary.js";
-import { dressOf } from "../client/js/core/viewfeed.js";
+import { dressOf, LAG } from "../client/js/core/viewfeed.js";
 import { Viewing, VIEW_ASKS } from "../client/js/core/viewing.js";
 import { decode } from "../client/js/core/wire.js";
 import { lookIn } from "./helpers.js";
@@ -21,7 +21,7 @@ const character = (name, weapon = "sword") => ({ hero: { name, shape: {}, look: 
 
 // A replicated world hosted, and games that come into it over links that take no time: each a
 // Viewing, its world a Host of the same seed that's never stepped
-function replicated({ netcode = "replicated", mode = "on" } = {}) {
+function replicated({ netcode = "replicated", mode = "on", line = null } = {}) {
     const world = buildWorld({ seed: 2 });
     const host = new Host(world, { populate: false });
     const games = new Map();
@@ -29,7 +29,8 @@ function replicated({ netcode = "replicated", mode = "on" } = {}) {
     let now = 0;
     const hosting = new Hosting(host, {
         send: (peer, text) => games.get(peer)?.link.hear(text),
-        sendBinary: (peer, bytes) => games.get(peer)?.link.frame(Uint8Array.from(bytes)),
+        // (`line`: a peer's frames put on a line of the test's own, not handed straight over)
+        sendBinary: (peer, bytes) => (line?.(peer, Uint8Array.from(bytes)) ? null : games.get(peer)?.link.frame(Uint8Array.from(bytes))),
     });
 
     host.join({ id: "host", hero: { name: "Host", shape: {}, look: {}, weapon: "sword", boots: false } });
@@ -581,6 +582,134 @@ describe("a replicated world's link (core/viewing.js)", () => {
         assert.ok(mine.battle.actor(annId));
         assert.equal(mine.battle.time, host.battle.time);
         assert.deepEqual(ann.link.mirror.faults, []);
+    });
+
+    it("holds back for a link that can't keep up: held to 8 KB/s, what a game's shown is never more than half a second old, and it's told all it must be", async () => {
+        // (Ann's line: what's sent her waits its turn, so many bytes a step let through, as a
+        // slow link's buffers hold it; Bea's as ever)
+        const waiting = [];
+        let [room, rate, now, late, sentBytes] = [0, Infinity, 0, [], 0];
+        const world = replicated({ line: (peer, bytes) => (peer === "a" ? (waiting.push({ bytes, left: bytes.length }), (sentBytes += bytes.length), true) : false) });
+        const [ann, bea] = [world.come("a", character("Ann")), world.come("b", character("Bea"))];
+        const pass = (steps) => {
+            for (let k = 0; k < steps; k++) {
+                // (What the line lets through this step, in order; then the world's step)
+                for (room += rate; waiting.length && room >= waiting[0].left; ) {
+                    const { bytes, left } = waiting.shift();
+
+                    room -= left;
+                    ann.link.frame(bytes);
+                    late.push(world.hosting.step() - ann.link.heard);
+                }
+
+                if (waiting.length) {
+                    waiting[0].left -= room;
+                    room = 0;
+                } else {
+                    room = Math.min(room, rate);
+                }
+
+                stir?.(now);
+                world.play(1);
+                now++;
+            }
+        };
+        let stir = null;
+
+        pass(40);
+        await Promise.all([ann.link.started, bea.link.started]);
+
+        const { host } = world;
+        const [annId, beaId] = [ann.link.me, bea.link.me];
+
+        // (A crowd about her, each going somewhere: more to tell than the line carries)
+        const truth = host.battle.actor(annId);
+        const crowd = host.battle.actors.filter((actor) => actor.id !== annId && actor.id !== beaId && !host.players.has(actor.id)).slice(0, 150);
+
+        crowd.forEach((actor, k) => Object.assign(actor, { x: truth.x + 2 + (k % 15), y: truth.y + 2 + Math.floor(k / 15), square: [Math.floor(truth.x) + 2 + (k % 15), Math.floor(truth.y) + 2 + Math.floor(k / 15)], map: truth.map }));
+        // (And kept going: each a little way on every step)
+        stir = (step) => crowd.forEach((actor, k) => {
+            if (!actor.dead) {
+                actor.x += ((step + k) % 4 < 2 ? 0.2 : -0.2);
+                actor.facing = (step + k) % 8;
+            }
+        });
+        pass(100);
+        [late, sentBytes] = [[], 0];
+        pass(200);
+
+        const { views } = world.hosting;
+        const lag = () => views.viewers.get(annId).lag;
+        const worst = () => Math.max(...late);
+
+        assert.equal(worst(), 0, "a line that carries all it's given: every frame as it's made");
+        assert.deepEqual(views.held, { frames: 0, raised: 0, lowered: 0 }, "and nothing held back");
+
+        // (Held to 8 KB/s, the gate's number: nothing shown her over half a second old)
+        rate = 8000 / 20;
+        pass(100);
+        [late, sentBytes] = [[], 0];
+        pass(400);
+        assert.ok(worst() <= 500 / STEP_MS, `${worst()} steps old at the worst`);
+        assert.ok(late.length >= 100, `${late.length} frames in 20 s`);
+
+        // (And to 3 KB/s, under half of what there is to tell: told half as often and as much,
+        // and half again, and nothing more while what she's been sent is still on its way)
+        rate = 3000 / 20;
+        pass(100);
+
+        // (A trade asked and taken up meanwhile: what she must hear of comes, if late)
+        const say = (game, command) => game.link.command(command, () => {});
+
+        Object.assign(host.battle.actor(beaId), { x: truth.x + 1, y: truth.y, square: [Math.floor(truth.x) + 1, Math.floor(truth.y)], map: truth.map, path: [], order: null });
+        pass(4);
+        say(ann, { type: "trade", with: beaId });
+        pass(4);
+        say(bea, { type: "trade", with: annId });
+        [late, sentBytes] = [[], 0];
+        pass(400);
+
+        const open = [...host.trades.values()].find((trade) => trade.open);
+
+        assert.equal(lag().level, LAG.levels, "at the lowest rate");
+        assert.ok(views.held.frames > 100 && views.held.raised === LAG.levels, JSON.stringify(views.held));
+        assert.ok(sentBytes / 20 <= 3000 * 1.05, `${Math.round(sentBytes / 20)} bytes a second sent a line that carries 3,000`);
+        assert.ok(worst() <= 2000 / STEP_MS, `${worst()} steps old at the worst`);
+        assert.ok(open, "a trade open");
+        assert.deepEqual(ann.link.host.trades.get(open.id), open, "and hers as the world has it");
+        assert.deepEqual(ann.link.mirror.faults, []);
+
+        // (Bytes waiting unwritten on her socket, as whoever sends for the world says: nothing
+        // sent her till they've gone, then how things are)
+        pass(20);
+
+        views.waiting("a", 30000);
+        pass(30);
+
+        // (What was on its way before has come by now)
+        const heard = ann.link.heard;
+
+        pass(30);
+        assert.equal(ann.link.heard, heard, "nothing more while they wait");
+        views.waiting("a", 0);
+        pass(30);
+        assert.ok(ann.link.heard > heard + 30, "and on from where the world is");
+
+        // (The line free again: back, a level at a time, to every step's frame)
+        rate = Infinity;
+        pass(2 * LAG.calm + 2 * LAG.settle + 60);
+        [late, sentBytes] = [[], 0];
+        pass(40);
+        assert.equal(lag().level, 0);
+        assert.equal(views.held.lowered, LAG.levels);
+        assert.equal(late.length, 40, "a frame a step");
+        assert.equal(worst(), 0);
+        // (Her line hands each frame over as the next step begins)
+        assert.equal(ann.link.host.battle.time, host.battle.time - STEP_MS);
+        assert.deepEqual(ann.link.mirror.faults, []);
+
+        // (How her frames came, kept for a measured run: SEEN)
+        assert.ok(ann.link.arrivals.frames > 100 && ann.link.arrivals.worst >= ann.link.arrivals.p99 && ann.link.arrivals.p99 >= ann.link.arrivals.p95);
     });
 
     it("has the director's props near its hero, the world at large and the rest of the war as its summary says, and flies a shot from its event", () => {

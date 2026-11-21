@@ -583,7 +583,9 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      a frame's bytes bumps it: a new part of the summary does (3-24's `fellows`, 3-25's
      `camps`, `depots`, `places`, `news` and `battles`, 3-26's `trades`), as a new section or
      field would. 3-26's `viewed`, the answer to `again` for a game sent views, is a message
-     only such a game is sent: additive and opted into, so no `NET_VERSION` bump.
+     only such a game is sent: additive and opted into, so no `NET_VERSION` bump. The same
+     goes for 3-27's `seen`, which only such a game says; a world that hears none holds
+     nothing back for it.
    - `SNAPSHOT_VERSION` (`client/js/core/host.js`): what a snapshot of the world holds. A world
      kept by an older version is carried on, not lost (the world server keeps worlds): add a step
      from the version before to `SNAPSHOT_STEPS`, filling in what the new version keeps as it

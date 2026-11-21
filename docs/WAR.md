@@ -4068,6 +4068,26 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     another, in both netcodes (`test/together.test.js`). A page reloaded comes in as
     anyone does, by the view's welcome; inside a building, its floor's made as it comes
     (`3-23`).
+  - **A link that can't keep up** (the plan's `3-27`). Such a game is sent less, not later.
+    It says the step of the frame it last took (`seen`, as frames come, no oftener than
+    every other step's: `Viewing`, `SEEN`), and the feed reckons how far behind its link is:
+    how long the oldest frame not yet said has been on its way, past the least that link's
+    ever taken (`ViewFeed.behind`, `LAG`). Past 4 steps behind, or with bytes waiting
+    unwritten on its socket, it's sent half as often and half as much, then half again
+    (20, 10, 5 frames a second; the frame's budget, its newcomers and its summary each
+    halved, the summary looked at half as often). Past 6, or with bytes waiting, it's sent
+    nothing till it's caught up, so what it's told next is how things are then. Calm for 5
+    seconds, it goes back up a level. What it must hear of a step with no frame is kept
+    for its next (`owed`); what it may is let go. Shots fly by the steps a frame is on
+    from the last, so they're as fast at 5 frames a second.
+    The world server says what waits on a socket (server/play.js: looked at before each
+    frame's sent, told to the world's thread as it changes between none and some,
+    `waiting`), and lets go of a game with 256 KB of frames waiting (`PLAY_LIMITS.frames`).
+    In `test/viewing.test.js` a line held to 8 KB/s shows nothing over half a second old;
+    held to 3 KB/s, under half of what there was to tell, it's sent no more than the line
+    carries, nothing over 2 s old, and a trade made meanwhile is there.
+    `Viewing.arrivals` keeps how the last 1,200 frames came (the time between them that
+    95 and 99 in a hundred came within, and the longest), for a measured run on a phone.
   - **Not yet**: bait thrown down
     and a bomb in the air aren't kept (the battle's own lists, as shots were). The legends
     are told whole each second while their clocks run. Convoys, supply trains and who's

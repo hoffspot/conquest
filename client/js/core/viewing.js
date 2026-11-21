@@ -55,6 +55,14 @@ export const VIEWING = Object.freeze({ kept: 60, late: 0.95, least: 2, most: 8 }
 /** How long a view asked for again goes unanswered before it's asked for again (ms). */
 export const VIEW_ASKS = 3000;
 
+/**
+ * What it says of the frames it takes, and keeps of how they come (the scaling plan's 3-27):
+ * the step of the last, said to its world no oftener than every `every` steps of frames (the
+ * world holds back for a link that isn't keeping up by it: core/viewfeed.js LAG); and how long
+ * passed between each of the last `kept` and the one before (`arrivals`).
+ */
+export const SEEN = Object.freeze({ every: 2, kept: 1200 });
+
 // How far a shot kept here flies at the most before it's let go of (m): one the world never
 // said the end of
 const FLIES = 200;
@@ -73,6 +81,9 @@ export class Viewing extends Joining {
     #took = [];
 
     #started = null;
+    #gaps = [];
+    #cameAt = null;
+    #said = -Infinity;
 
     // The last of the player's commands done and their hero's own state, as the latest frame
     // to come said (not the latest played)
@@ -481,6 +492,18 @@ export class Viewing extends Joining {
         this.#world();
     }
 
+    /**
+     * How its frames have come, of the last SEEN.kept: how many, and the time between one and
+     * the next (ms) that 95 and 99 in a hundred came within, and the longest. For a measured
+     * run on a phone (the scaling plan's 3-27).
+     */
+    get arrivals() {
+        const sorted = [...this.#gaps].sort((a, b) => a - b);
+        const at = (share) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * share))] : 0);
+
+        return { frames: sorted.length, p95: at(0.95), p99: at(0.99), worst: sorted.at(-1) ?? 0 };
+    }
+
     /** A frame come from the world (bytes). */
     frame(bytes) {
         // (Its view asked for again: what comes before the world's answer is of the old one)
@@ -510,6 +533,25 @@ export class Viewing extends Joining {
         this.heard = frame.step;
         this.hostStep = frame.step;
         this.#frames.push({ step: frame.step, bytes });
+
+        // (How long since the last came; and the world told which this is, as it comes, not
+        // as it's played: it's the link the world holds back for)
+        const now = this.clock();
+
+        if (this.#cameAt !== null) {
+            this.#gaps.push(now - this.#cameAt);
+
+            if (this.#gaps.length > SEEN.kept) {
+                this.#gaps.shift();
+            }
+        }
+
+        this.#cameAt = now;
+
+        if (frame.step - this.#said >= SEEN.every) {
+            this.#said = frame.step;
+            this.send(encode({ kind: "seen", step: frame.step }));
+        }
         this.#word(frame);
 
         if (this.mirror) {
@@ -616,6 +658,10 @@ export class Viewing extends Joining {
             this.members++;
         }
 
+        // (How many of the world's steps this frame is on from the last played: more than one
+        // for a link the world's holding back for)
+        const steps = Math.max(1, Math.min(8, frame.step - this.played));
+
         this.played = frame.step;
         this.frames++;
         host.battle.time = frame.step * STEP_MS;
@@ -663,7 +709,7 @@ export class Viewing extends Joining {
         }
 
         // (Shots flown a step, one just loosed with them: as the world flies its own)
-        this.#fly();
+        this.#fly(steps);
 
         // (The world's own word of a building got ready or let go is of everyone's being near
         // it: the game hears of this hero's, from the look here)
@@ -718,14 +764,14 @@ export class Viewing extends Joining {
         }
     }
 
-    #fly() {
+    #fly(steps = 1) {
         const { battle } = this.host;
 
         if (!battle.projectiles.length) {
             return;
         }
 
-        const travelled = (speed) => (speed * STEP_MS) / 1000;
+        const travelled = (speed) => (speed * STEP_MS * steps) / 1000;
 
         battle.projectiles = battle.projectiles.filter((projectile) => {
             const target = battle.actor(projectile.target);

@@ -49,6 +49,25 @@ export const ENTERS = Object.freeze({ frame: 1000 });
 /** How the feed runs: not at all, or dark (frames made and counted, never sent). */
 export const VIEW_MODES = Object.freeze(["off", "dark", "on"]);
 
+/**
+ * Holding back for a game whose link can't keep up (the scaling plan's 3-27), for games played
+ * from views alone. Such a game says the step of the frame it last took (`seen`); how long the
+ * oldest frame not yet said has been on its way, past the least that's ever taken (its link's
+ * own delay: the least of the last `forget` steps and the `forget` before) and what the saying itself waits
+ * (`allowed`), is how far behind its link is, in steps:
+ *   - past `raise`, or with bytes waiting unwritten on its socket, it's sent half as often and
+ *     half as much (20 a second, then 10, then 5: `levels`), no sooner than `settle` steps
+ *     after the last change;
+ *   - past `hold`, or with bytes waiting, it's sent nothing till it's caught up: what it's
+ *     told next is how things are then, never a line of what was;
+ *   - no further behind than `lower` for `calm` steps, it's sent as before, a level at a time.
+ * What it must hear of is kept for its next frame (a viewer's `owed`); what it may is let go.
+ * Held for being behind and no word come in `probe` steps, it's sent one all the same: its
+ * game may have let go of those it was sent (its view asked for again). `most`: how many
+ * frames not yet said are kept count of.
+ */
+export const LAG = Object.freeze({ levels: 2, raise: 4, hold: 6, lower: 1, settle: 20, calm: 100, allowed: 2, probe: 40, forget: 1200, most: 64 });
+
 /** What of one of the wild's creatures a game draws it by (core/wilds.js: its `wild`): the rest is the authority's. */
 export const WILD_SEEN = Object.freeze(["creature", "elite", "champion", "colossus", "worldBoss", "regalia", "companion"]);
 
@@ -158,6 +177,9 @@ export class ViewFeed {
 
         // The step frames were last made for (flush): one frame a step for each player
         this.flushed = -1;
+
+        /** What's been held back for links that couldn't keep up (LAG): frames not made, and changes of level. */
+        this.held = { frames: 0, raised: 0, lowered: 0 };
 
         /**
          * The players whose games have asked to be sent their frames beside lockstep, to hold
@@ -287,7 +309,8 @@ export class ViewFeed {
             // for all of them: core/summary.js)
             viewer.peer = peers.get(id);
 
-            if (step % SUMMARY.every === 0 && this.shadowing.has(id)) {
+            // (Half as often, and half again, for a link that isn't keeping up: LAG)
+            if (step % (SUMMARY.every << viewer.lag.level) === 0 && this.shadowing.has(id)) {
                 shared ??= worldParts(host);
                 this.#summarise(viewer, { ...shared, ...ownParts(host, id) }, step);
             } else if (session?.viewing?.has(viewer.peer) && (events.length || session.done.get(viewer.peer) !== viewer.done)) {
@@ -297,10 +320,111 @@ export class ViewFeed {
                 this.#summarise(viewer, ownParts(host, id), null);
             }
 
-            this.#frame(viewer, hero, step, this.#sections(viewer, hero, events, world, viewer.peer));
+            if (session?.viewing?.has(viewer.peer) && this.#holds(viewer, step)) {
+                this.#owe(viewer, hero, events, world);
+            } else {
+                this.#frame(viewer, hero, step, this.#sections(viewer, hero, events, world, viewer.peer));
+            }
         }
 
         this.totals.steps++;
+    }
+
+    /**
+     * How many bytes wait unwritten on a player's socket (`peer`: whoever sends for the world
+     * says, as it changes between none and some): none's sent them while any do (LAG).
+     */
+    waiting(peer, bytes) {
+        const viewer = this.viewers.get(this.hosting.session?.players.get(peer));
+
+        if (viewer) {
+            viewer.lag.waiting = Math.max(0, Number(bytes) || 0);
+        }
+    }
+
+    /** The step of the frame a player's game last took, as it says (`seen`: LAG). */
+    seen(peer, step) {
+        const lag = this.viewers.get(this.hosting.session?.players.get(peer))?.lag;
+
+        if (!lag || !Number.isInteger(step) || step <= lag.seen || step > this.flushed) {
+            return;
+        }
+
+        const took = this.flushed - step;
+
+        lag.seen = step;
+
+        while (lag.unsaid.length && lag.unsaid[0] <= step) {
+            lag.unsaid.shift();
+        }
+
+        // (The least it's taken, of this spell and the one before: a link's own delay changes,
+        // and one held up through a whole spell isn't taken for a slow link's own)
+        if (this.flushed - lag.since >= LAG.forget) {
+            [lag.before, lag.next, lag.since] = [lag.next, Infinity, this.flushed];
+        }
+
+        lag.next = Math.min(lag.next, took);
+        lag.least = Math.min(lag.before, lag.next);
+    }
+
+    /** How far behind a player's link is, in steps (LAG): 0 for one that's never said what it's seen. */
+    behind(id, step = this.flushed) {
+        const lag = this.viewers.get(id)?.lag;
+
+        return !lag?.unsaid.length || lag.seen < 0 ? 0 : Math.max(0, step - lag.unsaid[0] - (Number.isFinite(lag.least) ? lag.least : 0) - LAG.allowed);
+    }
+
+    // Whether a game played from views is sent nothing this step (LAG), its level changed
+    // first as its link's keeping up or not
+    #holds(viewer, step) {
+        const { lag } = viewer;
+        const behind = this.behind(viewer.id, step);
+        const backed = lag.waiting > 0;
+
+        if (backed || behind > LAG.lower) {
+            lag.calm = step;
+        }
+
+        if ((backed || behind > LAG.raise) && lag.level < LAG.levels && step - lag.changed >= LAG.settle) {
+            lag.level++;
+            lag.changed = step;
+            this.held.raised++;
+            count("views.raised");
+        } else if (lag.level > 0 && step - lag.calm >= LAG.calm && step - lag.changed >= LAG.settle) {
+            lag.level--;
+            lag.changed = lag.calm = step;
+            this.held.lowered++;
+            count("views.lowered");
+        }
+
+        if (backed || (behind > LAG.hold && step - lag.sent < LAG.probe) || step - lag.sent < 1 << lag.level) {
+            this.held.frames++;
+            count("views.held");
+
+            return true;
+        }
+
+        return false;
+    }
+
+    // A step no frame's made of for a player (LAG): what they must hear of it kept for their
+    // next, what they may let go
+    #owe(viewer, hero, events, world) {
+        if (!events.length) {
+            return;
+        }
+
+        const heard = sift(events, { id: viewer.id, hero, knows: (id) => viewer.ids.has(id) }, world);
+
+        for (const event of heard.must) {
+            viewer.owed.push(JSON.stringify(event));
+        }
+
+        if (heard.may.length) {
+            viewer.dropped += heard.may.length;
+            count("views.dropped", heard.may.length);
+        }
     }
 
     // What's changed of a player's summary since they were last told, put with what's still
@@ -331,11 +455,16 @@ export class ViewFeed {
 
         const step = this.hosting.step?.() ?? Math.floor(host.battle.time / 50);
 
+        // (What waits on their socket waits still: LAG)
+        const waiting = this.viewers.get(id)?.lag.waiting ?? 0;
+
         if (this.viewers.has(id)) {
             this.#forget(id);
         }
 
         const viewer = this.#viewer(id);
+
+        viewer.lag.waiting = waiting;
 
         this.shadowing.add(id);
         viewer.told.diff(parts);
@@ -348,7 +477,7 @@ export class ViewFeed {
     }
 
     #viewer(id) {
-        const viewer = { id, phase: this.#joined++ % KNOWN.every, list: [], byActor: new Map(), byIndex: new Array(KNOWN.most).fill(null), free: Array.from({ length: KNOWN.most }, (_, k) => KNOWN.most - 1 - k), leaves: [], owed: [], ids: new Set(), done: null, self: null, entering: 0, told: new Told(), patches: new Map(), summaryAt: null, atTold: null, frames: 0, bytes: 0, records: 0, events: 0, dropped: 0, enters: 0 };
+        const viewer = { id, phase: this.#joined++ % KNOWN.every, list: [], byActor: new Map(), byIndex: new Array(KNOWN.most).fill(null), free: Array.from({ length: KNOWN.most }, (_, k) => KNOWN.most - 1 - k), leaves: [], owed: [], ids: new Set(), done: null, self: null, entering: 0, told: new Told(), patches: new Map(), summaryAt: null, atTold: null, frames: 0, bytes: 0, records: 0, events: 0, dropped: 0, enters: 0, lag: { level: 0, waiting: 0, seen: -1, unsaid: [], sent: -Infinity, changed: -Infinity, calm: 0, least: Infinity, before: Infinity, next: Infinity, since: 0 } };
 
         this.viewers.set(id, viewer);
 
@@ -531,7 +660,8 @@ export class ViewFeed {
         }
 
         const { must = [], may = [], ...sections } = given ?? {};
-        let [known, budget] = [viewer.list, this.budget];
+        // (Half as much, and half again, for a link that isn't keeping up: LAG)
+        let [known, budget] = [viewer.list, Math.max(VIEW.header + 32, this.budget >> viewer.lag.level)];
 
         // (Who's come into the known set and not been told of yet: as many as a frame takes, in
         // their order, the rest next frame; only those told of have how they are told)
@@ -549,7 +679,7 @@ export class ViewFeed {
                     const text = JSON.stringify(as ? [entry.index, who, as] : [entry.index, who]);
                     const length = bytesOf(text) + 1;
 
-                    if (size + length > ENTERS.frame && texts.length) {
+                    if (size + length > ENTERS.frame >> viewer.lag.level && texts.length) {
                         break;
                     }
 
@@ -586,7 +716,7 @@ export class ViewFeed {
             for (const [key, patch] of viewer.patches) {
                 const length = bytesOf(patch[2] ?? "null") + patch[0].length + patch[1].length + 8;
 
-                if (size + length > SUMMARY.frame && size) {
+                if (size + length > SUMMARY.frame >> viewer.lag.level && size) {
                     break;
                 }
 
@@ -694,6 +824,14 @@ export class ViewFeed {
             // (Counted first: whoever sends them may hand the bytes over, and leave none here)
             count("views.sent", bytes.length);
             this.hosting.sendBinary(viewer.peer, bytes);
+
+            // (Counted as on its way till its game says it's seen it, or a later one: LAG)
+            viewer.lag.sent = step;
+            viewer.lag.unsaid.push(step);
+
+            if (viewer.lag.unsaid.length > LAG.most) {
+                viewer.lag.unsaid.shift();
+            }
         }
     }
 

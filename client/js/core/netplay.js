@@ -729,6 +729,13 @@ export class Session {
                 }
 
                 break;
+            case "seen":
+                // (A game played from views says the frame it last took: core/viewfeed.js LAG)
+                if (this.viewing.has(peer)) {
+                    this.hosting.views.seen(peer, message.step);
+                }
+
+                break;
             case "away":
                 if (this.players.has(peer)) {
                     this.hidden[message.hidden === true ? "add" : "delete"](peer);

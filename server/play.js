@@ -46,9 +46,11 @@ export const BINARY = Object.freeze({ echo: 0 });
  * Its limits: the longest message from a game (bytes: a world's snapshots only ever go the other
  * way; a character coming in is the longest, as a host takes it: core/netplay.js HEARD), how much may wait to go to one slow to take it, how long to enter a world, how long a
  * dropped link's place is kept, and how often each's asked whether it's still there (and let go
- * if it doesn't answer for `timeout`); all ms but `message` and `backlog`.
+ * if it doesn't answer for `timeout`); `frames`: how much may wait unwritten for a game sent a
+ * world's frames before it's let go (bytes: such a game is held back for long before, core/
+ * viewfeed.js LAG); all ms but `message`, `backlog` and `frames`.
  */
-export const PLAY_LIMITS = Object.freeze({ message: 256 * 1024, backlog: 8 * 1024 * 1024, enterWithin: 10000, grace: 300000, ping: 20000, timeout: 60000 });
+export const PLAY_LIMITS = Object.freeze({ message: 256 * 1024, backlog: 8 * 1024 * 1024, frames: 256 * 1024, enterWithin: 10000, grace: 300000, ping: 20000, timeout: 60000 });
 
 // The WebSocket handshake's magic (RFC 6455 section 1.3)
 const MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -416,6 +418,31 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
 
             if (!socket?.binary) {
                 return;
+            }
+
+            // (What waits unwritten from before this, looked at before more's put with it: what
+            // was sent a step ago should have gone. Some waiting, the world's told, to send
+            // this game nothing till it's gone (core/viewfeed.js LAG; the scaling plan's 3-27),
+            // and told again once it has; too much, and the game's let go: it would be shown
+            // a world long past)
+            const waiting = socket.waiting;
+
+            if (waiting > limits.frames) {
+                socket.close(1008);
+
+                return;
+            }
+
+            if (waiting > 0 && !socket.backed) {
+                const tell = (count) => registry.entries.get(world)?.thread?.waiting?.(peer, count);
+
+                socket.backed = true;
+                socket.onDrain = () => {
+                    socket.backed = false;
+                    socket.onDrain = null;
+                    tell(0);
+                };
+                tell(waiting);
             }
 
             const { sent } = socket;

@@ -602,6 +602,66 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         assert.equal(old.closed, 1003);
     });
 
+    it("tells a world when bytes wait unwritten on a player's socket, once as they begin to and once they've gone, and lets go of a game with a quarter of a megabyte of frames waiting", async () => {
+        const made = await server.call("POST", "/worlds", { auth: `Key ${server.adminKey}`, body: { name: "Slowwick", race: "human", seed: 5 } });
+        const entered = await server.call("POST", "/enter", { body: { world: made.json.world, key: made.json.playerKey, net: NET_VERSION } });
+        const game = await play(server, made.json.world, entered.json.session, { protocols: [PLAY_BINARY, PLAY_PROTOCOL] });
+        const peer = game.line("entered").split(" ")[1];
+        const world = server.registry.entries.get(made.json.world).thread;
+        const told = [];
+        const said = world.waiting.bind(world);
+        const real = Object.getOwnPropertyDescriptor(Socket.prototype, "waiting");
+        let [waits, its] = [null, null];
+        const frame = () => world.thread.emit("message", { type: "binary", peer, buffer: new Uint8Array(200).fill(7).buffer });
+
+        // (What waits on its socket said for it here: a slow link's isn't to be had on one machine)
+        world.waiting = (who, bytes) => (told.push([who, bytes]), said(who, bytes));
+        Object.defineProperty(Socket.prototype, "waiting", {
+            configurable: true,
+            get() {
+                its = this;
+
+                return waits ?? real.get.call(this);
+            },
+        });
+
+        try {
+            frame();
+            await until(() => game.frames.length === 1, "a frame");
+            assert.deepEqual(told, [], "nothing waiting, nothing said");
+
+            // (Some waiting as the next is sent: the world told, once, and the frame sent on)
+            waits = 5000;
+            frame();
+            frame();
+            await until(() => game.frames.length === 3, "the frames");
+            assert.deepEqual(told, [[peer, 5000]]);
+
+            // (All written: the world told so, once)
+            waits = 0;
+            its.socket.emit("drain");
+            its.socket.emit("drain");
+            assert.deepEqual(told, [[peer, 5000], [peer, 0]]);
+            frame();
+            await until(() => game.frames.length === 4, "a frame");
+            assert.equal(told.length, 2);
+
+            // (Waiting again, it's told again; and with more than a game's let wait, it's let go)
+            waits = PLAY_LIMITS.frames;
+            frame();
+            await until(() => game.frames.length === 5, "a frame");
+            assert.deepEqual(told.at(-1), [peer, PLAY_LIMITS.frames]);
+            assert.equal(PLAY_LIMITS.frames, 256 * 1024);
+            waits = PLAY_LIMITS.frames + 1;
+            frame();
+            await until(() => game.closed, "closed");
+            assert.equal(game.closed, 1008);
+            assert.equal(game.frames.length, 5, "and sent no more");
+        } finally {
+            Object.defineProperty(Socket.prototype, "waiting", real);
+        }
+    });
+
     it("makes each player's views dark where the server's replication is, counted with the world's work and never sent; and stops when it's turned off, with no restart", async () => {
         const made = await server.call("POST", "/worlds", { auth: `Key ${server.adminKey}`, body: { name: "Darkwick", race: "human", seed: 6 } });
         const entered = await server.call("POST", "/enter", { body: { world: made.json.world, key: made.json.playerKey, net: NET_VERSION } });
