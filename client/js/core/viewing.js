@@ -12,7 +12,10 @@
 //   - its player's own record is the welcome's, and what the frames say has changed of it;
 //   - who those in sight are drawn as (the folk, soldiers, other players' heroes, a creature's
 //     kind) is what the frames say as each comes into sight (core/viewfeed.js dressOf);
-//   - a trade the player's in is kept from the events that tell of it;
+//   - a trade the player's in is kept from the events that tell of it, and from the summary;
+//   - its page shown again, its link come back, or too far behind to catch up, it asks for
+//     its view again from nothing (resync; the plan's 3-26): what's in hand is let go, the
+//     mirror begun again over the battle as it stands, and everyone put where they are;
 //   - the invasions, what's burnt, hell's rifts, the legends, the rules, the war's camps,
 //     depots and news, the battles on, and the director's props near its hero (what's on the
 //     ground, campfires, caches and the rest) are the summary's too; a shot in flight is kept
@@ -31,10 +34,7 @@
 // ahead as a lockstep game's is (app/forecast.js; the plan's 3-22): from what each frame says of
 // them and of the world's time as it comes, over the mirror's battle.
 //
-// Not yet (each a later slice's): the rest of the world's summary put where the game reads it
-// (the war's camps and news, props: 3-25: a dungeon's chests among them),
-// a dungeon's sealed rooms, and being hidden and shown again or coming back in while inside
-// (3-26). Pure: no DOM, no network of its own.
+// Not yet: a dungeon's sealed rooms. Pure: no DOM, no network of its own.
 
 import { STEP_MS } from "./battle.js";
 import { Host } from "./host.js";
@@ -51,6 +51,9 @@ import { decode, encode } from "./wire.js";
  * them that came no later than that allows for; and the fewest and most steps kept in hand.
  */
 export const VIEWING = Object.freeze({ kept: 60, late: 0.95, least: 2, most: 8 });
+
+/** How long a view asked for again goes unanswered before it's asked for again (ms). */
+export const VIEW_ASKS = 3000;
 
 // How far a shot kept here flies at the most before it's let go of (m): one the world never
 // said the end of
@@ -82,6 +85,14 @@ export class Viewing extends Joining {
     #map = null;
 
     #sinceLook = 0;
+
+    // Its view asked for again and not yet told anew (resync), and when it was asked for; and
+    // whether everyone's still to be put where they are, a view told again (#again)
+    #stale = false;
+
+    #askedAt = 0;
+
+    #placing = false;
 
     // The legends as last told (the summary's own value: made again only when that's another)
     #legends = null;
@@ -129,6 +140,22 @@ export class Viewing extends Joining {
 
     /** What the world said: what came of a command of its player's, or anything a lockstep link's told too. */
     hear(text) {
+        // (Its view told again from nothing, as it asked: resync)
+        if (text.startsWith('{"kind":"viewed"')) {
+            let message;
+
+            try {
+                message = decode(text);
+            } catch {
+                return;
+            }
+
+            this.received.viewed = (this.received.viewed ?? 0) + text.length;
+            this.#again(message);
+
+            return;
+        }
+
         if (text.startsWith('{"kind":"result"')) {
             let message;
 
@@ -337,6 +364,9 @@ export class Viewing extends Joining {
 
         host.invites = new Map(structuredClone([...(parts.get("invites") ?? [])]));
         host.afar = new Map(structuredClone([...(parts.get("fellows") ?? [])]));
+        // (The trades they're in, as the summary has them: an event's word of one, #trade, is
+        // sooner, and this is what a view told again begins from)
+        host.trades = new Map(structuredClone([...(parts.get("trades") ?? [])]));
         this.#props(parts.get("props"));
     }
 
@@ -391,8 +421,73 @@ export class Viewing extends Joining {
         }
     }
 
+    /**
+     * Ask for its view again from nothing (the scaling plan's 3-26): its page shown again, its
+     * link come back, or fallen further behind than it may catch up. The frames in hand are let
+     * go and none taken till the world says it's told anew ("viewed": a frame from before that
+     * tells of those the world no longer counts it as knowing). Nothing's played meanwhile,
+     * and nothing's played fast to catch up: everyone's put where they are as the new view
+     * comes. Asked again if no answer's come in VIEW_ASKS (the world answers no oftener than
+     * VIEW_AGAIN).
+     */
+    resync() {
+        // (Before it asks: the answer may come as it's asked)
+        if (this.mirror) {
+            this.dropped += this.#frames.length;
+            this.#frames = [];
+            this.#took = [];
+            this.#stale = true;
+            this.#askedAt = this.clock();
+        }
+
+        super.resync();
+        this.farBehind = Boolean(this.mirror && this.#stale);
+    }
+
+    /** Its page hidden, or shown again: shown, its view's asked for again, whatever came meanwhile let go (resync). */
+    away(hidden) {
+        const was = this.hidden;
+
+        super.away(hidden);
+
+        if (was && !this.hidden && this.mirror) {
+            this.resync();
+        }
+    }
+
+    // The world's word that its view's told again from here (`again`: as its welcome had it):
+    // the mirror begun again over the battle as it stands, the summary put where the game reads
+    // it, and the frames taken from now on. Whoever the frames don't tell of again is let go
+    // (Mirror.expire); the game's told to put everyone where they are once its hero's told of
+    // (onState: app/game.js rehost, as a lockstep game's on its world come again)
+    #again(again) {
+        if (!this.mirror) {
+            return;
+        }
+
+        // (Timed by the world's step, as the frames to come are: its own is as far back as it was)
+        this.mirror.reset(again, (again.step ?? Math.max(0, this.played)) * STEP_MS);
+        this.host.battle.projectiles = [];
+        this.#frames = [];
+        this.#took = [];
+        this.#stale = false;
+        this.#placing = true;
+        this.#map = null;
+        this.astray = false;
+        this.farBehind = false;
+        this.resyncs++;
+        this.#own();
+        this.#mine();
+        this.#world();
+    }
+
     /** A frame come from the world (bytes). */
     frame(bytes) {
+        // (Its view asked for again: what comes before the world's answer is of the old one)
+        if (this.#stale) {
+            return;
+        }
+
         const frame = decodeFrame(bytes);
 
         if (!frame || frame.step <= this.heard) {
@@ -473,6 +568,12 @@ export class Viewing extends Joining {
      * are played at once, their events let go of.
      */
     step() {
+        // (Its view asked for again and not yet answered: asked again after a while)
+        if (this.#stale && this.clock() - this.#askedAt >= VIEW_ASKS) {
+            this.#askedAt = this.clock();
+            this.send(encode({ kind: "again" }));
+        }
+
         const heard = this.#stepped();
 
         if (!heard || !this.#early.length) {
@@ -490,9 +591,13 @@ export class Viewing extends Joining {
             return null;
         }
 
-        while (this.#frames.length > PACE.tooFar) {
-            this.#play(this.#frames.shift());
-            this.dropped++;
+        // (Too far behind to catch up: not played fast, which a page come back from being
+        // frozen would do for seconds; its view's asked for again. Before its game's begun,
+        // the first frames are played as they come: #begin)
+        if (this.#frames.length > PACE.tooFar && !this.#started) {
+            this.resync();
+
+            return null;
         }
 
         return this.#play(this.#frames.shift());
@@ -543,6 +648,18 @@ export class Viewing extends Joining {
 
                 host.open.delete(`site:${event.site}`);
             }
+        }
+
+        // (Its view told again: whoever's not been told of again in time let go, and everyone
+        // put where they are once its own hero's there)
+        if (mirror.expire(frame.step * STEP_MS)) {
+            this.members++;
+        }
+
+        if (this.#placing && host.battle.actor(this.me) && !mirror.waiting) {
+            this.#placing = false;
+            this.members++;
+            this.onState({ kind: "viewed" });
         }
 
         // (Shots flown a step, one just loosed with them: as the world flies its own)
@@ -643,9 +760,7 @@ export class Viewing extends Joining {
         }
     }
 
-    // (A lockstep link's: there's no copy to have gone astray, nor a world to be sent again)
-    resync() {}
-
+    // (A lockstep link's)
     shadowing() {}
 
     drawing() {}

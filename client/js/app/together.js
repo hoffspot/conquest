@@ -22,9 +22,11 @@ const RELAY_TIMEOUT = 8000;
  * network). Dropped, it's made again on a new link (the relay keeps its place a while: RELAY_LIMITS
  * grace), after `first` ms, then twice as long each try up to `most`, each a little more or less
  * (`jitter`, a share, so that everyone dropped at once doesn't come back at once), given up on
- * after `within` ms or when the relay says its place is gone.
+ * after `within` ms or when the relay says its place is gone. A page shown again asks at once
+ * (`woke`), and an ask then unanswered `woken` ms is taken for a link that died while it was
+ * hidden, which a socket needn't have said (generated/multiplayer_scaling_plan.md 3-26).
  */
-export const LINK_TIMING = Object.freeze({ ping: 4000, patience: 10000, first: 500, most: 8000, jitter: 0.25, within: 45000 });
+export const LINK_TIMING = Object.freeze({ ping: 4000, patience: 10000, woken: 2500, first: 500, most: 8000, jitter: 0.25, within: 45000 });
 
 /** The close code of a link given up on to come back on another (server/relay.js RECONNECTING). */
 const RECONNECTING = 4000;
@@ -348,6 +350,31 @@ export class RelayLink {
         }, this.timing.ping);
     }
 
+    /**
+     * The page is shown again: the link's asked whether it's still there at once, and taken for
+     * dropped if that's not answered within `woken`: a socket can die while a page is hidden
+     * and say nothing of it, and waiting out the usual patience was a quarter of a minute of a
+     * world standing still. Nothing's done for a link being made again already, or one that's
+     * never answered an ask (an older relay).
+     */
+    woke() {
+        if (!this.socket || this.reconnecting || this.closing || !this.answers) {
+            return;
+        }
+
+        const asked = Date.now();
+
+        this.pingedAt = asked;
+        this.tickedAt = asked;
+        this.#ping();
+        clearTimeout(this.wakeful);
+        this.wakeful = setTimeout(() => {
+            if (this.pingedAt === asked && this.socket && !this.reconnecting && !this.closing) {
+                this.#lost();
+            }
+        }, this.timing.woken);
+    }
+
     // A ping, timed if none is being (its answer heard by onRtt; one unanswered too long, given up on)
     #ping() {
         if (!this.#timing()) {
@@ -369,6 +396,7 @@ export class RelayLink {
     }
 
     #stopBeating() {
+        clearTimeout(this.wakeful);
         clearInterval(this.heartbeat);
         this.heartbeat = null;
         this.pingedAt = null;
