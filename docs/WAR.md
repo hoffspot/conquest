@@ -4068,6 +4068,23 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     another, in both netcodes (`test/together.test.js`). A page reloaded comes in as
     anyone does, by the view's welcome; inside a building, its floor's made as it comes
     (`3-23`).
+  - **A fight's events as bytes** (the plan's `3-28`). A frame told its events as JSON, and
+    in a big fight that was most of what it sent: a blow struck is some 130 bytes of it,
+    nearly all the names of its fields and the ids of two characters the game knows by a
+    byte each. The eight kinds a fight is mostly made of (`attack`, `hit`, `miss`,
+    `death`, `cast`, `projectile`, `healed`, `afflicted`: core/hotevents.js `HOT`) go as
+    bytes in a section of their own (`hot`; `VIEW_VERSION` 5): which of a kind's fields an
+    event has, a bit each; a character by their index among those the player knows of;
+    a weapon, an attack or a spell by a number, its text told the first time and kept by
+    both sides (4,096 of them at most, begun again with the player's view); a number
+    whole where it's whole. Someone the player's not been told of goes by their id, kept
+    the same way: a fight's edge is full of them. Nothing's lost: an event with a field
+    the table hasn't, or a value its type can't hold, goes as JSON as before, and each
+    says how many of the JSON ones come before it, so the order told is the order read
+    (`Mirror` reads them back after the frame's enters). In `test/hotevents.test.js` a
+    fight of 400 tells one player's game 6,583 events in 30 s in 3.7 KB a second, each as
+    the battle told it; as JSON they'd be 32 KB a second. For want of room 797 were let
+    go; with strangers' events still JSON, as the first cut had them, 4,452 were.
   - **A link that can't keep up** (the plan's `3-27`). Such a game is sent less, not later.
     It says the step of the frame it last took (`seen`, as frames come, no oftener than
     every other step's: `Viewing`, `SEEN`), and the feed reckons how far behind its link is:
