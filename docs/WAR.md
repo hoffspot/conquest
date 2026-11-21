@@ -4072,7 +4072,9 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     It says the step of the frame it last took (`seen`, as frames come, no oftener than
     every other step's: `Viewing`, `SEEN`), and the feed reckons how far behind its link is:
     how long the oldest frame not yet said has been on its way, past the least that link's
-    ever taken (`ViewFeed.behind`, `LAG`). Past 4 steps behind, or with bytes waiting
+    ever taken (`ViewFeed.behind`, `LAG`). Past 4 steps behind for over half a second
+    together (a moment's stall, as one lost packet makes, isn't a slow link: the look
+    ahead's tests have such stalls, and stay at 20 a second), or with bytes waiting
     unwritten on its socket, it's sent half as often and half as much, then half again
     (20, 10, 5 frames a second; the frame's budget, its newcomers and its summary each
     halved, the summary looked at half as often). Past 6, or with bytes waiting, it's sent

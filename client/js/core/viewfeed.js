@@ -55,9 +55,10 @@ export const VIEW_MODES = Object.freeze(["off", "dark", "on"]);
  * oldest frame not yet said has been on its way, past the least that's ever taken (its link's
  * own delay: the least of the last `forget` steps and the `forget` before) and what the saying itself waits
  * (`allowed`), is how far behind its link is, in steps:
- *   - past `raise`, or with bytes waiting unwritten on its socket, it's sent half as often and
- *     half as much (20 a second, then 10, then 5: `levels`), no sooner than `settle` steps
- *     after the last change;
+ *   - past `raise` for `sustain` steps together (a moment's stall, as one lost packet makes,
+ *     isn't a slow link), or with bytes waiting unwritten on its socket, it's sent half as
+ *     often and half as much (20 a second, then 10, then 5: `levels`), no sooner than `settle`
+ *     steps after the last change;
  *   - past `hold`, or with bytes waiting, it's sent nothing till it's caught up: what it's
  *     told next is how things are then, never a line of what was;
  *   - no further behind than `lower` for `calm` steps, it's sent as before, a level at a time.
@@ -66,7 +67,7 @@ export const VIEW_MODES = Object.freeze(["off", "dark", "on"]);
  * game may have let go of those it was sent (its view asked for again). `most`: how many
  * frames not yet said are kept count of.
  */
-export const LAG = Object.freeze({ levels: 2, raise: 4, hold: 6, lower: 1, settle: 20, calm: 100, allowed: 2, probe: 40, forget: 1200, most: 64 });
+export const LAG = Object.freeze({ levels: 2, raise: 4, sustain: 12, hold: 6, lower: 1, settle: 20, calm: 100, allowed: 2, probe: 40, forget: 1200, most: 64 });
 
 /** What of one of the wild's creatures a game draws it by (core/wilds.js: its `wild`): the rest is the authority's. */
 export const WILD_SEEN = Object.freeze(["creature", "elite", "champion", "colossus", "worldBoss", "regalia", "companion"]);
@@ -386,7 +387,10 @@ export class ViewFeed {
             lag.calm = step;
         }
 
-        if ((backed || behind > LAG.raise) && lag.level < LAG.levels && step - lag.changed >= LAG.settle) {
+        // (Since when it's been past `raise`, without a break)
+        lag.over = behind > LAG.raise ? (lag.over ?? step) : null;
+
+        if ((backed || (lag.over !== null && step - lag.over >= LAG.sustain)) && lag.level < LAG.levels && step - lag.changed >= LAG.settle) {
             lag.level++;
             lag.changed = step;
             this.held.raised++;
@@ -477,7 +481,7 @@ export class ViewFeed {
     }
 
     #viewer(id) {
-        const viewer = { id, phase: this.#joined++ % KNOWN.every, list: [], byActor: new Map(), byIndex: new Array(KNOWN.most).fill(null), free: Array.from({ length: KNOWN.most }, (_, k) => KNOWN.most - 1 - k), leaves: [], owed: [], ids: new Set(), done: null, self: null, entering: 0, told: new Told(), patches: new Map(), summaryAt: null, atTold: null, frames: 0, bytes: 0, records: 0, events: 0, dropped: 0, enters: 0, lag: { level: 0, waiting: 0, seen: -1, unsaid: [], sent: -Infinity, changed: -Infinity, calm: 0, least: Infinity, before: Infinity, next: Infinity, since: 0 } };
+        const viewer = { id, phase: this.#joined++ % KNOWN.every, list: [], byActor: new Map(), byIndex: new Array(KNOWN.most).fill(null), free: Array.from({ length: KNOWN.most }, (_, k) => KNOWN.most - 1 - k), leaves: [], owed: [], ids: new Set(), done: null, self: null, entering: 0, told: new Told(), patches: new Map(), summaryAt: null, atTold: null, frames: 0, bytes: 0, records: 0, events: 0, dropped: 0, enters: 0, lag: { level: 0, waiting: 0, seen: -1, unsaid: [], sent: -Infinity, changed: -Infinity, calm: 0, over: null, least: Infinity, before: Infinity, next: Infinity, since: 0 } };
 
         this.viewers.set(id, viewer);
 
