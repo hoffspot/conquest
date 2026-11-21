@@ -6505,6 +6505,8 @@ document.addEventListener("visibilitychange", () => {
     } else {
         // (A measured run's screen asked to stay awake again: the browser lets go of it whenever the page's hidden)
         measured?.wake();
+        // (And its link asked at once whether it's still there: one that died while the page was hidden says nothing)
+        state.together?.link?.woke?.();
     }
 });
 

@@ -27,7 +27,7 @@ export const SUMMARY = Object.freeze({ every: 20, frame: 6000, near: 512, news: 
 
 /** The parts that are every player's alike (worldParts), and those that are one player's (ownParts). */
 export const WORLD_PARTS = Object.freeze(["rules", "clock", "realms", "towns", "works", "forces", "forts", "relations", "parties", "roster", "invasions", "burnt", "rifts", "legends", "done", "dungeons", "camps", "depots", "places", "news", "battles"]);
-export const OWN_PARTS = Object.freeze(["own", "invites", "props", "fellows"]);
+export const OWN_PARTS = Object.freeze(["own", "invites", "props", "fellows", "trades"]);
 
 /** The director's props a player's told of when near: each a table of the host's, by its name there. */
 export const PROPS = Object.freeze(["ground", "campfires", "caches", "finds", "strangers", "obstacles", "treasures", "ambushes"]);
@@ -194,6 +194,9 @@ export function ownParts(host, me) {
         invites: byKey([...host.invites.entries()].filter(([to, invite]) => to === me || invite?.from === me || invite?.to === me)),
         props,
         fellows,
+        // (The trades they're in, asked or open, as they stand: a view told again has them,
+        // which the events that told of them wouldn't be heard again to say; the plan's 3-26)
+        trades: byKey([...(host.trades?.entries() ?? [])].filter(([, trade]) => trade?.from === me || trade?.to === me)),
     };
 }
 

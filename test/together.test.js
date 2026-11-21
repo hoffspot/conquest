@@ -17,7 +17,7 @@ import { attachRelay, RELAY_LIMITS, RELAY_PATH } from "../server/relay.js";
 import { mirrored } from "./replicated.js";
 
 // (Everything quick: pings every 50 ms, a link given up on after 200 ms unanswered)
-const TIMING = Object.freeze({ ...LINK_TIMING, ping: 50, patience: 200, first: 20, most: 100, within: 3000 });
+const TIMING = Object.freeze({ ...LINK_TIMING, ping: 50, patience: 200, woken: 40, first: 20, most: 100, within: 3000 });
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 const GUEST = Object.freeze({ hero: { name: "Bryn", shape: {}, look: {}, weapon: "bow", boots: false, race: "human" }, progress: { gold: 50 } });
 
@@ -171,6 +171,30 @@ describe("playing together over the relay (together.js)", () => {
         // (Answering at first; then not a word, as a link that's died without closing)
         await new Promise((resolve) => setTimeout(resolve, TIMING.ping * 3));
         socket.onMessage = (text) => (text === "ping" ? undefined : hear(text));
+        await until(() => heard.guest.at(-1) === null && heard.states === 1);
+        assert.deepEqual(heard.guest, ["lost", null]);
+        close();
+    });
+
+    it("asks at once whether its link's still there when its page is shown again, and takes one that died while it was hidden for dropped well inside its usual patience", async () => {
+        const { joined, heard, place, close } = await together();
+        const socket = place().peers.get("p1").socket;
+        const hear = socket.onMessage;
+
+        // (Answering at first; shown again with the link alive, nothing comes of the asking)
+        await new Promise((resolve) => setTimeout(resolve, TIMING.ping * 3));
+        joined.link.woke();
+        await new Promise((resolve) => setTimeout(resolve, TIMING.woken * 3));
+        assert.deepEqual(heard.guest, []);
+
+        // (Then dead without closing, as a socket is that a phone let go of while its page was hidden)
+        socket.onMessage = (text) => (text === "ping" ? undefined : hear(text));
+
+        const woken = Date.now();
+
+        joined.link.woke();
+        await until(() => heard.guest.includes("lost"));
+        assert.ok(Date.now() - woken < TIMING.patience * 0.75, `${Date.now() - woken} ms`);
         await until(() => heard.guest.at(-1) === null && heard.states === 1);
         assert.deepEqual(heard.guest, ["lost", null]);
         close();

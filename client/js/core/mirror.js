@@ -23,6 +23,9 @@ import { readPatches, Summary } from "./summary.js";
 import { decodeFrame, GOING, NONE, VIEW, WHO } from "./view.js";
 import { decode } from "./wire.js";
 
+/** How long those it knew of are kept, a view told again, for the frames to tell of them anew (ms). */
+export const RESET = Object.freeze({ wait: 3000 });
+
 /**
  * A character's ring: how many tellings of where it was are kept, and how far behind the world
  * it's drawn (ms, the world's time), where nothing's measured how late its frames come
@@ -193,6 +196,11 @@ export class Mirror {
 
     #byId;
 
+    // Those kept in the battle since its view was asked for again, by id, and when that was (reset)
+    #waiting = new Map();
+
+    #waitingSince = 0;
+
     /**
      * A frame taken: those who've left taken out, those who've come added, how each is set on
      * them, and what else it says kept. Returns the frame as read, or null for bytes that aren't
@@ -329,8 +337,12 @@ export class Mirror {
             return;
         }
 
-        const actor = this.battle.add({ id: who.id, kind: who.kind, name: who.name, weapon: who.weapon ?? undefined, boots: who.boots ?? undefined, team: who.team, map: who.map, square: [0, 0], neutral: who.neutral ?? undefined, role: who.role ?? undefined, side: who.side ?? undefined });
+        // (One kept in the battle since the view was asked for again, reset: taken up as they
+        // are, nowhere they were told to be before any use now)
+        const waited = this.#waiting.get(who.id);
+        const actor = waited ?? this.battle.add({ id: who.id, kind: who.kind, name: who.name, weapon: who.weapon ?? undefined, boots: who.boots ?? undefined, team: who.team, map: who.map, square: [0, 0], neutral: who.neutral ?? undefined, role: who.role ?? undefined, side: who.side ?? undefined });
 
+        this.#waiting.delete(who.id);
         Object.assign(actor, who);
         this.known[index] = { actor, who, ring: new Ring(), since: time, heading: 0, going: 0, speed: 0, health: 0, target: NONE };
         this.#byId.set(actor.id, this.known[index]);
@@ -389,6 +401,45 @@ export class Mirror {
      * Begun from a welcome with no world in it (core/viewfeed.js welcome: { own, world }): its
      * summary as it stood then, to be kept up by its frames.
      */
+    /**
+     * Its view told again from nothing (`again`: as a welcome, core/netplay.js Session
+     * #viewAgain; `time`, ms): everything it knew of let go, to be told anew by the frames
+     * that follow. Those in its battle stay there meanwhile, so no one's taken away and put
+     * back, and each is taken up again as they're told of; whoever isn't within RESET.wait
+     * was gone while it wasn't looking, and is let go (expire).
+     */
+    reset(again, time) {
+        this.#waiting = new Map(this.known.filter(Boolean).map(({ actor }) => [actor.id, actor]));
+        this.#waitingSince = time;
+        this.known = new Array(VIEW.most).fill(null);
+        this.#byId = new Map();
+        this.gone = new Map();
+        this.step = -1;
+        this.welcome(again);
+    }
+
+    /** Those still in its battle that a view told again hasn't told of in time (reset), let go: how many. */
+    expire(time) {
+        if (!this.#waiting.size || time - this.#waitingSince < RESET.wait) {
+            return 0;
+        }
+
+        const gone = [...this.#waiting.keys()];
+
+        for (const id of gone) {
+            this.battle.remove(id);
+        }
+
+        this.#waiting = new Map();
+
+        return gone.length;
+    }
+
+    /** How many it's still to be told of again (reset). */
+    get waiting() {
+        return this.#waiting.size;
+    }
+
     welcome({ step, own = {}, world = {} }) {
         this.summary = new Summary();
         this.summary.take(Object.entries(own).map(([key, value]) => ["own", key, value]));

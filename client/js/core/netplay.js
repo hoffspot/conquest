@@ -183,6 +183,9 @@ export const CHECK_EVERY = 4;
  */
 export const AGAIN = Object.freeze({ every: 10000, burst: 3 });
 
+/** How often, at the most, a game sent views is told its view again from nothing (ms). */
+export const VIEW_AGAIN = 1500;
+
 /**
  * How much of the host's one thread taking the world for those who've joined may use, where
  * that's held to (Hosting `sparing`: the world server's; generated/multiplayer_scaling_plan.md
@@ -663,6 +666,9 @@ export class Session {
     // they are (#enter, #welcomed); and whether those waiting are being let in just now (admit)
     #entering = new Map();
 
+    // When each game sent views was last told its view again (#viewAgain), by peer
+    #viewedAt = new Map();
+
     #admitting = false;
 
     // Of each who's waiting (by peer): when they said hello, by the clock ({ at }), and, once
@@ -707,8 +713,11 @@ export class Session {
                 this.#command(peer, message);
                 break;
             case "again":
-                // (One sent views has no copy to have gone astray, and is sent no world)
-                if (!this.viewing.has(peer)) {
+                // (One sent views has no copy to have gone astray, and is sent no world: its
+                // view's told again from nothing, #viewAgain)
+                if (this.viewing.has(peer)) {
+                    this.#viewAgain(peer);
+                } else {
                     this.feed.again(peer);
                 }
 
@@ -963,6 +972,27 @@ export class Session {
 
     // Each brought into the world and not yet sent it (#enter), sent it as it is: from the one
     // taking of it, however many they are; and whoever runs the world told they've come
+    // A game sent views asks for its view again (a page hidden and shown, a link come back: the
+    // scaling plan's 3-26): the feed forgets what it's told them, so everyone in their sight
+    // and the whole summary come anew, and they're told so ("viewed": the summary as it
+    // stands, as their welcome had it) before the first frame of it. No oftener than
+    // VIEW_AGAIN: one asking sooner asks again
+    #viewAgain(peer) {
+        const id = this.players.get(peer);
+        const now = this.clock?.() ?? this.host.battle.time;
+
+        if (!id || now - (this.#viewedAt.get(peer) ?? -Infinity) < VIEW_AGAIN) {
+            return;
+        }
+
+        const told = this.hosting.views.welcome(id);
+
+        if (told) {
+            this.#viewedAt.set(peer, now);
+            this.hosting.post(peer, "viewed", encode({ kind: "viewed", paused: this.paused, ...told }));
+        }
+    }
+
     #welcomed() {
         const entering = [...this.#entering];
         const { world } = this.host;
@@ -1329,6 +1359,7 @@ export class Session {
      */
     gone(peer) {
         this.viewing.delete(peer);
+        this.#viewedAt.delete(peer);
 
         // (One who was waiting to come in: no longer)
         this.waiting.delete(peer);

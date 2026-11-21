@@ -916,6 +916,26 @@ test("a replicated world: two players, neither's game holding a copy of it, see 
             return { ground: view.ground instanceof Map, campfires: Array.isArray(view.campfires), legends: typeof view.legends.stepOf, invasions: Array.isArray(view.invasions), rifts: typeof view.hellRifts.next, camps: Array.isArray(view.war.camps), news: Array.isArray(view.war.log), battles: Array.isArray(view.engagements()), rules: typeof view.rules.rest };
         })).toEqual({ ground: true, campfires: true, legends: "function", invasions: true, rifts: "number", camps: true, news: true, battles: true, rules: typeof (await una.evaluate(() => window.pellagos.game.worldview.rules.rest)) });
 
+        // Hidden and shown (the plan's 3-26): Una's page hidden a while, as a phone's is gone to
+        // another app; shown, her view's asked for again and told from nothing, her game put
+        // where the world is: its time going on, her party and the folk about as they were,
+        // and no world sent for it
+        const hide = (hidden) => {
+            Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+            document.dispatchEvent(new Event("visibilitychange"));
+        };
+        const again = (page) => page.evaluate(() => window.pellagos.together.joining.resyncs);
+        const [told, hiddenAt] = [await again(una), (await has(una)).time];
+
+        await una.evaluate(hide, true);
+        await una.waitForTimeout(2000);
+        await una.evaluate(hide, false);
+        await expect.poll(() => again(una), { timeout: 30000 }).toBe(told + 1);
+        await expect.poll(async () => (await has(una)).time, { timeout: 30000 }).toBeGreaterThan(hiddenAt + 2000);
+        await expect.poll(async () => (await has(una)).known, { timeout: 30000 }).toBeGreaterThanOrEqual(3);
+        await expect.poll(() => partied(una), { timeout: 30000 }).toMatchObject({ members: 2, roster: ["Bram", "Una"] });
+        expect(await una.evaluate(() => window.pellagos.together.joining.farBehind)).toBe(false);
+
         // (Still no copy, and nothing the frames said that couldn't be so)
         for (const one of [await has(una), await has(bram)]) {
             expect(one.ops + one.world).toBe(0);

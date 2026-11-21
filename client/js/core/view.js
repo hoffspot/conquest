@@ -59,7 +59,7 @@ import { TAU } from "./exact.js";
  * What a frame holds: its first byte. It moves only when a frame's bytes do, never with
  * NET_VERSION (contribution.md, section 3, the version numbers).
  */
-export const VIEW_VERSION = 3;
+export const VIEW_VERSION = 4;
 
 /**
  * A frame's origin is a corner of a square of `origin` metres, `lead` metres south-west of the

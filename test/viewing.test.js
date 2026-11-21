@@ -6,12 +6,13 @@ import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { Host } from "../client/js/core/host.js";
+import { RESET } from "../client/js/core/mirror.js";
 import { Hosting, Joining, NETCODES } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { asRemote, REMOTE_MEMBERS } from "../client/js/core/remote.js";
 import { SUMMARY, worldParts } from "../client/js/core/summary.js";
 import { dressOf } from "../client/js/core/viewfeed.js";
-import { Viewing } from "../client/js/core/viewing.js";
+import { Viewing, VIEW_ASKS } from "../client/js/core/viewing.js";
 import { decode } from "../client/js/core/wire.js";
 import { lookIn } from "./helpers.js";
 import { answerOf, ASKED_FOR, ToldView } from "../client/js/core/worldview.js";
@@ -466,6 +467,120 @@ describe("a replicated world's link (core/viewing.js)", () => {
 
         // (A lockstep link asks nothing: its game reads its copy)
         assert.equal(new Joining({ send: () => {} }).ask, null);
+    });
+
+    it("asks for its view again when its page is shown, plays nothing of what came while it was hidden, and has everyone where the world has them from what it's then told", async () => {
+        const world = replicated();
+        const [ann, bea] = [world.come("a", character("Ann")), world.come("b", character("Bea"))];
+
+        world.play(40);
+        await Promise.all([ann.link.started, bea.link.started]);
+
+        const { host } = world;
+        const [annId, beaId] = [ann.link.me, bea.link.me];
+        const mine = ann.link.host;
+        const states = [];
+        const say = (game, command) => game.link.command(command, () => {});
+
+        ann.link.onState = (state) => states.push(state);
+
+        // (A trade open as her page is hidden, to be there when it's shown)
+        const truth = host.battle.actor(annId);
+
+        Object.assign(host.battle.actor(beaId), { x: truth.x + 1, y: truth.y, square: [Math.floor(truth.x) + 1, Math.floor(truth.y)], map: truth.map, path: [], order: null });
+        world.play(4);
+        say(ann, { type: "trade", with: beaId });
+        world.play(4);
+        say(bea, { type: "trade", with: annId });
+        world.play(4);
+
+        const open = [...host.trades.values()].find((trade) => trade.open);
+
+        assert.ok(open && mine.trades.get(open.id), "a trade open");
+
+        // (Hidden half a minute: her page frozen, the world's frames piling up for it; Bea two
+        // squares on meanwhile, and her own trade forgotten as a page's memory may be)
+        const held = ann.link.host;
+        const kept = new Map(mine.battle.actors.map((actor) => [actor.id, actor]));
+
+        ann.link.away(true);
+        ann.link.host = null;
+        host.battle.actor(beaId).x += 2;
+        host.battle.actor(beaId).square[0] += 2;
+        world.play(600);
+        mine.trades.clear();
+        ann.link.host = held;
+        ann.events.length = 0;
+
+        const [time, behind] = [mine.battle.time, ann.link.behind];
+
+        assert.ok(behind > 500, `${behind} behind`);
+        ann.link.away(false);
+        assert.equal(ann.link.resyncs, 1, "told again at once");
+        assert.ok(ann.link.dropped >= 600, `${ann.link.dropped} frames let go`);
+        assert.equal(mine.battle.time, time, "and nothing played of them");
+
+        // (Right within a second of being shown: the gate's number)
+        world.play(20);
+        assert.equal(mine.battle.time, host.battle.time, "the world's time");
+        assert.deepEqual(states, [{ kind: "viewed" }], "her game told once to put everyone where they are");
+        assert.deepEqual(ann.link.mirror.faults, []);
+        assert.equal(ann.link.farBehind, false);
+
+        for (const who of [annId, beaId]) {
+            const [here, there] = [mine.battle.actor(who), host.battle.actor(who)];
+
+            assert.ok(here === kept.get(who), `${who}: the same one, kept for what's drawn of them`);
+            assert.deepEqual([here.x, here.y, here.map], [there.x, there.y, there.map]);
+        }
+
+        assert.deepEqual(mine.trades.get(open.id), host.trades.get(open.id), "her trade as the world has it, told with her view");
+        assert.equal(mine.players.get(annId).progress.gold, host.players.get(annId).progress.gold);
+        assert.ok(ann.events.length < 200, `${ann.events.length} events: none of the half minute's`);
+
+        // (Shown again at once, the world answers no oftener than it will; asked again, it does)
+        ann.link.away(true);
+        ann.link.away(false);
+        assert.equal(ann.link.resyncs, 1, "not told twice in a moment");
+        world.play(Math.ceil(VIEW_ASKS / STEP_MS) + 2);
+        assert.equal(ann.link.resyncs, 2, "asked again, and told");
+        world.play(20);
+        assert.equal(mine.battle.time, host.battle.time);
+        assert.deepEqual(ann.link.mirror.faults, []);
+    });
+
+    it("lets go of whoever its view, told again, no longer tells of, and asks again when it's fallen further behind than it may catch up, never playing fast", async () => {
+        const world = replicated();
+        const [ann, bea] = [world.come("a", character("Ann")), world.come("b", character("Bea"))];
+
+        world.play(40);
+        await Promise.all([ann.link.started, bea.link.started]);
+
+        const { host } = world;
+        const [annId, beaId] = [ann.link.me, bea.link.me];
+        const mine = ann.link.host;
+        const held = ann.link.host;
+
+        assert.ok(mine.battle.actor(beaId));
+
+        // (Frozen without a word, as a page is that's given no time: no "hidden" said. Bea gone
+        // far off meanwhile)
+        ann.link.host = null;
+        Object.assign(host.battle.actor(beaId), { x: host.battle.actor(beaId).x + 400, square: [Math.floor(host.battle.actor(beaId).x) + 400, Math.floor(host.battle.actor(beaId).y)], path: [], order: null });
+        world.play(300);
+        ann.link.host = held;
+
+        const time = mine.battle.time;
+
+        world.play(1);
+        assert.equal(ann.link.resyncs, 1, "its view asked for again, and told");
+        assert.ok(mine.battle.time - time <= 2 * STEP_MS, "and not played fast to where the world is");
+        assert.ok(mine.battle.actor(beaId), "Bea kept a moment, lest she's told of again");
+        world.play(Math.ceil(RESET.wait / STEP_MS) + 2);
+        assert.ok(!mine.battle.actor(beaId), "and let go of, never told of");
+        assert.ok(mine.battle.actor(annId));
+        assert.equal(mine.battle.time, host.battle.time);
+        assert.deepEqual(ann.link.mirror.faults, []);
     });
 
     it("has the director's props near its hero, the world at large and the rest of the war as its summary says, and flies a shot from its event", () => {

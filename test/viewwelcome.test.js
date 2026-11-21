@@ -152,7 +152,7 @@ describe("the view-mode welcome (core/netplay.js Session, core/viewfeed.js welco
         assert.ok(size <= 64 * 1024, `${size} bytes`);
         assert.ok(size > 10000, `${size} bytes: the towns and works are in it`);
         assert.equal(welcome.own.hero.name, "Vee");
-        assert.deepEqual(Object.keys(welcome.world).sort(), [...WORLD_PARTS, "invites", "props", "fellows"].filter((part) => Object.keys(welcome.world).includes(part)).sort());
+        assert.deepEqual(Object.keys(welcome.world).sort(), [...WORLD_PARTS, "invites", "props", "fellows", "trades"].filter((part) => Object.keys(welcome.world).includes(part)).sort());
         assert.ok(Object.keys(welcome.world.towns).length >= 50 && welcome.world.roster[me].name === "Vee");
 
         // (The lockstep game's is as ever: the world itself)
