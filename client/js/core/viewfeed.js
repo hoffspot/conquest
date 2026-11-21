@@ -81,6 +81,15 @@ export function dressOf(host, actor) {
         return player?.hero && player.progress?.worn ? { hero: player.hero, worn: player.progress.worn(), wielded: player.progress.wielded(), role: player.role ?? null, maxStamina: actor.maxStamina ?? null } : null;
     }
 
+    // (A war's works out in the world: a fort's realm and kind, what a wagon carries)
+    if (host.fortsOut?.has(actor.id)) {
+        return { fort: host.fortsOut.get(actor.id) };
+    }
+
+    if (host.wagons?.has(actor.id)) {
+        return { wagon: host.wagons.get(actor.id) };
+    }
+
     if (actor.wild) {
         return { wild: Object.fromEntries(WILD_SEEN.filter((key) => actor.wild[key] !== undefined).map((key) => [key, actor.wild[key]])) };
     }
