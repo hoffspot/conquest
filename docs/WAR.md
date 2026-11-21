@@ -3909,8 +3909,9 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   `3-18`). What a game sent views is told of the world beside those its hero can see.
   - **In parts of small entries:** the rules; the war's clock; each realm, town, works, force
     and fort; relations; the parties; who's in the world (a name, a people, a realm, a role:
-    not what each has and has done); the invasions and what's burnt; hell's rifts; the legends;
-    what's done; the dungeons. And one player's own: their record as the world keeps it, field
+    not what each has and has done); the invasions and what's burnt; hell's rifts;
+    what's done; the dungeons (the legends were among these till `3-29`, below, and are each
+    player's own now). And one player's own: their record as the world keeps it, field
     by field; the invitations that are theirs; and the director's props within 512 m of their
     hero (what's on the ground, campfires, caches, finds, strangers, obstacles, treasures,
     ambushes; one that doesn't say where it is, wherever they are). Each entry is the world's
@@ -4032,7 +4033,7 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   - **The world at large, the props about, and what flies** (the plan's `3-25`). The rest
     of the summary is put where the game reads it: the invasions, what's burnt, hell's
     rifts, what's been done, the rules, and the legends (made again only when they're told
-    anew). The war gains its camps and depots, the places cleared, its latest news
+    anew; a player's own part since `3-29`, below). The war gains its camps and depots, the places cleared, its latest news
     (`SUMMARY.news`: 60 events, from the start of a turn, each told once by its turn and
     place in it) and the battles on that aren't an invasion's: five new parts, so
     `VIEW_VERSION` is 3. The director's props within 512 m of the hero go into the world's
@@ -4085,6 +4086,50 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     fight of 400 tells one player's game 6,583 events in 30 s in 3.7 KB a second, each as
     the battle told it; as JSON they'd be 32 KB a second. For want of room 797 were let
     go; with strangers' events still JSON, as the first cut had them, 4,452 were.
+  - **What a world takes from another's game, and what it tells one** (the plan's `3-29`).
+    The rule: a game tells the world what its player asks for, and nothing of what's so.
+    A command names a thing to do and what to do it to; the world decides by its own
+    record whether it can be done. So what's heard is checked before the world's given it
+    (`Session` `#command`):
+    - **Its shape** (core/commandshape.js `COMMAND_SHAPES`, `misshapen`): a known kind;
+      fields that are a word, a number, a place or nothing, but for the few a kind names as
+      holding more; no more of it and no deeper than `SHAPE` allows; nothing but plain
+      objects and arrays; and no text that names what every object has. A misshapen one
+      is given the world as `{ type: "misshapen" }`, which it refuses as any kind it
+      doesn't know, so a lockstep world's copies each refuse the same.
+    - **Its number**: higher than the last from that game, or it's let go of (`unordered`).
+      A command's done once however often it's said.
+    - **Its reach**: a game's hero is walked no further at one asking than `HEARD.walk`
+      (128 m: the server keeps the ground made 160 m round each player; further, and it's
+      that far towards there). An "ahead" order's way is looked along a leg at a
+      time (`AHEAD_LEG`, 48 m) where the tiles of the rest aren't made, the rest as the
+      walker gets there; it's this every copy does, so `NET_VERSION` is 235.
+    - **Who may**: the six debug commands (`DEBUG_COMMANDS`) are the world's debugger's
+      alone, by the role the server gave, never by what a game says.
+      `test/hardening.test.js` reads the host's own cases to hold the list to them.
+    - **What it says of itself**: a device's `budget` is a size an invasion may be or it's
+      not taken (as it was), a round trip is held to a minute, and `own` is counted with
+      commands.
+    - **What it asks** (`ask`, of a game sent views): only of those it's been told of.
+    What that test's hundred thousand hostile messages found, each fixed: an "ahead" order
+    made up to 110 navigation tiles as it was heard, a second of the world's time; a walk
+    asked a world away made the ground there to look for somewhere to stand, 20 to 90 ms
+    each, before finding it too far; and
+    `{ type: "abandon", thread: "__proto__" }` gave up the thread every object is, and set
+    what a thread keeps on all of them, spoiling the whole process. Now none throws, and
+    the longest holds the world 37 ms.
+    **What a far player's told**: who another is and whose party they're in (the roster,
+    the parties), and nothing of where they are, what they do or what befalls them. The
+    test sends a spy 300 to 900 m from a player who walks, trades, marks the map, is hurt
+    and falls, and reads every byte it's sent for her id. The legends were the leak: told
+    whole to everyone, with every player's clocks (how long each has been indoors and out),
+    what each is owed and marked with, and who the encounter out now was dealt to and
+    where. They're each player's own part now (`lore`, core/summary.js `loreOf`): their own
+    clocks, dues and marks, the one out now only if it's theirs to know of, and no one's
+    id but their own on what's done. A field of it an entry, so a second's telling is of
+    their clocks and not the whole (`VIEW_VERSION` 6). Nanny Mode isn't built yet (`2-36`
+    on); when it is, the whereabouts it hides from those outside a party are already no
+    one's but the party's: the roster says who, never where.
   - **A link that can't keep up** (the plan's `3-27`). Such a game is sent less, not later.
     It says the step of the frame it last took (`seen`, as frames come, no oftener than
     every other step's: `Viewing`, `SEEN`), and the feed reckons how far behind its link is:
@@ -4108,8 +4153,7 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     `Viewing.arrivals` keeps how the last 1,200 frames came (the time between them that
     95 and 99 in a hundred came within, and the longest), for a measured run on a phone.
   - **Not yet**: bait thrown down
-    and a bomb in the air aren't kept (the battle's own lists, as shots were). The legends
-    are told whole each second while their clocks run. Convoys, supply trains and who's
+    and a bomb in the air aren't kept (the battle's own lists, as shots were). Convoys, supply trains and who's
     quartered where aren't told beyond those in sight. A dungeon's sealed
     rooms aren't made. A building's folk stand, where a copy's would sit: who they're drawn
     as comes without their routine. Another player's followers and companions aren't told

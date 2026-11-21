@@ -7,10 +7,11 @@ import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { Host } from "../client/js/core/host.js";
 import { RESET } from "../client/js/core/mirror.js";
-import { Hosting, Joining, NETCODES } from "../client/js/core/netplay.js";
+import { Hosting, Joining, NET_VERSION, NETCODES } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { asRemote, REMOTE_MEMBERS } from "../client/js/core/remote.js";
-import { SUMMARY, worldParts } from "../client/js/core/summary.js";
+import { Legends } from "../client/js/core/rare.js";
+import { loreOf, SUMMARY, worldParts } from "../client/js/core/summary.js";
 import { dressOf, LAG } from "../client/js/core/viewfeed.js";
 import { Viewing, VIEW_ASKS } from "../client/js/core/viewing.js";
 import { decode } from "../client/js/core/wire.js";
@@ -213,7 +214,7 @@ describe("a replicated world's link (core/viewing.js)", () => {
 
         class Whole extends Joining {
             hello(who) {
-                this.send(JSON.stringify({ kind: "hello", version: 234, character: who, speaks: ["lockstep", "replicated"] }));
+                this.send(JSON.stringify({ kind: "hello", version: NET_VERSION, character: who, speaks: ["lockstep", "replicated"] }));
             }
         }
 
@@ -240,7 +241,7 @@ describe("a replicated world's link (core/viewing.js)", () => {
 
         class Asks extends Viewing {
             hello(who) {
-                this.send(JSON.stringify({ kind: "hello", version: 234, mode: "view", character: who, speaks: ["lockstep"] }));
+                this.send(JSON.stringify({ kind: "hello", version: NET_VERSION, mode: "view", character: who, speaks: ["lockstep"] }));
             }
         }
 
@@ -426,6 +427,14 @@ describe("a replicated world's link (core/viewing.js)", () => {
         const keeper = [...host.folk.keys()].find((id) => host.battle.actor(id) && host.stockOf(id));
 
         assert.ok(keeper, "a shopkeeper with a day's stock");
+
+        // (Not of one she's not been told of: nothing's said of a shop from across the town.
+        // Beside them, as a shop's opened, she is, and it's hers to ask of)
+        assert.ok(!world.hosting.views.viewers.get(annId).ids.has(keeper));
+        assert.equal(await ann.link.ask({ what: "shop", keeper }), null, "a keeper she's not been told of");
+        host.battle.place(annId, host.battle.actor(keeper).map, host.battle.actor(keeper).square.map((v, k) => v + (k ? 1 : 0)));
+        world.play(12);
+        assert.ok(world.hosting.views.viewers.get(annId).ids.has(keeper), "told of the keeper beside her");
         assert.deepEqual(await ann.link.ask({ what: "shop", keeper }), answerOf(host, annId, { what: "shop", keeper }));
         assert.equal(await ann.link.ask({ what: "shop", keeper: "no one" }), null);
         assert.equal(await ann.link.ask({ what: "world" }), null);
@@ -672,7 +681,9 @@ describe("a replicated world's link (core/viewing.js)", () => {
         const open = [...host.trades.values()].find((trade) => trade.open);
 
         assert.equal(lag().level, LAG.levels, "at the lowest rate");
-        assert.ok(views.held.frames > 100 && views.held.raised === LAG.levels, JSON.stringify(views.held));
+        // (Down to it, and tried a level up again whenever the line kept up a while: each
+        // time back down)
+        assert.ok(views.held.frames > 100 && views.held.raised >= LAG.levels && views.held.raised - views.held.lowered === LAG.levels, JSON.stringify(views.held));
         assert.ok(sentBytes / 20 <= 3000 * 1.05, `${Math.round(sentBytes / 20)} bytes a second sent a line that carries 3,000`);
         assert.ok(worst() <= 2000 / STEP_MS, `${worst()} steps old at the worst`);
         assert.ok(open, "a trade open");
@@ -701,7 +712,7 @@ describe("a replicated world's link (core/viewing.js)", () => {
         [late, sentBytes] = [[], 0];
         pass(40);
         assert.equal(lag().level, 0);
-        assert.equal(views.held.lowered, LAG.levels);
+        assert.equal(views.held.lowered, views.held.raised, "every level it went down, back up");
         assert.equal(late.length, 40, "a frame a step");
         assert.equal(worst(), 0);
         // (Her line hands each frame over as the next step begins)
@@ -757,7 +768,9 @@ describe("a replicated world's link (core/viewing.js)", () => {
             world.play(1);
         } while (world.hosting.step() % SUMMARY.every);
 
-        assert.deepEqual(mine.legends.toJSON(), host.legends.toJSON());
+        // (As much of them as is hers to know: core/summary.js loreOf)
+        assert.deepEqual(mine.legends.toJSON(), new Legends(loreOf(host.legends.toJSON(), annId)).toJSON());
+        assert.deepEqual(Object.keys(mine.legends.toJSON().clocks), [annId], "her own clocks, and no one else's");
         assert.equal(typeof mine.legends.stepOf, "function", "the legends themselves, to ask");
 
         // The rest of the war: a camp, a depot, a place cleared, its news, and a battle on in the field

@@ -560,6 +560,15 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
    - `NET_VERSION` (`client/js/core/netplay.js`): anything players' games say to each other, or
      anything that changes the world or the rules two games must agree on. A game of another
      version can't join.
+     - **A command a game sends has a shape** (`client/js/core/commandshape.js`
+       `COMMAND_SHAPES`; generated/multiplayer_scaling_plan.md 3-29). A new kind of command in
+       `Host` `#command` needs its entry there, or a joined game's is refused as misshapen:
+       name the fields that hold more than a word, a number or a place (`more`), and the ones
+       held to more than that (`fields`). One only the world's debugger may give is marked
+       `debug` and asks `this.debugs(playerId)` in its own case. `test/hardening.test.js` reads
+       the host's cases and fails where the two differ. The rule behind it: a command says
+       what a player asks for, never what's so (their place, health, gold or pack), and an id
+       it names is looked up with `Object.hasOwn`, never by a bare `table[id]`.
      - **What needs no bump: an addition that's opted into.** A new kind of message, or a new
        field in one there is, leaves `NET_VERSION` alone when all of these hold: it's sent only
        to a game that has said it speaks it (`speaks`, in a joiner's `hello` and a server's
@@ -578,11 +587,12 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      moves only when the frame's bytes do, and never with `NET_VERSION`: a change to lockstep's
      messages or to what both netcodes share bumps `NET_VERSION` alone, a change to the frame
      bumps `VIEW_VERSION` alone, and a game says which views it reads in `speaks`. It's
-     5, and never 0 (a message of bytes whose first is 0 is the tests' echo: `server/play.js`
+     6, and never 0 (a message of bytes whose first is 0 is the tests' echo: `server/play.js`
      `BINARY`). A replicated world's games play from frames (3-21), so from here a change to
      a frame's bytes bumps it: a new part of the summary does (3-24's `fellows`, 3-25's
      `camps`, `depots`, `places`, `news` and `battles`, 3-26's `trades`), as a new section or
-     field would (3-28's `hot`, a fight's events as bytes: `client/js/core/hotevents.js`, whose
+     field would (3-29's `lore`, the legends as one player may know them, in place of the world's
+     `legends`; 3-28's `hot`, a fight's events as bytes: `client/js/core/hotevents.js`, whose
      table of kinds and fields is part of the frame's bytes too). 3-26's `viewed`, the answer to `again` for a game sent views, is a message
      only such a game is sent: additive and opted into, so no `NET_VERSION` bump. The same
      goes for 3-27's `seen`, which only such a game says; a world that hears none holds

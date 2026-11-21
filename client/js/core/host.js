@@ -2474,6 +2474,11 @@ export class Host {
                 // (Only the spells they know: their schools' up to their tiers, and those learnt; and
                 // the Prismatic sigil's, which the battle lets them cast with it whole (Prismatic
                 // Destruction) or an element's piece just earned (its Prismatic spell))
+                // (No spell there is: a name every object has isn't one)
+                if (typeof command.spell !== "string" || !Object.hasOwn(SPELLS, command.spell)) {
+                    return refuse("unknown");
+                }
+
                 if (!SPELLS[command.spell]?.prismatic && !player.progress.knows(command.spell)) {
                     return refuse("unknown");
                 }

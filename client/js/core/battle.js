@@ -772,6 +772,17 @@ const THRONG = 2 * BODY + 1;
 // (AHEAD's line is across 110 navigation tiles at the most, within what the mesh is asked
 // across: navigation.js MOST_ASKED, test/farway.test.js)
 export const AHEAD = 400;
+
+/**
+ * How far of an "ahead" order's way is looked along at once, where the tiles of the rest of it
+ * aren't all made yet (metres: as near a player as a way's found at once, WAIT_BEYOND, whose
+ * tiles the game makes ahead round them). The rest is looked along a leg at a time as they come
+ * to the end of each (the order's `ahead`: which way, and how far's left), by when the ground
+ * round them's made. So one asking, which looked across 110 tiles and made each there and then
+ * (a second of the world's time, where none were made), makes no more than those beside the
+ * walker (the scaling plan's 3-29).
+ */
+export const AHEAD_LEG = 48;
 const MOVE_ON = 1.5;
 const MOVE_LEGS = 8;
 
@@ -2496,6 +2507,9 @@ export class Battle {
                 const way = this.#route(actor, () => {
                     const [x, y] = [actor.x, actor.y];
                     const navigator = navigatorOf(this.maps[actor.map]);
+                    // (All of it at once only if its tiles are made: else a leg, AHEAD_LEG)
+                    const [ex, ey] = [x + sin(order.facing) * reach, y + cos(order.facing) * reach];
+                    const far = reach <= AHEAD_LEG || this.bakedOnly || navigator.made(Math.min(x, ex) - 1, Math.min(y, ey) - 1, Math.max(x, ex) + 1, Math.max(y, ey) + 1) ? reach : AHEAD_LEG;
 
                     // (A forecast's, the tiles round it not made yet: straight on that way, as far
                     // as it was asked, for now)
@@ -2509,7 +2523,7 @@ export class Battle {
 
                         return ray ? { point: ray.point, on: hypot(ray.point[0] - x, ray.point[1] - y) * cos(turn) } : null;
                     };
-                    const straight = along(0, reach);
+                    const straight = along(0, far);
 
                     if (straight && straight.on >= SLIDE.clear) {
                         return [straight.point];
@@ -2519,7 +2533,7 @@ export class Battle {
 
                     for (const turn of SLIDE.turns) {
                         for (const side of [turn, -turn]) {
-                            const each = along(side, Math.min(reach, SLIDE.leg));
+                            const each = along(side, Math.min(far, SLIDE.leg));
 
                             if (each && each.on >= SLIDE.least && each.on > (best?.on ?? 0) + 0.01) {
                                 best = each;
@@ -2539,9 +2553,15 @@ export class Battle {
 
                 const goal = [Math.floor(end[0]), Math.floor(end[1])];
 
+                // (A leg of it, by how far it goes: as far as a leg's looked along and short of
+                // what was asked. The rest is looked along from its end: #step. Told by the way
+                // alone, which every copy has, and not by what was made here)
+                const went = hypot(end[0] - actor.x, end[1] - actor.y);
+                const ahead = went >= AHEAD_LEG - 1 && reach - went > 1 ? { ahead: { facing: order.facing, left: reach - went } } : {};
+
                 // (Held input's: the player's steering, `held`, which an Action Bar blow out of
                 // reach doesn't take over: host.js #ability)
-                actor.order = { type: "move", to: goal, run: Boolean(order.run), held: true };
+                actor.order = { type: "move", to: goal, run: Boolean(order.run), held: true, ...ahead };
                 Object.assign(actor, { path: way, pathGoal: goal, lastPathAt: this.time, blockedSince: null, offPath: false });
                 break;
             }
@@ -4228,6 +4248,15 @@ export class Battle {
             if (left > MOVE_ON && (order.legs ?? 0) < MOVE_LEGS) {
                 order.legs = (order.legs ?? 0) + 1;
                 this.#pathTo(actor, order.to);
+
+                if (actor.path.length) {
+                    return;
+                }
+            }
+
+            // (A leg of an "ahead" order's way walked: on along the rest of it, AHEAD_LEG)
+            if (order.ahead) {
+                this.command(actor.id, { type: "ahead", facing: order.ahead.facing, reach: order.ahead.left, run: order.run });
 
                 if (actor.path.length) {
                     return;

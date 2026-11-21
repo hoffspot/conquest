@@ -1352,6 +1352,13 @@ export class Legends {
         return this.threads[id];
     }
 
+    // A thread by its id: one begun here, and nothing every object has by that name (an id
+    // comes from a player's game: "__proto__" is no thread, and what's set on what it names
+    // is set on everything)
+    #threadOf(id) {
+        return typeof id === "string" && Object.hasOwn(this.threads, id) ? this.threads[id] : undefined;
+    }
+
     /**
      * A thread given up by a player (`who`: their id): not theirs to follow (its steps done by
      * others, its card not dealt them, its rewards not theirs) till they take it back up
@@ -1359,7 +1366,7 @@ export class Legends {
      * done, not given up by them already).
      */
     giveUp(id, who) {
-        const thread = this.threads[id];
+        const thread = this.#threadOf(id);
 
         if (!thread || thread.done || (thread.left ?? []).includes(who)) {
             return false;
@@ -1373,7 +1380,7 @@ export class Legends {
 
     /** A thread a player gave up taken back up by them: theirs to follow again, at the step it's at. Whether it was now. */
     takeBack(id, who) {
-        const thread = this.threads[id];
+        const thread = this.#threadOf(id);
 
         if (!thread || thread.done || !(thread.left ?? []).includes(who)) {
             return false;
@@ -1395,7 +1402,7 @@ export class Legends {
      * while the thread's at that step. Whether it was now.
      */
     fellTo(id, who) {
-        const thread = this.threads[id];
+        const thread = this.#threadOf(id);
 
         if (!thread || thread.done || !thread.place || (thread.fell ?? []).includes(who) || (thread.left ?? []).includes(who)) {
             return false;
@@ -1408,7 +1415,7 @@ export class Legends {
 
     /** The step a thread's at (THREADS), or null (not begun, or done). */
     stepOf(id) {
-        const thread = this.threads[id];
+        const thread = this.#threadOf(id);
 
         return thread && !thread.done ? (THREADS[id]?.steps[thread.step] ?? null) : null;
     }
@@ -1419,7 +1426,7 @@ export class Legends {
      * What was done: { thread, step (its index), def (THREADS'), next (the next's def, or null) }.
      */
     advance(id, { ids = [], by = [], at = null } = {}) {
-        const thread = this.threads[id];
+        const thread = this.#threadOf(id);
         const def = this.stepOf(id);
 
         if (!def) {
