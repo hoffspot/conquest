@@ -23,6 +23,7 @@
     "load": "node scripts/load.js",
     "soak": "node scripts/soak.js",
     "soak:server": "node scripts/server-soak.js",
+    "soak:view": "node scripts/view-soak.js",
     "snapshot-fixture": "node scripts/snapshot-fixture.js",
     "vendor:three": "node scripts/vendor-three.js",
     "vendor:meshopt": "node scripts/vendor-meshopt.js",

@@ -12,15 +12,24 @@
 // many of them load a world server without their own play getting in the way of what's measured;
 // it can't tell whether a copy would have kept to the host's, which is what the full ones are for.
 //
+// And one that plays from its views alone (ViewBot; the scaling plan's 3-30), in a replicated
+// world: it holds a mirror (core/mirror.js) of what its frames tell and nothing else, steers
+// from what they say of its own hero, and goes for a foe the mirror shows near. It counts what
+// came (frames, bytes, how evenly), whom it knew of, and anything it was told that couldn't be
+// so (the mirror's faults): what a world's views cost each player, and whether they held.
+//
 // Pure JavaScript, the same in Node and the browser: whoever plays it says how much time has gone
 // by (tick).
 
-import { STEP_MS } from "./battle.js";
+import { Battle, STEP_MS } from "./battle.js";
 import { atan2 } from "./exact.js";
 import { Host } from "./host.js";
+import { Mirror } from "./mirror.js";
 import { NET_VERSION } from "./netplay.js";
 import { buildWorld } from "./overworld.js";
 import { placeOf } from "./selfstate.js";
+import { VIEW_MODE } from "./viewfeed.js";
+import { SEEN } from "./viewing.js";
 import { decode, encode } from "./wire.js";
 
 export const BOT = Object.freeze({
@@ -436,5 +445,332 @@ export class ThinBot {
     /** How it's gone, as plain data (`thin`: true; no `resyncs` or `desyncs`, having no copy to go astray). */
     report() {
         return { me: this.me, thin: true, played: this.time, step: this.step, moves: this.moves, held: this.held, fights: this.fights, heard: this.heard, sent: this.sent, states: this.states, rtt: this.rtt, kicked: this.kicked, refused: this.refused };
+    }
+}
+
+/** How many of a view bot's latest frames' comings are kept, to say how evenly they came. */
+export const VIEWED = Object.freeze({ kept: 1200 });
+
+export class ViewBot {
+    /**
+     * @param {object} options
+     * @param {function} options.send - Sends `text` to the world (its link's).
+     * @param {number} [options.seed] - Where it sends itself, and which way its fights face.
+     * @param {boolean} [options.fights] - Whether it starts fights (if it may).
+     * @param {object} [options.timing] - As BOT.
+     * @param {function} [options.clock] - The time (ms), to time its frames' comings and its
+     *     words to the world and back by; none, they're timed to its ticks.
+     * @param {function} [options.build] - Makes the world its mirror's battle stands in, from
+     *     { seed, race } (core/overworld.js buildWorld: never stepped, so many bots may share one).
+     */
+    constructor({ send, seed = 1, fights = false, timing = BOT, clock = null, build = buildWorld }) {
+        this.send = send;
+        this.clock = clock;
+        this.startsFights = fights;
+        this.timing = timing;
+        this.build = build;
+        this.random = seed >>> 0 || 1;
+
+        /** Its player's id in the world and its mirror, once it's welcomed; where it came in ([x, y]), and where its hero is ({ x, y, map }), as its frames say. */
+        this.me = null;
+        this.mirror = null;
+        this.home = null;
+        this.at = null;
+        this.dead = false;
+
+        /** How long it's played (ms); the step of the first frame it took and of the last. */
+        this.time = 0;
+        this.first = -1;
+        this.step = -1;
+
+        /** What it's done: sent itself somewhere, gone for foes its mirror showed, started fights. */
+        this.moves = 0;
+        this.engaged = 0;
+        this.fights = 0;
+        this.foe = null;
+
+        /** The frames it's taken and their bytes; those that weren't frames; what else it's heard, by kind ({ messages, chars }); how many characters it's sent. */
+        this.frames = 0;
+        this.bytes = 0;
+        this.unread = 0;
+        this.heard = {};
+        this.sent = 0;
+
+        /** Whom its mirror knew of, added up frame by frame, and the most at once; the events it was told. */
+        this.knownSum = 0;
+        this.most = 0;
+        this.events = 0;
+
+        /** How often its view was told again; what its commands came to, by whether they were done; how long its last word took (ms); if it was sent out or refused. */
+        this.again = 0;
+        this.results = { done: 0, refused: 0 };
+        this.rtt = null;
+        this.kicked = null;
+        this.refused = null;
+
+        this.seq = 0;
+        this.asking = false;
+        this.nextMove = 0;
+        this.nextPing = 0;
+        this.nextFight = timing.firstFight;
+        this.#said = -Infinity;
+    }
+
+    // The step it last told the world it had seen; when its last frame came, and the times
+    // between the latest (ms)
+    #said;
+
+    #cameAt = null;
+
+    #gaps = [];
+
+    #now() {
+        return this.clock?.() ?? this.time;
+    }
+
+    #say(message) {
+        const text = encode(message);
+
+        this.sent += text.length;
+        this.send(text);
+    }
+
+    // A command of its own, and nothing more asked till the world says what came of it
+    #command(command) {
+        this.asking = true;
+        this.#say({ kind: "command", seq: ++this.seq, command });
+    }
+
+    /** Ask to come into the world, to be sent views of it and no copy (as core/viewing.js does). */
+    hello(character, { hero } = {}) {
+        this.#say({ kind: "hello", version: NET_VERSION, mode: VIEW_MODE, character, ...(hero !== undefined ? { hero } : {}), speaks: ["replicated"] });
+    }
+
+    /** What the world said, in words: its welcome, its view told again, what came of a command, an answer to its asking, its being sent out. */
+    hear(text) {
+        const kind = kindOf(text);
+        const sum = (this.heard[kind] ??= { messages: 0, chars: 0 });
+
+        sum.messages++;
+        sum.chars += text.length;
+
+        if (kind === "welcome") {
+            const welcome = decode(text);
+
+            this.me = welcome.id;
+            this.mirror = new Mirror(new Battle(this.build({ seed: welcome.seed, race: welcome.race }), { seed: welcome.seed }), { stepMs: STEP_MS });
+            this.mirror.welcome(welcome);
+            this.#say({ kind: "ready" });
+        } else if (kind === "viewed") {
+            const again = decode(text);
+
+            this.mirror?.reset(again, (again.step ?? Math.max(0, this.step)) * STEP_MS);
+            this.again++;
+        } else if (kind === "result") {
+            const { seq, result } = decode(text);
+
+            if (seq === this.seq) {
+                this.asking = false;
+            }
+
+            this.results[result?.ok === false ? "refused" : "done"]++;
+        } else if (kind === "pong") {
+            const { t } = decode(text);
+
+            this.rtt = Number.isFinite(t) ? this.#now() - t : this.rtt;
+        } else if (kind === "kicked") {
+            this.kicked = { reason: decode(text).reason, step: this.step };
+        } else if (kind === "refused") {
+            this.refused = decode(text).reason;
+        }
+    }
+
+    /** A frame come from the world (bytes): taken by its mirror as it comes, and the world told which it was. */
+    frame(bytes) {
+        const frame = this.mirror?.apply(bytes);
+
+        if (!frame) {
+            this.unread++;
+
+            return;
+        }
+
+        const now = this.#now();
+
+        if (this.#cameAt !== null) {
+            this.#gaps.push(now - this.#cameAt);
+
+            if (this.#gaps.length > VIEWED.kept) {
+                this.#gaps.shift();
+            }
+        }
+
+        this.#cameAt = now;
+        this.frames++;
+        this.bytes += bytes.length;
+        this.first = this.first < 0 ? frame.step : this.first;
+        this.step = frame.step;
+        this.events += this.mirror.events.length;
+
+        const known = this.mirror.size;
+
+        this.knownSum += known;
+        this.most = Math.max(this.most, known);
+
+        // (What it says of its own hero, as last told)
+        const hero = this.mirror.self;
+
+        if (hero) {
+            this.at = placeOf(hero);
+            this.dead = hero.dead === true;
+
+            if (!this.home && this.at.map === "town") {
+                this.home = [this.at.x, this.at.y];
+            }
+        }
+
+        if (frame.step - this.#said >= SEEN.every) {
+            this.#said = frame.step;
+            this.#say({ kind: "seen", step: frame.step });
+        }
+    }
+
+    /** Time gone by (`ms`): it asks how long a word takes, if that's due, and does what it does next. */
+    tick(ms) {
+        if (!this.me || this.kicked) {
+            return;
+        }
+
+        const { timing } = this;
+
+        this.time += ms;
+
+        if (this.time >= this.nextPing) {
+            this.nextPing = this.time + THIN.ping;
+            this.#say({ kind: "ping", t: this.#now(), ...(this.rtt === null ? {} : { rtt: Math.round(this.rtt) }) });
+        }
+
+        // (Not till it's been told where its hero is; nor while they're down, or indoors; nor
+        // till the world's said what came of what it last asked)
+        if (!this.home || this.dead || this.at.map !== "town" || this.asking) {
+            return;
+        }
+
+        // (The foe it last went for, while its mirror still shows them standing near)
+        const foe = this.foe === null ? null : this.mirror.battle.actor(this.foe);
+        const fighting = Boolean(foe && !foe.dead && foe.map === this.at.map && this.#far(foe) <= timing.foeNear * timing.foeNear);
+
+        if (!fighting) {
+            const near = this.#foe();
+
+            this.foe = near?.id ?? null;
+
+            if (near) {
+                this.#command({ type: "engage", target: near.id });
+                this.engaged++;
+
+                return;
+            }
+        }
+
+        if (this.startsFights && this.time >= this.nextFight) {
+            this.nextFight = this.time + timing.fightEvery;
+            this.#command({ type: "fieldBattle", size: timing.fightSize, facing: this.#roll() * Math.PI });
+            this.fights++;
+
+            return;
+        }
+
+        if (this.time >= this.nextMove && !fighting) {
+            this.nextMove = this.time + timing.every;
+            this.#command({ type: "move", to: [Math.round(this.home[0] + this.#roll() * timing.roam), Math.round(this.home[1] + this.#roll() * timing.roam)] });
+            this.moves++;
+        }
+    }
+
+    // How far someone is from its hero, squared (m)
+    #far(actor) {
+        const [dx, dy] = [actor.x - this.at.x, actor.y - this.at.y];
+
+        return dx * dx + dy * dy;
+    }
+
+    // The nearest foe its mirror shows within BOT.foeNear, alive and on its hero's map (not
+    // the townsfolk, nor anyone who'd not fight it), or null
+    #foe() {
+        const { battle } = this.mirror;
+        const me = battle.actor(this.me);
+        let best = null;
+        let nearest = this.timing.foeNear * this.timing.foeNear;
+
+        if (!me) {
+            return null;
+        }
+
+        for (const entry of this.mirror.known) {
+            const actor = entry?.actor;
+
+            if (!actor || actor === me || actor.dead || actor.neutral || actor.map !== this.at.map || !Number.isFinite(actor.x)) {
+                continue;
+            }
+
+            const far = this.#far(actor);
+
+            if (far < nearest && battle.hostile(me, actor)) {
+                best = actor;
+                nearest = far;
+            }
+        }
+
+        return best;
+    }
+
+    // A number from -1 to 1, the next of its own
+    #roll() {
+        this.random = (Math.imul(this.random, 1103515245) + 12345) >>> 0;
+
+        return (this.random / 2 ** 32 - 0.5) * 2;
+    }
+
+    /**
+     * How it's gone, as plain data (`viewer`: true): the frames it took and their bytes, the
+     * steps they spanned, whom its mirror knew of (on the mean, at the most, and now), whether
+     * its own hero's among them, how its frames came (the time between them 95 and 99 in a
+     * hundred came within, and the longest, of the last VIEWED.kept), the mirror's faults (how
+     * many, and the first few), and what it did.
+     */
+    report() {
+        const sorted = [...this.#gaps].sort((a, b) => a - b);
+        const at = (share) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * share))] : 0);
+        const faults = this.mirror?.faults ?? [];
+
+        return {
+            me: this.me,
+            viewer: true,
+            played: this.time,
+            step: this.step,
+            frames: this.frames,
+            bytes: this.bytes,
+            unread: this.unread,
+            steps: this.first < 0 ? 0 : this.step - this.first + 1,
+            known: this.frames ? this.knownSum / this.frames : 0,
+            most: this.most,
+            now: this.mirror?.size ?? 0,
+            self: Boolean(this.mirror?.battle.actor(this.me)),
+            events: this.events,
+            arrivals: { frames: sorted.length, p95: at(0.95), p99: at(0.99), worst: sorted.at(-1) ?? 0 },
+            faults: faults.length,
+            lines: faults.slice(0, 5),
+            again: this.again,
+            moves: this.moves,
+            engaged: this.engaged,
+            fights: this.fights,
+            results: this.results,
+            heard: this.heard,
+            sent: this.sent,
+            rtt: this.rtt,
+            kicked: this.kicked,
+            refused: this.refused,
+        };
     }
 }
