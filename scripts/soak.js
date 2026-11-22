@@ -14,6 +14,13 @@
 //     npm run soak -- --minutes 10 --browsers none      # a Node joiner alone, 10 minutes
 //     npm run soak -- --browsers chromium --minutes 5   # Chromium only, 5 minutes
 //     npm run soak -- --seed 7 --json                   # another world; the report as JSON
+//     npm run soak -- --netcode replicated              # the world played by views, not lockstep
+//
+// Either way every engine's ground, made from the world's seed, is held to the host's
+// (core/overworld.js groundSum). Played by views (the scaling plan's 3-36: what the soak is once
+// lockstep's gone), the host is opened as a browser's is with Classic off (app/together.js), each
+// player a bot sent frames and no copy (core/bot.js ViewBot), with no one doing nothing; and it's
+// judged by frames played, a mirror that read all it was sent, and each hero in what it's shown.
 //
 // Writes the report to test-results/soak/report.json. Exits 1 if any copy was sent the world
 // again too often, or saw anyone marked away or sent out at another step than the host (or not at
@@ -26,9 +33,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { joinWorld, openWorld } from "../client/js/app/together.js";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { Bot } from "../client/js/core/bot.js";
+import { Joining } from "../client/js/core/netplay.js";
+import { Bot, ViewBot } from "../client/js/core/bot.js";
 import { AFK, Host } from "../client/js/core/host.js";
-import { buildWorld } from "../client/js/core/overworld.js";
+import { buildWorld, groundSum } from "../client/js/core/overworld.js";
 import { StepTimes, WorldRunner } from "../client/js/core/runner.js";
 import { Ahead } from "../server/ahead.js";
 import { attachRelay } from "../server/relay.js";
@@ -40,6 +48,9 @@ export const SOAK = Object.freeze({
     peoples: ["human", "elf", "orc", "cat"],
     // The world sent again per player-hour, at most (less than this, in every engine)
     rate: 1,
+    // A world played by views (--netcode replicated): the least of its steps a player's sent a
+    // frame for and plays, as scripts/view-soak.js VIEW_SOAK has it
+    frames: 0.5,
     // How often (ms) the host's world is moved on, and each player's; and how often how it's
     // going is told
     tick: 10,
@@ -99,11 +110,22 @@ export function characterOf(name, race) {
 
 // --- A player in Node: this script, in a process of its own (--join) ---
 
-async function playInNode({ address, code, name, race, seed, idle }) {
+async function playInNode({ address, code, name, race, seed, idle, world }) {
     let dropped = false;
-    const joined = await joinWorld({ code, character: characterOf(name, race), address, onClosed: () => process.exit(0), onDrop: () => (dropped = true) });
-    const bot = new Bot(joined.joining, { idle, seed });
-    const kicked = joined.joining.onKicked;
+    // (A world played by views: a bot that's sent frames and holds no copy, core/bot.js ViewBot,
+    // in the link's own place)
+    const joined = await joinWorld({
+        code,
+        character: characterOf(name, race),
+        address,
+        make: ({ netcode, send }) => (netcode === "replicated" ? new ViewBot({ send, seed, fights: true, clock: () => performance.now() }) : new Joining({ send, clock: () => performance.now() })),
+        onClosed: () => process.exit(0),
+        onDrop: () => (dropped = true),
+    });
+    const bot = joined.netcode === "replicated" ? joined.joining : new Bot(joined.joining, { idle, seed });
+    const kicked = joined.joining.onKicked ?? (() => {});
+    // (The ground this engine makes of the world's seed: held to the host's)
+    const ground = groundSum(buildWorld({ seed: world }));
     let last = performance.now();
 
     joined.joining.onKicked = (reason) => {
@@ -120,7 +142,7 @@ async function playInNode({ address, code, name, race, seed, idle }) {
 
     process.on("message", (message) => {
         if (message === "report") {
-            process.send({ ...bot.report(), dropped });
+            process.send({ ...bot.report(), dropped, ground, netcode: joined.netcode });
         }
     });
     process.send("ready");
@@ -130,7 +152,7 @@ async function playInNode({ address, code, name, race, seed, idle }) {
 
 // The world on Node, opened to others through the relay at `address`: { host, runner, opened,
 // saw (what the host saw: { type, id, away, step }), stop() }
-async function hostWorld({ seed, address }) {
+async function hostWorld({ seed, address, netcode = "lockstep" }) {
     installWorkers();
 
     const world = buildWorld({ seed });
@@ -142,7 +164,7 @@ async function hostWorld({ seed, address }) {
     const runner = new WorldRunner(host, { clock });
     const ahead = new Ahead(world, { host, clock });
     const game = { host, hosting: null, chatHeard() {} };
-    const opened = await openWorld(game, { address });
+    const opened = await openWorld(game, { address, netcode });
     const saw = [];
     const slow = [];
     let last = clock();
@@ -183,6 +205,7 @@ async function hostWorld({ seed, address }) {
         runner,
         ahead,
         opened,
+        ground: groundSum(world),
         saw,
         slow,
         stop() {
@@ -194,8 +217,8 @@ async function hostWorld({ seed, address }) {
 }
 
 // A player in Node, in a process of its own: { name, engine: "node", report(), stop() }
-async function nodePlayer({ address, code, name, race, seed, idle }) {
-    const child = fork(fileURLToPath(import.meta.url), ["--join", JSON.stringify({ address, code, name, race, seed, idle })], { stdio: ["ignore", "inherit", "inherit", "ipc"] });
+async function nodePlayer({ address, code, name, race, seed, idle, world }) {
+    const child = fork(fileURLToPath(import.meta.url), ["--join", JSON.stringify({ address, code, name, race, seed, idle, world })], { stdio: ["ignore", "inherit", "inherit", "ipc"] });
     let answer = null;
 
     child.on("message", (message) => {
@@ -238,7 +261,7 @@ async function nodePlayer({ address, code, name, race, seed, idle }) {
 
 // A player in a browser (`engine`: chromium, webkit or firefox), on a page of the game's server
 // with nothing on it but the player (PAGE): { name, engine, report(), stop() }
-async function browserPlayer({ base, code, name, race, seed, engine }) {
+async function browserPlayer({ base, code, name, race, seed, engine, world }) {
     const playwright = await import("@playwright/test");
     const executablePath = engine === "chromium" ? process.env.CHROMIUM_PATH : undefined;
     const browser = await playwright[engine].launch(executablePath ? { executablePath } : {});
@@ -248,10 +271,15 @@ async function browserPlayer({ base, code, name, race, seed, engine }) {
     page.on("pageerror", (error) => errors.push(String(error)));
     await page.goto(`${base}/soak`);
     await page.evaluate(
-        async ({ code, character, seed, tick }) => {
-            const [{ joinWorld }, { Bot }] = await Promise.all([import("/js/app/together.js"), import("/js/core/bot.js")]);
-            const joined = await joinWorld({ code, character });
-            const bot = new Bot(joined.joining, { seed });
+        async ({ code, character, seed, tick, world }) => {
+            const [{ joinWorld }, { Bot, ViewBot }, { Joining }, { buildWorld, groundSum }] = await Promise.all([import("/js/app/together.js"), import("/js/core/bot.js"), import("/js/core/netplay.js"), import("/js/core/overworld.js")]);
+            const joined = await joinWorld({
+                code,
+                character,
+                make: ({ netcode, send }) => (netcode === "replicated" ? new ViewBot({ send, seed, fights: true, clock: () => performance.now() }) : new Joining({ send, clock: () => performance.now() })),
+            });
+            const bot = joined.netcode === "replicated" ? joined.joining : new Bot(joined.joining, { seed });
+            const ground = groundSum(buildWorld({ seed: world }));
             let last = performance.now();
 
             setInterval(() => {
@@ -261,9 +289,9 @@ async function browserPlayer({ base, code, name, race, seed, engine }) {
                 last = now;
             }, tick);
 
-            globalThis.soak = { bot, joined };
+            globalThis.soak = { bot, joined, ground };
         },
-        { code, character: characterOf(name, race), seed, tick: SOAK.tick },
+        { code, character: characterOf(name, race), seed, tick: SOAK.tick, world },
     );
 
     let last = null;
@@ -277,7 +305,7 @@ async function browserPlayer({ base, code, name, race, seed, engine }) {
         errors,
         async report() {
             try {
-                last = (await page.evaluate(() => globalThis.soak?.bot.report() ?? null)) ?? last;
+                last = (await page.evaluate(() => (globalThis.soak ? { ...globalThis.soak.bot.report(), ground: globalThis.soak.ground, netcode: globalThis.soak.joined.netcode } : null))) ?? last;
             } catch (error) {
                 errors.push(String(error));
             }
@@ -293,14 +321,17 @@ async function browserPlayer({ base, code, name, race, seed, engine }) {
  * toJSON), players, saw }, players: [{ name, engine, race, idle, ...core/bot.js report, hours,
  * rate, errors }], failures: [why] }).
  */
-export async function soak({ seed = 2, minutes = 32, nodes = 1, browsers = ["chromium", "webkit", "firefox"], idle = true, log = console.log } = {}) {
+export async function soak({ seed = 2, minutes = 32, nodes = 1, browsers = ["chromium", "webkit", "firefox"], idle = true, netcode = "lockstep", log = console.log } = {}) {
+    // (The one who does nothing is lockstep's: a view bot always plays)
+    idle = idle && netcode === "lockstep";
+
     const server = soakServer();
 
     await new Promise((resolve) => server.httpServer.listen(0, "127.0.0.1", resolve));
 
     const base = `http://127.0.0.1:${server.httpServer.address().port}`;
     const address = `${base.replace("http", "ws")}/relay`;
-    const world = await hostWorld({ seed, address });
+    const world = await hostWorld({ seed, address, netcode });
     const { code } = world.opened;
     const players = [];
     const failures = [];
@@ -314,7 +345,7 @@ export async function soak({ seed = 2, minutes = 32, nodes = 1, browsers = ["chr
     try {
         // (The one who does nothing first: away, then sent out, soonest)
         if (idle) {
-            players.push(await nodePlayer({ address, code, name: "Idle", race: SOAK.peoples[0], seed: 99, idle: true }));
+            players.push(await nodePlayer({ address, code, name: "Idle", race: SOAK.peoples[0], seed: 99, idle: true, world: seed }));
         }
 
         const joining = [
@@ -325,7 +356,7 @@ export async function soak({ seed = 2, minutes = 32, nodes = 1, browsers = ["chr
         for (const [k, { name, engine }] of joining.entries()) {
             const race = SOAK.peoples[k % SOAK.peoples.length];
 
-            players.push(engine === "node" ? await nodePlayer({ address, code, name, race, seed: k + 1, idle: false }) : await browserPlayer({ base, code, name, race, seed: k + 1, engine }));
+            players.push(engine === "node" ? await nodePlayer({ address, code, name, race, seed: k + 1, idle: false, world: seed }) : await browserPlayer({ base, code, name, race, seed: k + 1, engine, world: seed }));
             log(`${name} (${engine}${players.at(-1).version ? ` ${players.at(-1).version}` : ""}) joining as ${/^[aeiou]/.test(race) ? "an" : "a"} ${race}`);
         }
 
@@ -367,7 +398,7 @@ export async function soak({ seed = 2, minutes = 32, nodes = 1, browsers = ["chr
     }
 
     const reports = await Promise.all(players.map((player) => player.report()));
-    const host = { steps: world.runner.times?.toJSON() ?? null, slow: world.slow, players: [...world.host.players.keys()], saw: world.saw, actors: world.host.battle.actors.length };
+    const host = { steps: world.runner.times?.toJSON() ?? null, slow: world.slow, players: [...world.host.players.keys()], saw: world.saw, actors: world.host.battle.actors.length, ground: world.ground, netcode };
 
     for (const player of players) {
         await player.stop();
@@ -389,16 +420,43 @@ export async function soak({ seed = 2, minutes = 32, nodes = 1, browsers = ["chr
 
     failures.push(...judge({ rows, host }));
 
-    return { seed, minutes, code, host, players: rows, failures };
+    return { seed, minutes, netcode, code, host, players: rows, failures };
 }
 
-// What went wrong (each a line), if anything
-function judge({ rows, host }) {
+/**
+ * What went wrong (each a line), if anything. Every engine's ground is held to the host's
+ * (core/overworld.js groundSum: the same seed, the same land). A world in lockstep: each copy
+ * sent the world again no more than SOAK.rate a player-hour, and the one doing nothing seen
+ * marked away and sent out at the host's step. One played by views (`host.netcode` replicated):
+ * each sent it as the world says, its hero in what it's shown, a frame for SOAK.frames of the
+ * steps at least, and nothing its mirror couldn't read.
+ */
+export function judge({ rows, host }) {
     const failures = [];
 
     for (const row of rows) {
+        if (row.steps && Number.isInteger(host.ground) && row.ground !== host.ground) {
+            failures.push(`${row.name} made other ground of the world's seed than the host (${row.ground}, the host ${host.ground})`);
+        }
+
         if (!row.steps) {
             failures.push(`${row.name} never played the world`);
+        } else if (host.netcode === "replicated") {
+            if (row.netcode !== "replicated" || !row.viewer) {
+                failures.push(`${row.name} wasn't sent views`);
+            } else {
+                if (row.frames < row.steps * SOAK.frames) {
+                    failures.push(`${row.name} played ${row.frames} frames of ${row.steps} steps: fewer than ${SOAK.frames * 100}%`);
+                }
+
+                if (row.faults) {
+                    failures.push(`${row.name}'s mirror couldn't read ${row.faults} of what it was sent${row.lines?.length ? `: ${row.lines[0]}` : ""}`);
+                }
+
+                if (!row.self) {
+                    failures.push(`${row.name}'s hero isn't in what it's shown`);
+                }
+            }
         } else if (!row.idle && row.rate >= SOAK.rate) {
             failures.push(`${row.name} was sent the world again ${row.resyncs} times in ${(row.hours * 60).toFixed(0)} minutes (${row.desyncs} found astray, ${row.skips ?? 0} too far behind): ${row.rate.toFixed(1)} a player-hour`);
         }
@@ -485,6 +543,7 @@ async function main() {
             nodes: { type: "string", default: "1" },
             browsers: { type: "string", default: "chromium,webkit,firefox" },
             "no-idle": { type: "boolean", default: false },
+            netcode: { type: "string", default: "lockstep" },
             json: { type: "boolean", default: false },
         },
     });
@@ -496,7 +555,7 @@ async function main() {
     }
 
     const browsers = values.browsers === "none" ? [] : values.browsers.split(",").filter(Boolean);
-    const report = await soak({ seed: Number(values.seed), minutes: Number(values.minutes), nodes: Number(values.nodes), browsers, idle: !values["no-idle"], log: values.json ? () => {} : console.log });
+    const report = await soak({ seed: Number(values.seed), minutes: Number(values.minutes), nodes: Number(values.nodes), browsers, idle: !values["no-idle"], netcode: values.netcode === "replicated" ? "replicated" : "lockstep", log: values.json ? () => {} : console.log });
 
     await mkdir(path.dirname(REPORT), { recursive: true });
     await writeFile(REPORT, `${JSON.stringify(report, null, 2)}\n`);

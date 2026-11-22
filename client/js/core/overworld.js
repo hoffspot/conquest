@@ -2707,6 +2707,32 @@ export class Overworld {
     }
 }
 
+
+/**
+ * A sum of a world's ground: its height (to the millimetre) at `within` by `within` points a few
+ * metres apart, in each of `cells` by `cells` places spread across the whole of it, folded into
+ * one number. Two engines that make the same world from the same seed give the same sum; the
+ * cross-engine soak holds each to the host's (scripts/soak.js). Each place's ground is made to be
+ * asked, so it takes a few seconds.
+ */
+export function groundSum(world, { cells = 8, within = 4 } = {}) {
+    const land = world.maps.town;
+    const apart = WORLD_SIZE / cells;
+    let sum = 2166136261;
+
+    for (let j = 0; j < cells; j++) {
+        for (let i = 0; i < cells; i++) {
+            for (let v = 0; v < within; v++) {
+                for (let u = 0; u < within; u++) {
+                    sum = Math.imul(sum ^ Math.round(land.heightAt((i + 0.5) * apart + u * 3.25, (j + 0.5) * apart + v * 3.25) * 1000), 16777619) >>> 0;
+                }
+            }
+        }
+    }
+
+    return sum;
+}
+
 /**
  * The world for a seed: the plan, the town set into it where a player of `race` starts, and the
  * world outside round it, in the shape generateWorld's (world.js) is, but in the world's metres
