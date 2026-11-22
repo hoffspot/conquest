@@ -3972,7 +3972,8 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   - **Not yet:** how it looks on a phone, which is the owner's to say (P3).
 - **A player's own world played by views** (`app/together.js`; the scaling plan's `3-35`). A
   world hosted in a browser is **Classic** unless its host turns that off in the invite dialog
-  (the `hostClassic` setting, kept for the device): lockstep, each who joins playing a copy of
+  (kept with that world, on its record: `app/save.js` `worldClassic`; a game played with no world
+  kept has the device's, the `hostClassic` setting): lockstep, each who joins playing a copy of
   the whole world. Off, it's opened `replicated`: its `Hosting` runs the view feed beside its own
   copy (`views.mode` on, `session.netcode` replicated), and each who joins is sent frames of
   what's near their hero and no world. The host plays its own copy as ever.

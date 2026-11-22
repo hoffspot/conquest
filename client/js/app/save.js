@@ -144,7 +144,8 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     sendCrashes: true,
     // (Hosting a world for others, how it's played with them: Classic, each who joins playing a
     // copy of the whole world, as it always was; off, they're sent views of what's near their
-    // hero, the netcode being built: the invite dialog's switch, the scaling plan's 3-35)
+    // hero, the netcode being built: the invite dialog's switch, the scaling plan's 3-35. Each
+    // world kept on the device has its own (worldClassic): this is for one played with none kept)
     hostClassic: true,
     // (Auto target lock: whoever the player sets on stays their target as they run from it, till it
     // falls or is 40 m off; off, only an enemy's icon held locks on: app/game.js `autoLock`)
@@ -653,6 +654,22 @@ export function renameWorld(id, name) {
     const named = typeof name === "string" ? name.trim().slice(0, 60) : "";
 
     return Boolean(world && named) && write(`pellagos.${id}.about`, { ...world, name: named });
+}
+
+/**
+ * Whether a world kept on this device is Classic when it's opened to others (its record's
+ * `classic`: main.js's invite dialog, the scaling plan's 3-35): each who joins playing a copy of
+ * the whole world, as ever, unless it's been set otherwise. One that isn't kept is.
+ */
+export function worldClassic(id) {
+    return loadLocalWorld(id)?.classic !== false;
+}
+
+/** Set whether a world kept on this device is Classic when it's opened to others. Returns false if it isn't kept. */
+export function keepWorldClassic(id, on) {
+    const world = loadLocalWorld(id);
+
+    return Boolean(world) && write(`pellagos.${id}.about`, { ...world, classic: on !== false });
 }
 
 /**

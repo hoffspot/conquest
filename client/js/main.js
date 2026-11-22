@@ -41,7 +41,7 @@ import { telemetry } from "./app/telemetry.js";
 import { crashedIn, crashesFor, forgetCrashes, keepCrash, letGoCrash, REFUSED_FOR_GOOD } from "./app/crash-reports.js";
 import { startsUpdate, Updater } from "./app/updater.js";
 import { builtAt, codeVersion } from "./app/version.js";
-import { blocksOf, enterWorld, exportCharacter, forgetCharacter, forgetWorld, hearRefusal, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadLegends, loadMarkers, loadRoll, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
+import { blocksOf, enterWorld, exportCharacter, forgetCharacter, forgetWorld, hearRefusal, keepCharacter, keepVisitor, keepWorldClassic, loadCharacters, loadExplored, loadFollowers, loadLegends, loadMarkers, loadRoll, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, worldClassic, writeSave } from "./app/save.js";
 import { ACTIONS as PAD_ACTIONS, asTheyCome, BAR_SLOTS, bindingsOf, bindingWords, rebind, SYMBOL_NAMES, symbolOf, takenFrom } from "./app/gamepad.js";
 import { PadPlay } from "./app/padplay.js";
 import { actionFor, GROUPS, KEY_ACTIONS, keyMap, keyOf as keyPressed, keysAsCame, keysChanged, keysOf, keyWords, mouseOf, setKey } from "./app/keys.js";
@@ -2668,6 +2668,12 @@ async function invite({ via = undefined } = {}) {
     showInvite(opened.problem ?? "");
 }
 
+// Whether the world being played is Classic when it's opened to others: its own choice, kept with
+// it (save.js worldClassic); played with no world kept, the device's (the hostClassic setting)
+function hostsClassic() {
+    return state.stay?.world ? worldClassic(state.stay.world.id) : settings.hostClassic !== false;
+}
+
 // The player's own world (`game`'s) opened to others: through the broker of a world server
 // (`via`, chosen; else brokerFor's), else the old relay; `reclaim` ({ id, token, listed }), the
 // listing it had before its page was started again, taken back if the broker's kept it, else a new
@@ -2680,7 +2686,7 @@ async function openToOthers(game, { reclaim = null, via = undefined } = {}) {
     try {
         const world = await openWorld(game, {
             // (How it's played with those who join: Classic, unless its switch is off)
-            netcode: settings.hostClassic === false ? "replicated" : "lockstep",
+            netcode: hostsClassic() ? "lockstep" : "replicated",
             ...(broker ? { broker: { address: broker.address, listing: { ...(await listingOf(game)), listed: Boolean(reclaim?.listed) }, ...(reclaim ? { reclaim } : {}) } } : {}),
             // (Those who come in: who they are and what they carry theirs, what this world remembers
             // of them its own, kept with it by their own id: save.js visitorOf, keepVisitor)
@@ -2940,9 +2946,9 @@ function showInvite(problem = "") {
     $("#invitestatus").textContent = problem || (code ? `Your world's open to others${via ? ` through ${via.name}` : ""}. Give them this code:` : "Opening your world to others…");
     $("#invitelisting").hidden = !(code && via);
     // (How it's played is settled as it's opened: changed with others in, it's for the next time)
-    $("#inviteclassic").checked = settings.hostClassic !== false;
+    $("#inviteclassic").checked = hostsClassic();
     $("#inviteclassicnote").textContent =
-        code && others.length && (state.together.netcode === "replicated") === (settings.hostClassic !== false)
+        code && others.length && (state.together.netcode === "replicated") === hostsClassic()
             ? "Changed for the next time your world's opened to others: those here now play on as they are"
             : "Those who join each play a copy of your whole world, as ever. Off (experimental), they're sent only what's near their hero";
     $("#invitelistname").textContent = via ? `List it on ${via.name}` : "List it on the server";
@@ -5745,7 +5751,10 @@ $("#invitelist").addEventListener("change", (event) => {
 // (Classic or not: kept for this device; a world open with nobody else in it opened again as it
 // now is, under a new code; with others in, it's for the next time)
 $("#inviteclassic").addEventListener("change", async (event) => {
-    applySetting("hostClassic", event.target.checked);
+    // (The world's own, kept with it; played with no world kept, the device's)
+    if (!state.stay?.world || !keepWorldClassic(state.stay.world.id, event.target.checked)) {
+        applySetting("hostClassic", event.target.checked);
+    }
 
     const { together, game } = state;
 
