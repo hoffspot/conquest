@@ -609,6 +609,10 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      only such a game is sent: additive and opted into, so no `NET_VERSION` bump. The same
      goes for 3-27's `seen`, which only such a game says; a world that hears none holds
      nothing back for it.
+     And for 3-35's `how` and `played`: one joining a world hosted in a browser asks how it's
+     played before its hello, and only one that asks is answered; a host that doesn't know the
+     question says nothing, and is taken for lockstep after a wait (`HOW_WAIT`,
+     `client/js/app/together.js`; `test/together.test.js`).
    - `SNAPSHOT_VERSION` (`client/js/core/host.js`): what a snapshot of the world holds. A world
      kept by an older version is carried on, not lost (the world server keeps worlds): add a step
      from the version before to `SNAPSHOT_STEPS`, filling in what the new version keeps as it
