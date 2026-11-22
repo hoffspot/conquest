@@ -23,6 +23,7 @@ const SWITCHES = Object.freeze({
     "world netcode": "2027-11-12",
     "world experimental": "2027-11-12",
     "server replication": "2027-11-12",
+    "server newWorlds": "2027-11-22",
 });
 
 const CHEAP = Object.freeze({ N: 2 ** 10, r: 8, p: 1, length: 32, maxmem: 32 * 1024 * 1024 });

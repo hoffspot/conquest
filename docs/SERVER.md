@@ -867,6 +867,12 @@ being built for worlds of more than 8 (generated/multiplayer_scaling_plan.md). I
   replicated world sends each game its frames and nothing of lockstep's. What such a game can
   do yet is in docs/WAR.md (*A replicated world*): its start town, moving, fighting and trading.
 
+**Settings › New worlds** (`newWorlds`: lockstep or replicated) is how a world made here is played
+when it isn't said as it's made (the plan's `3-34`). It's lockstep. Set to replicated, new worlds
+are replicated only while Replicated views is on; otherwise they're lockstep still, so that no new
+world is one nobody can come into. A world that says how it's played is played so, worlds already
+made don't change, and a replicated world takes 8 at the most like any other.
+
 What off means: a world set to be played any other way than lockstep lets nobody in, its save
 kept exactly as it is, until the switch is turned on again or the world is set back to lockstep.
 Turned off while such a world's being played, everyone in it is sent out at once and told why,

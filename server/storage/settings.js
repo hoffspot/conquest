@@ -64,6 +64,13 @@ export const SETTINGS = Object.freeze({
         default: "off",
         about: "Replicated views, the netcode for worlds of more than 8 (generated/multiplayer_scaling_plan.md): the switch that turns them off for every world at once, with no update. Off, a world set to them lets nobody in, its save kept as it is",
     },
+    newWorlds: {
+        kind: "choice",
+        of: ["lockstep", "replicated"],
+        words: { lockstep: "Lockstep: a new world's played as worlds always were", replicated: "Replicated: a new world's played by views, while Replicated views is on" },
+        default: "lockstep",
+        about: "New worlds: how a world made here is played unless it's said as it's made (generated/multiplayer_scaling_plan.md 3-34). Replicated holds only while Replicated views above is on: otherwise a new world's lockstep, so nobody's kept out of it. Worlds already made don't change, and any world's own setting can still be changed",
+    },
     updateHour: { kind: "integer", min: 0, max: 23, default: 3, about: "The hour it installs new versions by itself from, this computer's time (3 is 3 in the morning)" },
 });
 
