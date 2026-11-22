@@ -11,7 +11,7 @@ import { characterFrom, Hosting, Joining, NETCODES } from "../core/netplay.js";
 import { Viewing } from "../core/viewing.js";
 import { BROKER_ERRORS, BrokerHost, BrokerJoin, frameOf, frameText, reachability } from "./peer.js";
 
-export { NET_KICKS, NET_REFUSALS, queuedWords, versionWords } from "../core/netplay.js";
+export { lockstepNotice, NET_KICKS, NET_REFUSALS, queuedWords, versionWords } from "../core/netplay.js";
 
 /** How long to wait for the relay to answer (ms). */
 const RELAY_TIMEOUT = 8000;

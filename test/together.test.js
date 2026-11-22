@@ -10,7 +10,7 @@ import http from "node:http";
 import { after, before, describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
-import { CHECK_EVERY, Joining } from "../client/js/core/netplay.js";
+import { CHECK_EVERY, Joining, LOCKSTEP_ENDS, lockstepNotice } from "../client/js/core/netplay.js";
 import { Viewing } from "../client/js/core/viewing.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { HOW_WAIT, joinWorld, LINK_TIMING, openWorld, playedHow } from "../client/js/app/together.js";
@@ -321,6 +321,16 @@ describe("a world hosted in a browser, played by views or Classic (the scaling p
         assert.ok(Math.abs(theirs.x - seen.x) < 1 && Math.abs(theirs.y - seen.y) < 1, "where the world has it");
         assert.ok(joined.joining.host.battle.actors.length < host.battle.actors.length, "and they hold only what's near");
         close();
+    });
+
+    it("says nothing of lockstep's going till its date's set, and then tells a host and a guest each their own (the plan's 3-36)", () => {
+        assert.equal(LOCKSTEP_ENDS, null, "no date: the owner's to set");
+        assert.equal(lockstepNotice("host"), null);
+        assert.equal(lockstepNotice("guest"), null);
+        assert.equal(lockstepNotice("host", "soon"), null, "nothing but a date");
+        assert.match(lockstepNotice("host", "2027-03-01"), /^Classic is being retired on 2027-03-01\./);
+        assert.match(lockstepNotice("guest", "2027-03-01"), /retired on 2027-03-01\. Nothing of yours is lost/);
+        unexpired("the notice of lockstep's going (LOCKSTEP_ENDS)", "2027-11-22");
     });
 
     it("is a switch that starts as it always was, and has its date", () => {
