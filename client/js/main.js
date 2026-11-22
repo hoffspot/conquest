@@ -2680,7 +2680,10 @@ function hostsClassic() {
 // code. Kept to open again should the game fall over or be reloaded (keepHosting). Resolves with
 // { world } (state.together's now), or { problem } (why it couldn't be, in words)
 async function openToOthers(game, { reclaim = null, via = undefined } = {}) {
-    const { openWorld, RELAY_ERRORS } = await import("./app/together.js");
+    const { openWorld, RELAY_ERRORS, lockstepNotice } = await import("./app/together.js");
+
+    // (What's said of lockstep's going, once it has a date: core/netplay.js LOCKSTEP_ENDS)
+    state.lockstepNotice = lockstepNotice;
     const broker = via === undefined ? await brokerFor() : via;
 
     try {
@@ -2950,7 +2953,7 @@ function showInvite(problem = "") {
     $("#inviteclassicnote").textContent =
         code && others.length && (state.together.netcode === "replicated") === hostsClassic()
             ? "Changed for the next time your world's opened to others: those here now play on as they are"
-            : "Those who join each play a copy of your whole world, as ever. Off (experimental), they're sent only what's near their hero";
+            : (state.lockstepNotice?.("host") ?? "Those who join each play a copy of your whole world, as ever. Off (experimental), they're sent only what's near their hero");
     $("#invitelistname").textContent = via ? `List it on ${via.name}` : "List it on the server";
     $("#invitecode").hidden = !code;
     $("#invitecode").textContent = code ?? "";
@@ -3067,7 +3070,10 @@ async function join(event) {
 // waiting?, done?, gone? }: the join dialog's line of words, or the way back in's stages,
 // REJOIN_STAGES friend), and once the world's come, played, kept to go back into (app/rejoin.js)
 async function joinByCode(code, save, tell, { broker = undefined } = {}) {
-    const { joinWorld, RELAY_ERRORS, NET_KICKS, NET_REFUSALS, versionWords } = await import("./app/together.js");
+    const { joinWorld, RELAY_ERRORS, NET_KICKS, NET_REFUSALS, versionWords, lockstepNotice } = await import("./app/together.js");
+
+    // (What's said of lockstep's going, once it has a date: core/netplay.js LOCKSTEP_ENDS)
+    state.lockstepNotice = lockstepNotice;
 
     tell.stage("reach");
 
@@ -3333,6 +3339,11 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
 
     // (Their character was in the world already, on another device or on a link gone dead without
     // a word: theirs here now, as it stood: core/netplay.js Hosting #takeOver)
+    // (A world played in lockstep, once its going has a date: told, the once, as they come in)
+    if (!game.viewed && state.lockstepNotice?.("guest")) {
+        state.hud.message(state.lockstepNotice("guest"), 8);
+    }
+
     if (welcome.took) {
         state.hud.message("Your other session in this world was closed: you carry on here.", 5);
     }
@@ -5148,7 +5159,10 @@ function bringFromFile(client, entered) {
  */
 async function playServerWorld(client, entered, { save = null, hero = undefined, character: given = null, tell = worldsTell() }) {
     const { SERVER_REFUSALS } = await serversOf();
-    const { NET_REFUSALS, NET_KICKS, queuedWords, versionWords } = await import("./app/together.js");
+    const { NET_REFUSALS, NET_KICKS, queuedWords, versionWords, lockstepNotice } = await import("./app/together.js");
+
+    // (What's said of lockstep's going, once it has a date: core/netplay.js LOCKSTEP_ENDS)
+    state.lockstepNotice = lockstepNotice;
     const kept = entered.card?.heroes === "kept";
     const character = given ?? (save ? characterOf(save) : {});
 

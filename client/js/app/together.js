@@ -11,7 +11,7 @@ import { characterFrom, Hosting, Joining, NETCODES } from "../core/netplay.js";
 import { Viewing } from "../core/viewing.js";
 import { BROKER_ERRORS, BrokerHost, BrokerJoin, frameOf, frameText, reachability } from "./peer.js";
 
-export { NET_KICKS, NET_REFUSALS, queuedWords, versionWords } from "../core/netplay.js";
+export { lockstepNotice, NET_KICKS, NET_REFUSALS, queuedWords, versionWords } from "../core/netplay.js";
 
 /** How long to wait for the relay to answer (ms). */
 const RELAY_TIMEOUT = 8000;
@@ -693,9 +693,10 @@ export async function openWorld(game, { address = null, broker = null, netcode =
  * world; onLink("lost") when its link's dropped and it's coming back on another, onLink("away")
  * when the host's has, onLink(null) once all's well again (the world asked for again); and
  * onDrop() if the link's lost for good. Tells onStage("find") once the server's reached, the world
- * still to be found by its code (app/rejoin.js REJOIN_STAGES).
+ * still to be found by its code (app/rejoin.js REJOIN_STAGES). `make`, if it's given, makes what
+ * plays the world in a game's place, from { netcode, send }.
  */
-export async function joinWorld({ code, character, address = null, broker = null, onStage = () => {}, onClosed = () => {}, onLink = () => {}, onDrop = () => {}, timing = LINK_TIMING }) {
+export async function joinWorld({ code, character, address = null, broker = null, make = null, onStage = () => {}, onClosed = () => {}, onLink = () => {}, onDrop = () => {}, timing = LINK_TIMING }) {
     const link = broker ? await BrokerJoin.open(broker.address, peerOptions(broker)) : await RelayLink.open(address ?? relayAddress(), timing);
 
     // (The server reached: the world to be found by its code, and linked to)
@@ -710,7 +711,9 @@ export async function joinWorld({ code, character, address = null, broker = null
 
     // (How it's played, asked of its host: by views, a link that holds no copy of the world)
     const netcode = await playedHow(link, timing.how ?? HOW_WAIT);
-    const joining = new (netcode === "replicated" ? Viewing : Joining)({ send: (text) => link.data(text), clock: () => performance.now() });
+    // (Or whatever's to play it in a game's place, `make`'s: a soak's bot, given how it's played
+    // and how to say things to the host; it hears as a link does: hello, hear, frame)
+    const joining = make ? make({ netcode, send: (text) => link.data(text) }) : new (netcode === "replicated" ? Viewing : Joining)({ send: (text) => link.data(text), clock: () => performance.now() });
 
     // (A view's frame: bytes on a channel, text through a relay)
     link.onData = (text) => {
@@ -728,7 +731,7 @@ export async function joinWorld({ code, character, address = null, broker = null
     link.onBack = () => onLink(null);
     link.onLost = () => onLink("lost");
     link.onFound = () => {
-        joining.resync();
+        joining.resync?.();
         onLink(null);
     };
     link.onDrop = onDrop;

@@ -17,6 +17,9 @@ on:
       browsers:
         description: The browsers to play in (comma-separated, or none)
         default: chromium,webkit,firefox
+      netcode:
+        description: How the world's played (lockstep, or replicated; by views, with no one doing nothing)
+        default: lockstep
   pull_request:
     paths:
       - scripts/soak.js
@@ -49,7 +52,15 @@ jobs:
         run: for try in 1 2 3; do timeout 600 npx playwright install --with-deps chromium webkit firefox && exit 0; done; exit 1
 
       - name: Soak
-        run: npm run soak -- --minutes ${{ github.event.inputs.minutes || '3' }} --seed ${{ github.event.inputs.seed || '2' }} --browsers ${{ github.event.inputs.browsers || 'chromium,webkit,firefox' }}
+        run: npm run soak -- --minutes ${{ github.event.inputs.minutes || '3' }} --seed ${{ github.event.inputs.seed || '2' }} --browsers ${{ github.event.inputs.browsers || 'chromium,webkit,firefox' }} --netcode ${{ github.event.inputs.netcode || 'lockstep' }}
+
+      # (On a pull request, played by views too: what the soak is once lockstep's gone, the
+      # scaling plan's 3-36. Its report kept beside the other's)
+      - name: Soak, played by views
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir -p test-results/soak-lockstep && cp test-results/soak/report.json test-results/soak-lockstep/report.json
+          npm run soak -- --minutes 3 --seed 2 --browsers chromium,webkit,firefox --netcode replicated
 
       - name: Keep the report
         if: always()

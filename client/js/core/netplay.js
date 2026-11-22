@@ -148,6 +148,28 @@ export const NET_VERSION = 235;
 export const NETCODES = Object.freeze(["lockstep", "replicated"]);
 
 /**
+ * When lockstep is to be taken out of the game (a date, as 2027-03-01), told to its players
+ * from now till then (lockstepNotice): the scaling plan's 3-36 and its gate (d), a notice in the
+ * game for two releases before it goes. Null: no date's set, and nothing's said. The owner's to
+ * set, once every world there is can be played by views.
+ */
+export const LOCKSTEP_ENDS = null;
+
+/**
+ * What a player's told of lockstep's going (`role`: "host", opening their own world Classic;
+ * "guest", come into a world played so), or null while no date's set (`ends`: LOCKSTEP_ENDS).
+ */
+export function lockstepNotice(role, ends = LOCKSTEP_ENDS) {
+    if (typeof ends !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(ends)) {
+        return null;
+    }
+
+    return role === "host"
+        ? `Classic is being retired on ${ends}. Until then your world can be opened either way; after it, those who join are sent what's near their hero.`
+        : `This world is played the Classic way, which is being retired on ${ends}. Nothing of yours is lost: its host need only open it the new way.`;
+}
+
+/**
  * The netcodes this game can play, as it says them (`speaks`) when it asks to join a world
  * (Joining.hello) or to enter one on a world server (app/servers.js): a world played another
  * way refuses it in words (NET_REFUSALS.netcode), where it would otherwise fail to understand.

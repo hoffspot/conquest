@@ -431,11 +431,10 @@ const PAD_REACH = Object.freeze({ talk: 5, foe: 10, thing: 5, portal: 8 });
 // What Cross does to each kind of thing in front of the player, said beside it
 const PAD_WORDS = Object.freeze({ talk: "Talk", trade: "Trade", attack: "Fight", drop: "Pick up", door: "Go through", portal: "The portal", strongroom: "Your stash", table: "The war table", lectern: "Read", sign: "Read", shrine: "Pray" });
 
-// A dungeon's level's camera, its tilt and distance the space's (world/view.js DUNGEON_VIEW):
-// the player's own tilt or zoom kept on them as a nudge while it's as open or as tight as where
-// they set it (its share of the way from a tunnel's camera to an open cavern's within `space`),
-// eased away, at `ease` a second, once it's not
-const DUNGEON_NUDGE = Object.freeze({ space: 0.2, ease: 1.5 });
+// A dungeon's level's camera set by the player (#dungeonPose), theirs till they put it back:
+// looking down more steeply than `over` degrees it's over the level's roof, the rock cut away
+// (world/view.js roofCut), and under it again only once it's lower than `under`
+const DUNGEON_OWN = Object.freeze({ over: 32, under: 26 });
 
 // Finding the way through (Game options, Camera: #openWay): walking where the walls or rock
 // crowd the camera in by more than `crowded` of its distance for `after` seconds, it's turned the
@@ -9605,13 +9604,23 @@ export class Game {
         }
     }
 
-    // A dungeon's level's camera (DUNGEON_NUDGE): its tilt and distance by how much room there is
-    // round the player, eased from one to the next as they go; the player's own tilt and zoom kept
-    // on them as a nudge, and let go of once they've gone somewhere tighter or more open. Returns
-    // the pitch to look from (anywhere else, the camera's own)
+    // A dungeon's level's camera: its tilt and distance by how much room there is round the
+    // player, eased from one to the next as they go; till the player sets it themselves (tilts,
+    // turns or zooms it by hand: DUNGEON_OWN). Then it's theirs, where they put it, wherever they
+    // go, over the cut roof or under it by how steeply they look down and not by the room; and
+    // the space's again once they put it back behind them (recentre: R, or a tap on the thumb
+    // stick). Returns the pitch to look from (anywhere else, the camera's own)
     #dungeonPose(dt) {
         const follow = this.cameraFollow;
-        const space = this.view.space(dt || Infinity);
+        const held = this.dungeonCamera?.own ?? null;
+
+        // (Theirs: over the roof looking steeply down, under it looking along, a little past
+        // either way before it changes)
+        if (held) {
+            held.over = follow.pitch >= (held.over ? DUNGEON_OWN.under : DUNGEON_OWN.over);
+        }
+
+        const space = this.view.space(dt || Infinity, held ? held.over : null);
 
         if (!space) {
             this.dungeonCamera = null;
@@ -9619,33 +9628,38 @@ export class Game {
             return follow.pitch;
         }
 
-        const pose = dungeonPose(space.share, space.over);
-        const camera = (this.dungeonCamera ??= { pitch: pose.pitch, distance: pose.distance, nudge: 0, zoom: 1, share: space.share, set: null });
+        const pose = dungeonPose(space.share, held ? space.roomy : space.over);
+        const camera = (this.dungeonCamera ??= { pitch: pose.pitch, distance: pose.distance, own: null, set: null });
         const at = dt ? 1 - Math.exp(-DUNGEON_VIEW.ease * dt) : 1;
 
+        // (The space's own, kept up with as they go, theirs or not: where it eases back from)
         camera.pitch += (pose.pitch - camera.pitch) * at;
         camera.distance += (pose.distance - camera.distance) * at;
 
-        // (Tilted by hand, or zoomed: the nudge, where they are)
-        if (follow.held || this.keyTurning || this.padTurning) {
-            camera.nudge = follow.pitch - camera.pitch;
-            camera.share = space.share;
+        if (follow.recentring !== null) {
+            // (Put back behind them: the space's again, its tilt with it, so the swing round
+            // is over once it's behind them and doesn't wait on a tilt of its own)
+            camera.own = null;
+            follow.recentreTilt = null;
+        } else {
+            // (Tilted or turned by hand, or zoomed: theirs from here)
+            if (follow.held || this.keyTurning || this.padTurning) {
+                camera.own ??= { distance: this.view.distance, over: space.over };
+            }
+
+            if (camera.set !== null && Math.abs(this.view.distance - camera.set) > 1e-3) {
+                camera.own ??= { distance: this.view.distance, over: space.over };
+                camera.own.distance = this.view.distance;
+            }
         }
 
-        if (camera.set !== null && Math.abs(this.view.distance - camera.set) > 1e-3) {
-            camera.zoom = this.view.distance / camera.distance;
-            camera.share = space.share;
+        if (camera.own) {
+            this.view.distance = Math.max(DISTANCE.least, Math.min(DISTANCE.most, camera.own.distance));
+        } else {
+            follow.pitch = Math.max(PITCH.least, Math.min(PITCH.most, camera.pitch));
+            this.view.distance = Math.max(DISTANCE.least, Math.min(DISTANCE.most, camera.distance));
         }
 
-        if (dt && Math.abs(space.share - camera.share) > DUNGEON_NUDGE.space) {
-            const fade = Math.exp(-DUNGEON_NUDGE.ease * dt);
-
-            camera.nudge *= fade;
-            camera.zoom = 1 + (camera.zoom - 1) * fade;
-        }
-
-        follow.pitch = Math.max(PITCH.least, Math.min(PITCH.most, camera.pitch + camera.nudge));
-        this.view.distance = Math.max(DISTANCE.least, Math.min(DISTANCE.most, camera.distance * camera.zoom));
         camera.set = this.view.distance;
 
         return follow.pitch;

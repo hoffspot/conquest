@@ -1393,10 +1393,11 @@ export class View {
     /**
      * In a dungeon's level, how much room there is round where the camera looks (DUNGEON_VIEW):
      * its openness's share of the way from a tunnel's camera to an open cavern's, eased as the
-     * player goes over `dt` seconds (at once, Infinity), and whether the camera's to be over its
-     * cut roof (`over`); null anywhere else.
+     * player goes over `dt` seconds (at once, Infinity), whether the camera's to be over its
+     * cut roof (`over`: by the room, unless it's said, true or false, for a camera the player's
+     * set themselves), and whether the room would have it so (`roomy`); null anywhere else.
      */
-    space(dt = Infinity) {
+    space(dt = Infinity, over = null) {
         const room = this.room;
 
         if (!room?.rock) {
@@ -1406,9 +1407,12 @@ export class View {
         const share = spaceShare(openness(room.rock, this.focus.x, this.focus.z));
 
         room.share = room.share === undefined || !Number.isFinite(dt) ? share : room.share + (share - room.share) * (1 - Math.exp(-DUNGEON_VIEW.settle * dt));
-        room.overRoof = room.overRoof ? room.share > DUNGEON_VIEW.underAt : room.share >= DUNGEON_VIEW.overAt;
+        // (By the room: `roomy`. The camera set by the player, `over` said: over the roof or
+        // under it as they have it, whatever the room: app/game.js DUNGEON_OWN)
+        room.roomy = room.roomy ? room.share > DUNGEON_VIEW.underAt : room.share >= DUNGEON_VIEW.overAt;
+        room.overRoof = over === null ? room.roomy : over;
 
-        return { share: room.share, over: room.overRoof };
+        return { share: room.share, over: room.overRoof, roomy: room.roomy };
     }
 
     /**
