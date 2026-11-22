@@ -8,7 +8,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { after, afterEach, describe, it } from "node:test";
-import { BrokerHost, BrokerJoin, brokerOf, Channel, HIGH, MOST, PACKED, packed, PEER_TIMING, PIECE, Pieces, piecesOf, reachability, reachabilityOf, unpacked } from "../client/js/app/peer.js";
+import { BrokerHost, BrokerJoin, brokerOf, BYTES_MOST, Channel, FRAME_MARK, frameOf, frameText, HIGH, MOST, PACKED, packed, PEER_TIMING, PIECE, Pieces, piecesOf, reachability, reachabilityOf, unpacked } from "../client/js/app/peer.js";
 import { joinWorld, openWorld } from "../client/js/app/together.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
@@ -221,6 +221,60 @@ describe("pieces", () => {
     };
     // (A world as it's sent: JSON, the same few words over and over)
     const WORLD = JSON.stringify({ kind: "welcome", snapshot: { actors: Array.from({ length: 2500 }, (_, k) => ({ id: `townsfolk:human-town-4/${k}`, x: k * 1.37, y: k * 2.11, hp: 100, team: "human", kind: "folk" })) } });
+
+    it("carry bytes in their turn among the text, as bytes; ones too long for a message of them as text; and a relay's as text (the plan's 3-35)", async () => {
+        const { one, two, wire, heard } = linked();
+        const bytes = { a: [], b: [] };
+
+        two.onBytes = (frame) => bytes.b.push(frame);
+        one.onText = (text) => heard.a.push(text);
+        await settled(() => one.packs && two.packs);
+
+        const frame = Uint8Array.from({ length: 300 }, (_, k) => (k * 7) % 256);
+        const long = Uint8Array.from({ length: BYTES_MOST + 500 }, (_, k) => (k * 13) % 256);
+        const before = wire.a.length;
+
+        // (Said at once, a world between them that's compressed on its way and so takes a moment:
+        // heard in the order said)
+        const order = [];
+
+        two.onText = (text) => order.push(text.length > 100 ? "world" : text);
+        two.onBytes = (got) => (order.push("bytes"), bytes.b.push(got));
+        one.send("first");
+        one.sendBytes(frame);
+        one.send(WORLD);
+        one.sendBytes(frame);
+        one.send("last");
+        await settled(() => order.length === 5);
+        assert.deepEqual(order, ["first", "bytes", "world", "bytes", "last"]);
+        assert.deepEqual([...bytes.b[0]], [...frame]);
+        assert.ok(wire.a.slice(before).some((piece) => piece instanceof Uint8Array && piece.byteLength === 300), "as one message of bytes");
+
+        // (The bytes sent are its own: what's done to the sender's after doesn't change them)
+        const mine = Uint8Array.from([1, 2, 3]);
+
+        one.sendBytes(mine);
+        mine[0] = 9;
+        await settled(() => bytes.b.length === 3);
+        assert.deepEqual([...bytes.b[2]], [1, 2, 3]);
+
+        // (Too long for a message of bytes: as text, in pieces; whoever hears it reads it back)
+        const texts = [];
+
+        two.onText = (text) => texts.push(text);
+        one.sendBytes(long);
+        await settled(() => texts.length === 1);
+        assert.equal(texts[0][0], FRAME_MARK);
+        assert.deepEqual([...frameOf(texts[0])], [...long]);
+        assert.equal(bytes.b.length, 3, "not as bytes");
+
+        // (As text: marked, and no word of the game's is taken for it)
+        assert.deepEqual([...frameOf(frameText(frame))], [...frame]);
+        assert.equal(frameOf('{"kind":"welcome"}'), null);
+        assert.equal(frameOf(""), null);
+        assert.equal(frameOf(null), null);
+        assert.ok(BYTES_MOST <= 16384);
+    });
 
     it("compress a long message on its way to a game that's said it reads them, a world a fifth of its size and less on the wire and whole as it's heard; a short one goes as it is; and all of it's heard in the order it was said", async () => {
         const { one, two, wire, heard } = linked();

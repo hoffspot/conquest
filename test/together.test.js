@@ -15,6 +15,8 @@ import { Viewing } from "../client/js/core/viewing.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { HOW_WAIT, joinWorld, LINK_TIMING, openWorld, playedHow } from "../client/js/app/together.js";
 import { attachRelay, RELAY_LIMITS, RELAY_PATH } from "../server/relay.js";
+import { SETTINGS_DEFAULTS } from "../client/js/app/save.js";
+import { unexpired } from "./helpers.js";
 import { mirrored } from "./replicated.js";
 
 // (Everything quick: pings every 50 ms, a link given up on after 200 ms unanswered)
@@ -319,6 +321,11 @@ describe("a world hosted in a browser, played by views or Classic (the scaling p
         assert.ok(Math.abs(theirs.x - seen.x) < 1 && Math.abs(theirs.y - seen.y) < 1, "where the world has it");
         assert.ok(joined.joining.host.battle.actors.length < host.battle.actors.length, "and they hold only what's near");
         close();
+    });
+
+    it("is a switch that starts as it always was, and has its date", () => {
+        assert.equal(SETTINGS_DEFAULTS.hostClassic, true, "Classic till its host says otherwise");
+        unexpired("the host's Classic switch (hostClassic)", "2027-11-22");
     });
 
     it("takes a host that never says how its world's played for lockstep, after a wait; and one that names a way it doesn't know", async () => {

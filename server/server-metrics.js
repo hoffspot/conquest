@@ -123,7 +123,7 @@ export class ServerMetrics {
             wire: metrics.counter("pellagos_play_sent_wire_bytes_total", "What a world has sent its players' games, as it went on the wire (compressed, where it is).", ["world"]),
             sentMessages: metrics.counter("pellagos_play_sent_messages_total", "The messages a world has sent its players' games.", ["world"]),
             received: metrics.counter("pellagos_play_received_bytes_total", "What a world's players' games have sent it.", ["world"]),
-            hosted: metrics.gauge("pellagos_hosted_worlds", "Players' own worlds open through the broker, by how each is played (lockstep, which a host calls Classic, or replicated).", ["netcode"]),
+            hosted: metrics.gauge("pellagos_hosted_worlds", "Players' own worlds open through the broker, by how each is played (kind: lockstep, which a host calls Classic, or replicated).", ["kind"]),
             worlds: metrics.gauge("pellagos_worlds", "The server's worlds, by how they are (stored, waiting, loading, running, empty, stopping).", ["kind"]),
             utilization: metrics.gauge("pellagos_event_loop_utilization", "The share of its time the supervisor's event loop was busy, lately (0 to 1)."),
             rss: metrics.gauge("pellagos_rss_bytes", "The whole server's memory resident, every world's thread with it."),
@@ -194,8 +194,8 @@ export class ServerMetrics {
         }
 
         // (Players' own worlds open through its broker, by how each is played: the plan's gate (d))
-        for (const [netcode, count] of Object.entries(server.broker?.counts() ?? { lockstep: 0, replicated: 0 })) {
-            counted.hosted.with({ netcode }).set(count);
+        for (const [kind, count] of Object.entries(server.broker?.counts() ?? { lockstep: 0, replicated: 0 })) {
+            counted.hosted.with({ kind }).set(count);
         }
 
         for (const id of [...this.known]) {
