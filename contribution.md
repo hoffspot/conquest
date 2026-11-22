@@ -329,6 +329,14 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_PORT=8096 \
   further off its hero than 192 m, as a replicated world's game will; the scaling plan's 3-9),
   alone and joined to another's world, and fails for any error of the page's or in its debug
   log. A change to how the game handles what the world tells it should pass it.
+- `e2e/replicated.spec.js` plays a replicated world from the game against a real world server
+  (the scaling plan's 3-31, its gate (a)): six tests, each a thing a player does in a world no
+  game holds a copy of (joining and walking over a play socket routed to take 300 ms there and
+  back; a fight and loot; a dungeon's way in and its first floor; a party on the maps; the page
+  hidden and shown; the game reloaded). A change to what a replicated world sends, or to how a
+  game takes it, should pass it and the longer one in `e2e/worlds.spec.js`. A test there that
+  sends its hero through a door by a command waits for the game to have built the floor first,
+  as the game's readying card does.
 - Every spec opens the game with `playing` (`e2e/fixtures.js`), and the game's drawn cheaply
   unless the test says otherwise: at Low without shadows (kept as the game's settings before the
   page loads, where the test keeps none of its own), looking down on the player once it's
