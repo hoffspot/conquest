@@ -6,7 +6,7 @@
 //
 //   broker -> any    "broker {ice, relaying}"      on connecting: the STUN servers to try, and
 //                                                  whether the server relays when direct fails
-//   host -> broker   "announce {name, people, players, most, net, visibility, direct, local, temporary}"
+//   host -> broker   "announce {name, people, players, most, net, visibility, direct, local, temporary, netcode}"
 //                                                  -> "announced ID TOKEN" (ID: the world's code,
 //                                                     CODE_LENGTH letters; or "error busy",
 //                                                     "error too-many", "error bad")
@@ -132,6 +132,8 @@ export function announcementOf(said) {
         direct: said.direct === true,
         local: said.local === true,
         temporary: said.temporary === true,
+        // (How it's played: one that doesn't say, a game from before it could, is lockstep)
+        netcode: said.netcode === "replicated" ? "replicated" : "lockstep",
     };
 }
 
@@ -661,6 +663,17 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
 
     return {
         listings,
+
+        /** How many worlds are open through it, by how each is played ({ lockstep, replicated }): listed or by code alone, its host linked or away. */
+        counts() {
+            const counts = { lockstep: 0, replicated: 0 };
+
+            for (const { said } of listings.values()) {
+                counts[said.netcode] += 1;
+            }
+
+            return counts;
+        },
 
         /** The listings as one at `{ address, from }` sees them (the status card's `players`). */
         seen(watcher) {

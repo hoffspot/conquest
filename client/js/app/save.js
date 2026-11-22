@@ -142,6 +142,10 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     // (A crash in a world on a world server: what the debug log kept of it sent to that server as
     // the player comes back in, for its admin to see: app/crash-reports.js)
     sendCrashes: true,
+    // (Hosting a world for others, how it's played with them: Classic, each who joins playing a
+    // copy of the whole world, as it always was; off, they're sent views of what's near their
+    // hero, the netcode being built: the invite dialog's switch, the scaling plan's 3-35)
+    hostClassic: true,
     // (Auto target lock: whoever the player sets on stays their target as they run from it, till it
     // falls or is 40 m off; off, only an enemy's icon held locks on: app/game.js `autoLock`)
     autoLock: true,

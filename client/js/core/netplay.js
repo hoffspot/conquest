@@ -722,6 +722,14 @@ export class Session {
             case "hello":
                 this.#hello(peer, message);
                 break;
+            case "how":
+                // (One about to say hello, asking how the world's played, to come as that asks:
+                // a game hosted in a browser's, which has no card to read it from)
+                if (!this.players.has(peer)) {
+                    this.hosting.post(peer, "played", encode({ kind: "played", netcode: this.netcode }));
+                }
+
+                break;
             case "command":
                 this.#command(peer, message);
                 break;

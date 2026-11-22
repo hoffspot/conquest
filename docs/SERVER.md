@@ -444,6 +444,12 @@ away (`server/broker.js` `BROKER_LIMITS`):
   under its code (docs/GAME.md, *Back into a world*). Taken back that way, afresh, those in it are
   told to come in again (`closed again`), and the game goes straight back in.
 
+**How they're played, counted.** A host says how its world's played as it announces it
+(`netcode`: `lockstep`, which the game calls Classic, or `replicated`; one that doesn't say is
+lockstep). The broker counts the worlds open through it by that, listed or by code alone
+(`counts()`), and the server reports it at `/metrics` as
+`pellagos_hosted_worlds{kind="lockstep"|"replicated"}`: the count the scaling plan's gate (d) reads.
+
 ## Archives
 
 **Settings › Archive › Archive everything** downloads the whole server as one file

@@ -7,13 +7,52 @@
 //   const world = await openWorld(game, { broker });          // { code, hosting, close() }
 //   const joined = await joinWorld({ code, character, broker }); // { joining, close() }
 
-import { characterFrom, Hosting, Joining } from "../core/netplay.js";
-import { BROKER_ERRORS, BrokerHost, BrokerJoin, reachability } from "./peer.js";
+import { characterFrom, Hosting, Joining, NETCODES } from "../core/netplay.js";
+import { Viewing } from "../core/viewing.js";
+import { BROKER_ERRORS, BrokerHost, BrokerJoin, frameOf, frameText, reachability } from "./peer.js";
 
 export { NET_KICKS, NET_REFUSALS, queuedWords, versionWords } from "../core/netplay.js";
 
 /** How long to wait for the relay to answer (ms). */
 const RELAY_TIMEOUT = 8000;
+
+/**
+ * How long one joining waits for the host to say how its world's played (ms), before taking it
+ * for lockstep: a host from before worlds could be played another way says nothing.
+ */
+export const HOW_WAIT = 2500;
+
+/**
+ * How the world at a link's other end is played (NETCODES), asked of its host before hello
+ * (core/netplay.js `how`, `played`): what it says, or lockstep if it says nothing in `wait` ms or
+ * names a way this game doesn't know. Nothing else is heard on the link meanwhile.
+ */
+export function playedHow(link, wait = HOW_WAIT) {
+    return new Promise((resolve) => {
+        const heard = link.onData;
+        const done = (netcode) => {
+            clearTimeout(timer);
+            link.onData = heard;
+            resolve(NETCODES.includes(netcode) ? netcode : "lockstep");
+        };
+        const timer = setTimeout(() => done("lockstep"), wait);
+
+        link.onData = (text) => {
+            let said = null;
+
+            try {
+                said = JSON.parse(text);
+            } catch {
+                // (Not a word of the game's)
+            }
+
+            if (said?.kind === "played") {
+                done(said.netcode);
+            }
+        };
+        link.data(JSON.stringify({ kind: "how" }));
+    });
+}
 
 /**
  * Keeping the link: how often it asks the relay whether it's still there (ms, once it's been
@@ -545,7 +584,7 @@ const peerOptions = ({ RTC, timing }) => ({ ...(RTC !== undefined ? { RTC } : {}
  * world remembers of them: save.js visitorOf), and leave(character) told as each goes, with where
  * and how they were (to remember them: save.js keepVisitor).
  */
-export async function openWorld(game, { address = null, broker = null, onChange = () => {}, onLink = () => {}, onDrop = () => {}, timing = LINK_TIMING, visitors = null } = {}) {
+export async function openWorld(game, { address = null, broker = null, netcode = "lockstep", onChange = () => {}, onLink = () => {}, onDrop = () => {}, timing = LINK_TIMING, visitors = null } = {}) {
     let link;
     let code;
     let reclaimed = false;
@@ -560,7 +599,7 @@ export async function openWorld(game, { address = null, broker = null, onChange 
             // (Whether it can be reached, from here and from its own network: the listing rule's)
             const reach = await reachability({ ice: link.ice, ...peerOptions(broker) });
 
-            const announcement = { ...listing, players: link.playersNow(), visibility: listed ? "listed" : "code", ...reach, temporary: /iPhone|iPad/.test(globalThis.navigator?.userAgent ?? "") };
+            const announcement = { ...listing, netcode, players: link.playersNow(), visibility: listed ? "listed" : "code", ...reach, temporary: /iPhone|iPad/.test(globalThis.navigator?.userAgent ?? "") };
 
             code = broker.reclaim ? await link.reclaim(broker.reclaim.id, broker.reclaim.token, announcement).catch(() => null) : null;
             reclaimed = code !== null;
@@ -575,7 +614,20 @@ export async function openWorld(game, { address = null, broker = null, onChange 
     }
 
     // (With a clock: what one who's joined may ask of this game's thread is bounded, core/netplay.js HEARD)
-    const hosting = new Hosting(game.host, { send: (peer, text) => link.to(peer, text), clock: () => performance.now() });
+    // (A world played by views, `netcode` replicated: each who joins sent frames of what's near
+    // their hero and no copy of the world, core/viewfeed.js. As bytes where the link carries
+    // them, a channel's; as text where it doesn't, a relay's. The host plays its own copy as ever)
+    const replicated = netcode === "replicated";
+    const hosting = new Hosting(game.host, {
+        send: (peer, text) => link.to(peer, text),
+        clock: () => performance.now(),
+        ...(replicated ? { sendBinary: (peer, bytes) => (link.toBytes ? link.toBytes(peer, bytes) : link.to(peer, frameText(bytes))) } : {}),
+    });
+
+    if (replicated) {
+        hosting.session.netcode = "replicated";
+        hosting.views.mode = "on";
+    }
 
     hosting.onJoin = () => onChange();
     hosting.onLeave = (id, peer, character) => {
@@ -615,6 +667,7 @@ export async function openWorld(game, { address = null, broker = null, onChange 
         code,
         hosting,
         link,
+        netcode: replicated ? "replicated" : "lockstep",
         reclaimed,
         close() {
             game.hosting = null;
@@ -655,9 +708,21 @@ export async function joinWorld({ code, character, address = null, broker = null
         throw error;
     }
 
-    const joining = new Joining({ send: (text) => link.data(text), clock: () => performance.now() });
+    // (How it's played, asked of its host: by views, a link that holds no copy of the world)
+    const netcode = await playedHow(link, timing.how ?? HOW_WAIT);
+    const joining = new (netcode === "replicated" ? Viewing : Joining)({ send: (text) => link.data(text), clock: () => performance.now() });
 
-    link.onData = (text) => joining.hear(text);
+    // (A view's frame: bytes on a channel, text through a relay)
+    link.onData = (text) => {
+        const bytes = frameOf(text);
+
+        if (bytes) {
+            joining.frame(bytes);
+        } else {
+            joining.hear(text);
+        }
+    };
+    link.onBinary = (bytes) => joining.frame(new Uint8Array(bytes));
     link.onClosed = onClosed;
     link.onAway = () => onLink("away");
     link.onBack = () => onLink(null);
@@ -669,5 +734,5 @@ export async function joinWorld({ code, character, address = null, broker = null
     link.onDrop = onDrop;
     joining.hello(character);
 
-    return { joining, link, close: () => link.close() };
+    return { joining, link, netcode, close: () => link.close() };
 }

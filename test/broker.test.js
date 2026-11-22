@@ -11,6 +11,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
+import { parseText } from "../server/metrics.js";
 import { announcementOf, attachBroker, BROKER_LIMITS, BROKER_PROTOCOL } from "../server/broker.js";
 import { WorldServer } from "../server/world-server.js";
 
@@ -95,7 +96,10 @@ async function announce(server, world = WORLD) {
 
 describe("announcements", () => {
     it("keep what's said of a world, cut to size, and refuse what can't be one", () => {
-        assert.deepEqual(announcementOf({ ...WORLD, name: `  ${"x".repeat(80)}  `, players: 20 }), { name: "x".repeat(60), people: "human", players: 8, most: 8, net: 113, visibility: "listed", direct: true, local: true, temporary: false });
+        assert.deepEqual(announcementOf({ ...WORLD, name: `  ${"x".repeat(80)}  `, players: 20 }), { name: "x".repeat(60), people: "human", players: 8, most: 8, net: 113, visibility: "listed", direct: true, local: true, temporary: false, netcode: "lockstep" });
+        // (How it's played: replicated if it says so, lockstep if it says nothing or anything else)
+        assert.equal(announcementOf({ ...WORLD, netcode: "replicated" }).netcode, "replicated");
+        assert.equal(announcementOf({ ...WORLD, netcode: "views.9" }).netcode, "lockstep");
         assert.equal(announcementOf({ ...WORLD, name: "" }), null);
         assert.equal(announcementOf({ ...WORLD, most: 0 }), null);
         assert.equal(announcementOf({ ...WORLD, net: "113" }), null);
@@ -383,6 +387,26 @@ describe("the broker", () => {
         await wait(1800);
         assert.equal(server.broker.listings.has(id), false);
         [joiner, back].forEach((link) => link.close());
+    });
+
+    it("counts the worlds open through it by how each is played, listed or by code alone, and reports them (the plan's 3-35)", async () => {
+        const server = await serve();
+
+        assert.deepEqual(server.broker.counts(), { lockstep: 0, replicated: 0 });
+
+        const [classic, classicId] = await announce(server);
+        const [, id] = await announce(server, { ...WORLD, name: "By views", netcode: "replicated", visibility: "code" });
+
+        assert.deepEqual(server.broker.counts(), { lockstep: 1, replicated: 1 });
+
+        const hosted = () => Object.fromEntries(parseText(server.metrics.registry.text()).pellagos_hosted_worlds.samples.map((sample) => [sample.labels.kind, sample.value]));
+
+        assert.deepEqual(hosted(), { lockstep: 1, replicated: 1 });
+        classic.send(`withdraw ${classicId}`);
+        await until(() => server.broker.listings.size === 1, "the Classic world withdrawn");
+        assert.equal(server.broker.listings.get(id).said.netcode, "replicated");
+        assert.deepEqual(server.broker.counts(), { lockstep: 0, replicated: 1 });
+        assert.deepEqual(hosted(), { lockstep: 0, replicated: 1 });
     });
 
     it("refuses a bad announcement, more than 3 from one address, a joiner for a world that isn't there, and anything it doesn't know", async () => {

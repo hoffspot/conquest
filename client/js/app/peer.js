@@ -362,6 +362,18 @@ function split(text) {
     return at < 0 ? [text, ""] : [text.slice(0, at), text.slice(at + 1)];
 }
 
+/** The most bytes sent as one message of bytes on a data channel: every browser's takes as much. */
+export const BYTES_MOST = 16000;
+
+/** What a message of bytes begins with where it goes as text (a relay's line; one too long for a channel): no other message does. */
+export const FRAME_MARK = "#";
+
+/** Bytes (a Uint8Array) as a message of text: FRAME_MARK, then base64. */
+export const frameText = (bytes) => `${FRAME_MARK}${toBase64(bytes)}`;
+
+/** The bytes of a message of text that carries them (frameText), or null if it's any other. */
+export const frameOf = (text) => (typeof text === "string" && text[0] === FRAME_MARK ? fromBase64(text.slice(1)) : null);
+
 /**
  * A data channel, sending in pieces and waiting when too much is waiting to go; closed, if more
  * than MOST.waiting is (whoever's at its other end isn't taking it). A long message is compressed
@@ -390,6 +402,9 @@ export class Channel {
 
         /** Told each message heard (text), in the order they were said. */
         this.onText = () => {};
+        /** Told each message of bytes heard (a Uint8Array), in its turn among the text. */
+        this.onBytes = () => {};
+        channel.binaryType = "arraybuffer";
 
         channel.bufferedAmountLowThreshold = LOW;
         channel.addEventListener("bufferedamountlow", () => this.#flush());
@@ -435,6 +450,22 @@ export class Channel {
         }
     }
 
+    /**
+     * Bytes sent (a Uint8Array: a view's frame), in their turn among what's been said, as one
+     * message of bytes; longer than BYTES_MOST, as text (frameText), in pieces as any text is.
+     */
+    sendBytes(bytes) {
+        if (bytes.byteLength > BYTES_MOST) {
+            this.send(frameText(bytes));
+
+            return;
+        }
+
+        this.sent.text += bytes.byteLength;
+        this.outbox.push({ pieces: [bytes.slice()] });
+        this.#said();
+    }
+
     // Whatever's ready at the head of what's been said put to go, in order; one too slow to take
     // it all let go of
     #said() {
@@ -468,6 +499,14 @@ export class Channel {
      * messages is kept (packs), and told to no one.
      */
     heard(data) {
+        // (Bytes: a whole message of their own, told in their turn)
+        if (typeof data !== "string") {
+            this.inbox.push({ bytes: new Uint8Array(data) });
+            this.#tell();
+
+            return;
+        }
+
         const whole = this.pieces.add(data);
 
         if (whole === null) {
@@ -496,10 +535,12 @@ export class Channel {
 
     // Whatever's read at the head of what's been heard told, in order (one that wouldn't read, left out)
     #tell() {
-        while (this.inbox.length && this.inbox[0].text !== undefined) {
-            const { text } = this.inbox.shift();
+        while (this.inbox.length && (this.inbox[0].bytes || this.inbox[0].text !== undefined)) {
+            const { text, bytes } = this.inbox.shift();
 
-            if (text !== null) {
+            if (bytes) {
+                this.onBytes(bytes);
+            } else if (text !== null) {
                 this.onText(text);
             }
         }
@@ -896,6 +937,17 @@ export class BrokerHost extends BrokerSocket {
         }
     }
 
+    /** Send bytes (a Uint8Array: a view's frame) to one who's joined: as bytes on their channel, as text (frameText) where they're relayed. */
+    toBytes(peer, bytes) {
+        const place = this.peers.get(peer);
+
+        if (place?.channel?.open) {
+            place.channel.sendBytes(bytes);
+        } else if (place?.relayed) {
+            this.send(`to ${peer}\n${frameText(bytes)}`);
+        }
+    }
+
     /** Put one who's joined out. */
     kick(peer) {
         this.send(`kick ${peer}`);
@@ -1032,6 +1084,8 @@ export class BrokerJoin extends BrokerSocket {
         this.restarting = null;
 
         this.onData = () => {};
+        /** Told each message of bytes the host sent on the channel (a Uint8Array: a view's frame). */
+        this.onBinary = () => {};
         this.onClosed = () => {};
         this.onAway = () => {};
         this.onBack = () => {};
@@ -1096,6 +1150,7 @@ export class BrokerJoin extends BrokerSocket {
             }
         });
         channel.onText = (text) => this.onData(text);
+        channel.onBytes = (bytes) => this.onBinary(bytes);
         channel.channel.addEventListener("message", ({ data }) => channel.heard(data));
         channel.channel.addEventListener("close", () => {
             if (this.how === "direct" && !this.closing) {

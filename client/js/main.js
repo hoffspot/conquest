@@ -2679,6 +2679,8 @@ async function openToOthers(game, { reclaim = null, via = undefined } = {}) {
 
     try {
         const world = await openWorld(game, {
+            // (How it's played with those who join: Classic, unless its switch is off)
+            netcode: settings.hostClassic === false ? "replicated" : "lockstep",
             ...(broker ? { broker: { address: broker.address, listing: { ...(await listingOf(game)), listed: Boolean(reclaim?.listed) }, ...(reclaim ? { reclaim } : {}) } } : {}),
             // (Those who come in: who they are and what they carry theirs, what this world remembers
             // of them its own, kept with it by their own id: save.js visitorOf, keepVisitor)
@@ -2937,6 +2939,12 @@ function showInvite(problem = "") {
 
     $("#invitestatus").textContent = problem || (code ? `Your world's open to others${via ? ` through ${via.name}` : ""}. Give them this code:` : "Opening your world to others…");
     $("#invitelisting").hidden = !(code && via);
+    // (How it's played is settled as it's opened: changed with others in, it's for the next time)
+    $("#inviteclassic").checked = settings.hostClassic !== false;
+    $("#inviteclassicnote").textContent =
+        code && others.length && (state.together.netcode === "replicated") === (settings.hostClassic !== false)
+            ? "Changed for the next time your world's opened to others: those here now play on as they are"
+            : "Those who join each play a copy of your whole world, as ever. Off (experimental), they're sent only what's near their hero";
     $("#invitelistname").textContent = via ? `List it on ${via.name}` : "List it on the server";
     $("#invitecode").hidden = !code;
     $("#invitecode").textContent = code ?? "";
@@ -5733,6 +5741,25 @@ $("#inviteback").addEventListener("click", closeInvite);
 $("#invitelist").addEventListener("change", (event) => {
     state.together?.link?.list?.(event.target.checked);
     keepHosting(state.together);
+});
+// (Classic or not: kept for this device; a world open with nobody else in it opened again as it
+// now is, under a new code; with others in, it's for the next time)
+$("#inviteclassic").addEventListener("change", async (event) => {
+    applySetting("hostClassic", event.target.checked);
+
+    const { together, game } = state;
+
+    if (together?.code && game && !game.remote && !game.others().length) {
+        const { via } = together;
+
+        together.close();
+        setTogether(null);
+        inWorld(null);
+        showInvite();
+        showInvite((await openToOthers(game, { via })).problem ?? "");
+    } else {
+        showInvite();
+    }
 });
 $("#invitestop").addEventListener("click", () => {
     state.together?.close();
