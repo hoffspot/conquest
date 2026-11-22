@@ -62,7 +62,8 @@ Lockstep and the replicated views ship together until the plan's gates say other
 - No pull request for replication bumps `SNAPSHOT_VERSION`.
 - A change to the transport is tested in both netcodes.
 - No world takes more than 8 players until the replicated netcode exists (the owner's decision):
-  no setting may raise that.
+  no setting may raise that. The rule for passing 8, and the test that pins the cap, are
+  `server/access/cap.js` and `test/cap.test.js` (the plan's 3-33): change them together.
 
 ## Sounds: keep the sound studio current
 
