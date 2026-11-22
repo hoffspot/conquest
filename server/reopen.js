@@ -13,15 +13,19 @@
 import { rm } from "node:fs/promises";
 import { salvage } from "../client/js/app/character-file.js";
 import { ExportError, forwardExport, importCharacter } from "../client/js/app/save.js";
-import { Host, SNAPSHOT_STEPS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
+import { Host, presetRules, SNAPSHOT_STEPS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
 import { copyOf } from "../client/js/core/guid.js";
 import { characterFrom } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { NewerDataError } from "./storage/versions.js";
 
-/** The rules of a world the server runs (core/host.js RULES): time passes when everyone rests; debug commands are its owners', if its settings allow them; invasions come to its towns. */
+/**
+ * The rules of a world the server runs (core/host.js RULES): time passes when everyone rests; debug
+ * commands are its owners', if its settings allow them; invasions come to its towns; and the rest
+ * as its preset has them (its `preset` setting: core/host.js PRESETS).
+ */
 export function rulesFor(meta) {
-    return { rest: "everyone", debug: meta.settings?.debugCommands ? "owner" : "none", invasions: true };
+    return { rest: "everyone", debug: meta.settings?.debugCommands ? "owner" : "none", invasions: true, ...presetRules(meta.settings?.preset) };
 }
 
 /** Refused: a kept world that can't be carried on (`reason`), for its owner to choose a fresh start from its seed. */
@@ -65,6 +69,10 @@ export async function openWorld(stored, { build = buildWorld } = {}) {
     }
 
     const host = Host.restore(build({ seed: stored.meta.seed, race: stored.meta.race }), snapshot);
+
+    // (Its preset may have been changed since it was kept, which it is only while nobody's in it)
+    host.preset(stored.meta.settings?.preset);
+
     const forwarded = snapshot.version === SNAPSHOT_VERSION ? null : snapshot.version;
 
     if (forwarded !== null) {

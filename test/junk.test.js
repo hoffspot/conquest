@@ -536,7 +536,7 @@ describe("junk kept (host.js snapshot, app/save.js, app/character-file.js, serve
         // (A mark is in the checksum: a copy gone astray on one is told apart)
         theirs.markJunk(1, true);
         assert.notEqual(again.checksum(), host.checksum());
-        assert.equal(SNAPSHOT_VERSION, 54, "(a stack's mark, kept only where it's set, needs no step: absent, it's what an older snapshot meant)");
+        assert.equal(SNAPSHOT_VERSION, 55, "(a stack's mark, kept only where it's set, needs no step: absent, it's what an older snapshot meant; 55 is the rules a shared world changes, the plan's 2-1)");
     });
 
     it("is kept on a device with what's carried, and in a character's file taken to another device", () => {
@@ -622,7 +622,7 @@ describe("junk on a joined player's copy of the world (NET_VERSION 230)", () => 
             }
         };
 
-        assert.equal(NET_VERSION, 235, "235 an ahead order looked along a leg at a time (docs/WAR.md, the plan's 3-29), 230 junk's, 231 crafting's (docs/CRAFTING.md), 232 mercenaries never lost (docs/WAR.md), 233 a player's far way waiting (docs/WORLD.md), 234 insides drawn by their slots (insides.js INSIDE_SLOTS)");
+        assert.equal(NET_VERSION, 236, "236 the rules a shared world changes, kept with every world (the plan's 2-1), 235 an ahead order looked along a leg at a time (docs/WAR.md, the plan's 3-29), 230 junk's, 231 crafting's (docs/CRAFTING.md), 232 mercenaries never lost (docs/WAR.md), 233 a player's far way waiting (docs/WORLD.md), 234 insides drawn by their slots (insides.js INSIDE_SLOTS)");
         joining.onWelcome = ({ seed, race, snapshot }) => joining.attach(Host.restore(buildWorld({ seed, race }), snapshot));
         joining.hello({ hero: { ...HERO, name: "Bryn", race: "human" }, progress: { gold: 3, pack: [junk("potion", 3), stack("meal", 2), junk("ale", 4), { ...stack("ale"), junk: "x".repeat(20) }] } });
         deliver();

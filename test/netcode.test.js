@@ -24,6 +24,8 @@ const SWITCHES = Object.freeze({
     "world experimental": "2027-11-12",
     "server replication": "2027-11-12",
     "server newWorlds": "2027-11-22",
+    "world preset": "2027-11-22",
+    "world public": "2027-11-22",
 });
 
 const CHEAP = Object.freeze({ N: 2 ** 10, r: 8, p: 1, length: 32, maxmem: 32 * 1024 * 1024 });
@@ -234,7 +236,7 @@ describe("the switches' expiry (test/helpers.js unexpired)", () => {
     it("has a date for every switch there is, none of them passed", () => {
         // (A setting that's one of a few is a switch, and so is a world's experimental mark: one
         // added without a date here fails)
-        const switches = [...Object.entries(WORLD_SETTINGS).map(([key, setting]) => [`world ${key}`, setting]), ...Object.entries(SETTINGS).map(([key, setting]) => [`server ${key}`, setting])].filter(([name, { kind }]) => kind === "choice" || name === "world experimental").map(([name]) => name);
+        const switches = [...Object.entries(WORLD_SETTINGS).map(([key, setting]) => [`world ${key}`, setting]), ...Object.entries(SETTINGS).map(([key, setting]) => [`server ${key}`, setting])].filter(([name, { kind }]) => kind === "choice" || name === "world experimental" || name === "world public").map(([name]) => name);
 
         assert.deepEqual(switches.sort(), Object.keys(SWITCHES).sort());
 

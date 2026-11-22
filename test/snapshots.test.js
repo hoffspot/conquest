@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { exportCharacter, saveProgress, saveTalks, saveWorld, writeSave } from "../client/js/app/save.js";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { Host, HOST_PLAYER, SNAPSHOT_STEPS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
+import { Host, HOST_PLAYER, RULES, SNAPSHOT_STEPS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { decode } from "../client/js/core/wire.js";
 import { CantCarryOn, freshStart, importSolo, openWorld } from "../server/reopen.js";
@@ -122,7 +122,7 @@ describe("a kept world opened by the server (server/reopen.js)", () => {
         const { host, from } = await openWorld(stored);
 
         assert.equal(from, null);
-        assert.deepEqual(host.rules, { rest: "everyone", debug: "none", invasions: true, mortal: false });
+        assert.deepEqual(host.rules, { ...RULES, rest: "everyone", debug: "none" });
         assert.equal(host.battle.time, 0);
     });
 

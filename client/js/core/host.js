@@ -506,19 +506,63 @@ export const REST = Object.freeze({ clear: 40, least: 5 * 60000, burns: 3 * 6000
  *  - `invasions`: whether invasions come to the towns the players are in (core/invasions.js);
  *  - `mortal`: whether the players' hired adventurers can die (docs/WAR.md *Mercenaries that
  *    grow*): the fall that would send one home to mend (followers.js MENDING) its last. Off to
- *    begin with; set by the world's host's player or an owner (the "rule" command).
+ *    begin with; set by the world's host's player or an owner (the "rule" command);
+ *  - and the rules a world shared by strangers changes (RULE_CHOICES), each as it is today.
  */
-export const RULES = Object.freeze({ rest: "host", debug: "host", invasions: true, mortal: false });
+export const RULES = Object.freeze({ rest: "host", debug: "host", invasions: true, mortal: false, pvp: "war", pause: "owner", loot: "near", scaling: "side", director: "player", instances: "site", rares: "world", stock: "shared" });
 
-// A world's rules as given (RULES), anything unknown left as RULES has it
-function rulesOf(rules = {}) {
+/**
+ * The rules a world shared by strangers plays by (generated/multiplayer_scaling_plan.md Stage 2,
+ * `2-1`): for each, what it can be (`of`, today's first: RULES has it), what the `shared` preset
+ * makes it (`shared`), the slice that builds its other way (`slice`), and whether that's built
+ * (`built`). One not built yet can only be as it is today, whatever a world's given: a rule
+ * nothing plays by isn't kept as if it were. Each slice turns its own on.
+ *  - `pvp`: players of peoples at war are enemies ("war"), or only by a duel or their flags;
+ *  - `pause`: an owner may stop the world for everyone ("owner"), or no one may;
+ *  - `loot`: a wild foe's spoils go to those near it ("near"), or to those who fought it;
+ *  - `scaling`: a foe's answer to a bigger side grows with it ("side"), or is softened for a crowd;
+ *  - `director`: the wilds deal to each player ("player"), or no more than an area can hold;
+ *  - `instances`: a dungeon is one for its site ("site"), or one for each party;
+ *  - `rares`: a unique is met once in the world ("world"), or once by each character;
+ *  - `stock`: what a shop has sold is gone for everyone ("shared"), or for each character.
+ */
+export const RULE_CHOICES = Object.freeze({
+    pvp: Object.freeze({ of: Object.freeze(["war", "optin"]), shared: "optin", slice: "2-2", built: false }),
+    pause: Object.freeze({ of: Object.freeze(["owner", "none"]), shared: "none", slice: "2-7", built: false }),
+    loot: Object.freeze({ of: Object.freeze(["near", "tagged"]), shared: "tagged", slice: "2-13", built: false }),
+    scaling: Object.freeze({ of: Object.freeze(["side", "crowd"]), shared: "crowd", slice: "2-16", built: false }),
+    director: Object.freeze({ of: Object.freeze(["player", "area"]), shared: "area", slice: "2-18", built: false }),
+    instances: Object.freeze({ of: Object.freeze(["site", "party"]), shared: "party", slice: "2-21", built: false }),
+    rares: Object.freeze({ of: Object.freeze(["world", "character"]), shared: "character", slice: "2-25", built: false }),
+    stock: Object.freeze({ of: Object.freeze(["shared", "personal"]), shared: "personal", slice: "2-33", built: false }),
+});
+
+/** A world's presets: `company`, a company of friends' (RULES as they are), or `shared`, a world shared by strangers'. */
+export const PRESETS = Object.freeze(["company", "shared"]);
+
+/**
+ * The rules a preset sets (PRESETS), over whatever else a world's are: `shared`, each of
+ * RULE_CHOICES as a shared world has it, of those built (`choices`, but for the tests); `company`,
+ * or anything else, each as it is today.
+ */
+export function presetRules(preset, choices = RULE_CHOICES) {
+    return Object.fromEntries(Object.entries(choices).map(([key, { of, shared, built }]) => [key, preset === "shared" && built ? shared : of[0]]));
+}
+
+// A world's rules as given (RULES), anything unknown left as RULES has it (and any of
+// RULE_CHOICES whose other way isn't built, as it is today)
+function rulesOf(rules = {}, choices = RULE_CHOICES) {
     return Object.freeze({
         rest: ["host", "everyone"].includes(rules?.rest) ? rules.rest : RULES.rest,
         debug: ["host", "owner", "none"].includes(rules?.debug) ? rules.debug : RULES.debug,
         invasions: typeof rules?.invasions === "boolean" ? rules.invasions : RULES.invasions,
         mortal: typeof rules?.mortal === "boolean" ? rules.mortal : RULES.mortal,
+        ...Object.fromEntries(Object.entries(choices).map(([key, { of, built }]) => [key, built && of.includes(rules?.[key]) ? rules[key] : of[0]])),
     });
 }
+
+/** A world's rules as `rules` would have them (rulesOf), for the tests of a rule not built yet (`choices`). */
+export const ruled = (rules, choices = RULE_CHOICES) => rulesOf(rules, choices);
 
 /**
  * A player who's given no command for a while (ms of the world's time, which stands still while
@@ -778,7 +822,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 54;
+export const SNAPSHOT_VERSION = 55;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -984,6 +1028,9 @@ export const SNAPSHOT_STEPS = Object.freeze({
         version: 54,
         players: snapshot.players.map((player) => ({ ...player, progress: { strongroom: { tabs: Array.from({ length: STRONGROOM.tabs }, () => Array(STRONGROOM.size).fill(null)) }, ...player.progress } })),
     }),
+    // 55: the rules a world shared by strangers changes (RULE_CHOICES), each as it was played:
+    // today's way
+    54: (snapshot) => ({ ...snapshot, version: 55, rules: { ...snapshot.rules, ...presetRules("company") } }),
 });
 
 // A band's invasion kept from before battles were fought in bodies (SNAPSHOT_STEPS 40): its two
@@ -16648,6 +16695,14 @@ export class Host {
         this.#event("follower", { id: player.id, follower: id, name: this.#calledBy(one), change: "picked", pick: pick.id });
 
         return OK;
+    }
+
+    /**
+     * The world's rules as a preset has them (PRESETS, presetRules), the rest as they were: as a
+     * kept world's opened (server/reopen.js), before anyone's in it, so nobody's told.
+     */
+    preset(preset) {
+        this.rules = rulesOf({ ...this.rules, ...presetRules(preset) });
     }
 
     // One of the world's rules changed (RULES mortal), by whoever may (debugs: its host's player,
