@@ -2907,6 +2907,16 @@ export class Game {
         });
         await time("navigation", () => near);
 
+        // (One frame drawn now, while the loading screen's still up: the shadows' shaders made,
+        // which no compiling of the scene makes, every program used once, and what's in sight
+        // sent to the graphics card, its shapes with its pictures. Left to the first frame seen,
+        // that held an iPhone 2.6 s as the world was shown)
+        await time("first frame", () => {
+            this.view.render();
+
+            return view.settled();
+        });
+
         // (The marshal's first look at the soldiers about in the first frame, not half a second
         // on: any come while it loaded drawn at once)
         this.marshalClock = 0;
