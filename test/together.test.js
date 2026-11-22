@@ -10,9 +10,10 @@ import http from "node:http";
 import { after, before, describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
-import { CHECK_EVERY } from "../client/js/core/netplay.js";
+import { CHECK_EVERY, Joining } from "../client/js/core/netplay.js";
+import { Viewing } from "../client/js/core/viewing.js";
 import { buildWorld } from "../client/js/core/overworld.js";
-import { joinWorld, LINK_TIMING, openWorld } from "../client/js/app/together.js";
+import { HOW_WAIT, joinWorld, LINK_TIMING, openWorld, playedHow } from "../client/js/app/together.js";
 import { attachRelay, RELAY_LIMITS, RELAY_PATH } from "../server/relay.js";
 import { mirrored } from "./replicated.js";
 
@@ -240,5 +241,104 @@ describe("playing together over the relay (together.js)", () => {
         await new Promise((resolve) => setTimeout(resolve, TIMING.patience * 4));
         assert.deepEqual(heard, []);
         world.close();
+    });
+});
+
+// A world opened to others the way `netcode` says, and a game that's joined it by its code alone
+async function hosted(netcode) {
+    const host = new Host(buildWorld({ seed: 2 }), { populate: false });
+
+    host.join({ id: HOST_PLAYER, hero: HERO });
+    host.populate();
+
+    const game = { host, hosting: null };
+    const world = await openWorld(game, { address, timing: TIMING, ...(netcode ? { netcode } : {}) });
+    const joined = await joinWorld({ code: world.code, character: GUEST, address, timing: TIMING });
+    const refused = [];
+
+    joined.joining.onRefused = (reason) => refused.push(reason);
+
+    return { host, world, joined, refused, close: () => (joined.close(), world.close()) };
+}
+
+describe("a world hosted in a browser, played by views or Classic (the scaling plan's 3-35)", () => {
+    it("is Classic unless it's opened otherwise: one who joins asks how it's played, is told lockstep, and is sent the whole world", async () => {
+        const { world, joined, refused, close } = await hosted();
+        let welcome = null;
+
+        joined.joining.onWelcome = (said) => (welcome = said);
+        assert.equal(world.netcode, "lockstep");
+        assert.equal(world.hosting.session.netcode, "lockstep");
+        assert.equal(world.hosting.views.mode, "off");
+        assert.equal(world.hosting.sendBinary, null, "no bytes are sent");
+        assert.equal(joined.netcode, "lockstep");
+        assert.ok(joined.joining instanceof Joining && !(joined.joining instanceof Viewing));
+        await until(() => welcome);
+        assert.ok(welcome.snapshot, "the world itself");
+        assert.deepEqual(refused, []);
+        close();
+    });
+
+    it("sends one who joins a world opened as replicated views and no copy: frames as text over the relay, played as they come", async () => {
+        const { host, world, joined, refused, close } = await hosted("replicated");
+        let welcome = null;
+
+        assert.equal(world.netcode, "replicated");
+        assert.equal(world.hosting.session.netcode, "replicated");
+        assert.equal(world.hosting.views.mode, "on");
+        assert.equal(joined.netcode, "replicated");
+        assert.ok(joined.joining instanceof Viewing);
+
+        joined.joining.onWelcome = (said) => {
+            welcome = said;
+            joined.joining.attach(new Host(buildWorld({ seed: said.seed, race: said.race }), { populate: false }), said);
+        };
+        await until(() => welcome);
+        assert.equal(welcome.snapshot, undefined, "no copy of the world");
+        assert.deepEqual(refused, []);
+
+        // (The host's world played on, as core/runner.js plays it: each step's events told the feed)
+        for (let k = 0; k < 40; k++) {
+            world.hosting.views.heard(host.advance(STEP_MS));
+            world.hosting.flush();
+        }
+
+        await until(() => {
+            while (joined.joining.step()) {
+                // (Played)
+            }
+
+            return joined.joining.frames >= 20;
+        });
+
+        const me = joined.joining.me;
+        const theirs = host.battle.actors.find((actor) => actor.id === me);
+        const seen = joined.joining.host.battle.actors.find((actor) => actor.id === me);
+
+        assert.ok(theirs && seen, "their hero's in the world, and in what they're shown of it");
+        assert.ok(Math.abs(theirs.x - seen.x) < 1 && Math.abs(theirs.y - seen.y) < 1, "where the world has it");
+        assert.ok(joined.joining.host.battle.actors.length < host.battle.actors.length, "and they hold only what's near");
+        close();
+    });
+
+    it("takes a host that never says how its world's played for lockstep, after a wait; and one that names a way it doesn't know", async () => {
+        const quiet = { onData: () => {}, said: [], data: (text) => quiet.said.push(text) };
+        const started = Date.now();
+
+        assert.ok(HOW_WAIT >= 1000 && HOW_WAIT <= 5000);
+        assert.equal(await playedHow(quiet, 60), "lockstep");
+        assert.ok(Date.now() - started >= 50);
+        assert.deepEqual(quiet.said, ['{"kind":"how"}']);
+
+        const odd = { onData: () => {}, data: () => setTimeout(() => odd.onData('{"kind":"played","netcode":"views.9"}'), 5) };
+
+        assert.equal(await playedHow(odd, 2000), "lockstep");
+
+        // (What else is said meanwhile isn't an answer; and the link's own hearing is put back after)
+        const mine = () => {};
+        const told = { onData: mine, data: () => setTimeout(() => (told.onData("not json"), told.onData('{"kind":"pong"}'), told.onData('{"kind":"played","netcode":"replicated"}')), 5) };
+
+        assert.equal(await playedHow(told, 2000), "replicated");
+        assert.equal(told.onData, mine);
     });
 });
