@@ -331,6 +331,8 @@ function sizeOf(mask) {
  * @param {number} [frame.budget] - How many bytes it may take (no more than VIEW.frame). With
  *     more to tell than fits, those longest untold go first (then by index), and the rest wait:
  *     no one who's changing is left out for good.
+ * @param {number} [frame.reserve] - Bytes of records it has room for at the least, whatever its
+ *     sections take: for those that must be told with this frame (the longest untold, told first).
  * @param {{ events?: string, done?: number, self?: string, enters?: string }} [frame.sections] -
  *     What else to tell: the events' JSON text, the last command done, the hero's own state's
  *     JSON text, who's come into the known set (JSON text).
@@ -342,7 +344,7 @@ function sizeOf(mask) {
  *     (no frame's sent: a town standing still costs nothing); `told` is the indexes it tells of,
  *     whose `sent` is now this step.
  */
-export function encodeFrame(state, { step, origin, leaves = [], known = [], indexOf = () => NONE, budget = VIEW.budget, sections = null, always = false }) {
+export function encodeFrame(state, { step, origin, leaves = [], known = [], indexOf = () => NONE, budget = VIEW.budget, reserve = 0, sections = null, always = false }) {
     // (The sections, as bytes, in their order: each its tag, its length and what it holds)
     const extra = [];
 
@@ -385,7 +387,10 @@ export function encodeFrame(state, { step, origin, leaves = [], known = [], inde
     }
 
     const more = extra.reduce((sum, [, bytes]) => sum + 3 + bytes.length, 0);
-    const room = Math.min(budget, VIEW.frame) - more;
+    // (`reserve`: room for records whatever the sections take of the budget and of a frame's
+    // most, for those that must be told with this frame: the longest untold are told first,
+    // and those are)
+    const room = Math.max(Math.min(budget, VIEW.frame) - more, reserve ? VIEW.header + leaves.length + reserve : -Infinity);
     const [ox, oy] = origin;
     const [baseX, baseY] = [ox * VIEW.origin * 100, oy * VIEW.origin * 100];
     const due = [];
