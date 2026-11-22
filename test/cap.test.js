@@ -99,7 +99,7 @@ describe("the cap on a world's players", () => {
     it("is what a server's settings and its worlds are held to", async () => {
         const settings = await Settings.open(path.join(await folder(), "server.json"));
 
-        assert.deepEqual(await settings.change({ mostPlayersCeiling: 16 }), { ok: false, reasons: ["mostPlayersCeiling must be a whole number from 1 to 8, not 16.", "mostPlayersCeiling above 8 waits on this server being ready for public worlds."] });
+        assert.deepEqual(await settings.change({ mostPlayersCeiling: 16 }), { ok: false, reasons: ["mostPlayersCeiling must be a whole number from 1 to 8, not 16."] });
         assert.equal(settings.get("mostPlayersCeiling"), 8);
         assert.deepEqual(await settings.change({ mostPlayersCeiling: 6 }), { ok: true });
         assert.deepEqual(await settings.change({ mostPlayersCeiling: 8 }), { ok: true });
@@ -113,9 +113,8 @@ describe("the cap on a world's players", () => {
             assert.equal(server.mostPlayersOf({ settings: { mostPlayers: 25, netcode: "replicated" } }), 8, "one brought in from elsewhere asking more");
             assert.equal(server.mostPlayersOf({ settings: { mostPlayers: 25, netcode: "lockstep" } }), 8);
             assert.equal(server.overCeiling({ mostPlayers: 8 }), null);
-            assert.match(server.overCeiling({ mostPlayers: 16, netcode: "replicated" }), /above 8 .* isn't public or shared/);
-            assert.match(server.overCeiling({ mostPlayers: 16 }, { netcode: "replicated" }), /above 8 .* isn't public or shared/, "its netcode as it's kept");
-            await assert.rejects(server.createWorld({ name: "Too many", seed: 3, race: "human", settings: { mostPlayers: 16, netcode: "replicated" } }));
+            assert.equal(server.overCeiling({ mostPlayers: 16, netcode: "replicated" }, { netcode: "replicated" }), null, "above what a world's setting goes to, its schema refuses it");
+            await assert.rejects(server.createWorld({ name: "Too many", seed: 3, race: "human", settings: { mostPlayers: 16, netcode: "replicated" } }), /mostPlayers must be a whole number from 1 to 8/);
         } finally {
             await server.close();
         }

@@ -219,8 +219,10 @@ export class Settings {
             return { ok: false, reasons: ["Nothing to change."] };
         }
 
-        // (Each by its schema; and the ceiling on a world's players, above 8, by the cap's own rule)
-        const reasons = [...Object.entries(changes).map(([key, value]) => settingReason(key, value)), ceilingReason(changes.mostPlayersCeiling, this.#values.mostPlayersCeiling, publicReady().ready)].filter(Boolean);
+        // (Each by its schema; and the ceiling on a world's players, where its schema lets it above 8, by the cap's own rule)
+        const reasons = Object.entries(changes)
+            .map(([key, value]) => settingReason(key, value) ?? (key === "mostPlayersCeiling" ? ceilingReason(value, this.#values.mostPlayersCeiling, publicReady().ready) : null))
+            .filter(Boolean);
 
         if (reasons.length) {
             return { ok: false, reasons };

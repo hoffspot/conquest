@@ -420,7 +420,8 @@ export class WorldServer {
             return `mostPlayers must be a whole number from ${WORLD_SETTINGS.mostPlayers.min} to ${this.mostPlayersCeiling} on this server, not ${asked}.`;
         }
 
-        return capReason(asked, capWorld({ ...kept, ...settings }), publicReady().ready);
+        // (Above what a world's setting goes to at all, its schema says so itself)
+        return asked <= WORLD_SETTINGS.mostPlayers.max ? capReason(asked, capWorld({ ...kept, ...settings }), publicReady().ready) : null;
     }
 
     /**
