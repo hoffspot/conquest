@@ -14797,7 +14797,7 @@ test("coming up to a city, the ground its soldiers and townsfolk are stood on is
     expect(came.delved).toMatchObject({ made: true, taken: true, tier: came.ahead.tier, kept: null });
 });
 
-test("a dungeon's camera goes by the room round the player: over its cut roof, looking down, in an open cavern; under its roof, low behind them, in a tunnel; tilted by hand, kept so while it's as open, let go of in the tunnel; turned to find the way through it; framing a fight from where there's room; and anyone its rock hides seen through it", async ({ page }) => {
+test("a dungeon's camera goes by the room round the player: over its cut roof, looking down, in an open cavern; under its roof, low behind them, in a tunnel; tilted by hand, theirs from then on, in the tunnel too, over its cut roof and no nearer, till it's put back behind them; turned to find the way through it; framing a fight from where there's room; and anyone its rock hides seen through it", async ({ page }) => {
     test.setTimeout(300000);
     // (Of where a dungeon puts the camera: left to the game from the start)
     await playing(page, "/?play&seed=1", { view: "start" });
@@ -14901,7 +14901,14 @@ test("a dungeon's camera goes by the room round the player: over its cut roof, l
 
         const nudged = at(open, 2);
         const base = inOpen.pitch;
+        // (Into the tunnel: theirs still, where they put it, over the cut roof and no nearer)
         const tunnel = at(tight, 6);
+        const kept = { pitch: tunnel.pitch - nudged.pitch, over: tunnel.over, cut: tunnel.cut, height: tunnel.height, distance: view.distance };
+
+        // (Put back behind them: the space's again, under the tunnel's roof)
+        game.recentre();
+
+        const back = at(tight, 6);
 
         // Walking along the tunnel, the camera turned to look across it (crowded in by its rock):
         // turned to find the way through (Game options); or, turned off, left so
@@ -14991,7 +14998,7 @@ test("a dungeon's camera goes by the room round the player: over its cut roof, l
             return result;
         };
 
-        return { open, tight, inOpen, inTight, nudged: nudged.pitch - base, tunnel: tunnel.pitch - inTight.pitch, finds: across(true), leaves: across(false), fight: fight(), silhouette: silhouette() };
+        return { open, tight, inOpen, inTight, nudged: nudged.pitch - base, kept, tunnel: back.pitch - inTight.pitch, back: { over: back.over, cut: back.cut, own: game.dungeonCamera.own, recentring: game.cameraFollow.recentring }, finds: across(true), leaves: across(false), fight: fight(), silhouette: silhouette() };
     });
 
     expect(seen.open.how).toBeGreaterThan(0.75);
@@ -15003,6 +15010,14 @@ test("a dungeon's camera goes by the room round the player: over its cut roof, l
     expect(seen.inTight.pitch).toBeLessThan(32);
     expect(seen.inTight.under).toBeGreaterThan(0.5);
     expect(seen.nudged).toBeGreaterThan(10);
+    // (Set by hand, it's theirs wherever they go: in the tunnel as they tilted it, over its cut
+    // roof and as far off, never pulled in close under it)
+    expect(Math.abs(seen.kept.pitch)).toBeLessThan(1);
+    expect(seen.kept).toMatchObject({ over: true, cut: true });
+    expect(seen.kept.height).toBeGreaterThan(6);
+    expect(seen.kept.distance).toBeGreaterThan(8);
+    // (And put back behind them, the space's again)
+    expect(seen.back).toEqual({ over: false, cut: false, own: null, recentring: null });
     expect(Math.abs(seen.tunnel)).toBeLessThan(3);
     expect(seen.finds.before).toBeLessThan(0.5);
     expect(seen.finds.after).toBeGreaterThanOrEqual(0.8);

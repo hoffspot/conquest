@@ -1215,9 +1215,12 @@ through, its squares one pool) and `@` the heart its Halls of Bone beat to. The 
   in closer rather than go into it, and 0.6 m under the roof over each point of its line (the
   rock's own height there, worked out a square at a time as it's asked: `roofGrid`), not under
   the level's lowest roof everywhere: so looking down in a low tunnel no longer brings it closer.
-  The player's own tilt or zoom is a nudge on the space's, kept while it's as open or as tight as
-  where they set it (within a fifth of the way) and let go of once they've gone somewhere tighter
-  or more open (`DUNGEON_NUDGE`); R lets it go at once. The player and whoever they're fighting
+  Once the player sets the camera themselves (tilts, turns or zooms it by hand), it's theirs and
+  the space no longer moves it: its tilt and distance stay where they put them wherever they go,
+  and it's over the cut roof or under it by how steeply they look down (over past 32 degrees,
+  under again below 26: `DUNGEON_OWN`), not by the room. So a camera set looking straight down in
+  a cavern stays so in a tunnel, the rock cut away, and isn't brought in close under its roof. R,
+  or a tap on the thumb stick, puts it back behind them and gives it back to the space. The player and whoever they're fighting
   are seen through the rock where it hides them, drawn again in a flat colour, half its pixels let
   through, over what stands in front of them (world/silhouette.js: the rock between them and the
   camera, below where it's cut, view.js `rockHides`).
