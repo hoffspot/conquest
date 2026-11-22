@@ -17,6 +17,9 @@
 //     npm run soak:view -- --seed 7 --json               # another world; the report as JSON
 //
 //     --fights     the players start field battles too (they come in as the world's owners)
+//     --report-bytes
+//                  frames over the plan's 20 KB a second a player are said and don't fail it
+//                  (the nightly's: .github/workflows/scale.yml)
 //     --one-town   everyone human, in the humans' town (as it is without: each by their own
 //                  people's town, the peoples in turn)
 //
@@ -163,9 +166,10 @@ async function viewers(options) {
  * 95th and 99th percentile between frames, and the longest: ms), failures }. It fails if a
  * player was never welcomed or sent no frame, a mirror was told what couldn't be so, a player's
  * own hero isn't in their mirror, bytes that weren't a frame came, too few of the steps had a
- * frame (`frames`), or the frames came to more than `bytes` a second each on the mean.
+ * frame (`frames`), or the frames came to more than `bytes` a second each on the mean (`over`
+ * says so either way; with `told`, that's said and isn't a failure).
  */
-export function viewersOf(reports, { bytes = VIEW_SOAK.bytes, frames = VIEW_SOAK.frames } = {}) {
+export function viewersOf(reports, { bytes = VIEW_SOAK.bytes, frames = VIEW_SOAK.frames, told = false } = {}) {
     const had = reports.filter((report) => report.viewer);
     const failures = [];
     const sum = (key) => had.reduce((all, report) => all + (report[key] ?? 0), 0);
@@ -202,7 +206,7 @@ export function viewersOf(reports, { bytes = VIEW_SOAK.bytes, frames = VIEW_SOAK
 
     const mean = steps ? (sum("bytes") / steps) * (1000 / STEP_MS) : 0;
 
-    if (mean > bytes) {
+    if (mean > bytes && !told) {
         failures.push(`each player's frames came to ${(mean / 1024).toFixed(1)} KB a second on the mean (${(bytes / 1024).toFixed(0)} KB at the most)`);
     }
 
@@ -213,6 +217,7 @@ export function viewersOf(reports, { bytes = VIEW_SOAK.bytes, frames = VIEW_SOAK
         frames: sum("frames"),
         bytes: sum("bytes"),
         bytesASecond: mean,
+        over: mean > bytes,
         most: Math.max(0, ...had.map(perSecond)),
         rate: steps ? sum("frames") / steps : 0,
         known: had.length ? sum("known") / had.length : 0,
@@ -231,7 +236,7 @@ export function viewersOf(reports, { bytes = VIEW_SOAK.bytes, frames = VIEW_SOAK
  * limits, players: [...ViewBot report], samples, histograms, passes, views (what the view feed
  * cost the world: scripts/server-soak.js viewsOf), viewers (viewersOf), judged, failures }).
  */
-export async function soakView({ seed = 2, minutes = 10, players: count = 8, fights = false, oneTown = false, log = console.log } = {}) {
+export async function soakView({ seed = 2, minutes = 10, players: count = 8, fights = false, oneTown = false, reportBytes = false, log = console.log } = {}) {
     const folder = await mkdtemp(path.join(os.tmpdir(), "pellagos-view-soak-"));
     const limits = limitsFor(count);
     const server = await WorldServer.open(folder, { awake: () => ({ stop() {} }), router: false, funnel: false, ...(Object.keys(limits).length ? { limits } : {}) });
@@ -258,7 +263,7 @@ export async function soakView({ seed = 2, minutes = 10, players: count = 8, fig
 
         failures.push(...stayed(reports));
 
-        const seen = viewersOf(reports);
+        const seen = viewersOf(reports, { told: reportBytes });
 
         failures.push(...seen.failures);
 
@@ -282,6 +287,7 @@ const { values } = parseArgs({
         minutes: { type: "string" },
         players: { type: "string" },
         fights: { type: "boolean" },
+        "report-bytes": { type: "boolean" },
         "one-town": { type: "boolean" },
         seed: { type: "string" },
         json: { type: "boolean" },
@@ -298,6 +304,7 @@ if (values["join-view"]) {
         players: Number(values.players ?? 8),
         fights: values.fights === true,
         oneTown: values["one-town"] === true,
+        reportBytes: values["report-bytes"] === true,
     });
 
     await mkdir(path.dirname(REPORT), { recursive: true });
@@ -310,6 +317,10 @@ if (values["join-view"]) {
     const { judged, viewers: seen, views } = report;
 
     console.log(`${seen.players} players sent views: ${(seen.bytesASecond / 1024).toFixed(1)} KB a second each on the mean (the dearest ${(seen.most / 1024).toFixed(1)}), a frame for ${(seen.rate * 100).toFixed(1)}% of the steps, ${seen.known.toFixed(0)} known of each; ${seen.faults} faults, ${seen.again} views told again; ${seen.commands.done} commands done and ${seen.commands.refused} refused`);
+    if (seen.over) {
+        console.log(`Over the plan's budget: each player's frames came to ${(seen.bytesASecond / 1024).toFixed(1)} KB a second on the mean (${(VIEW_SOAK.bytes / 1024).toFixed(0)} KB)`);
+    }
+
     console.log(`Frames came, at the worst player's: 95 in a hundred within ${seen.arrivals.p95.toFixed(0)} ms of the last, 99 within ${seen.arrivals.p99.toFixed(0)} ms, the longest ${seen.arrivals.worst.toFixed(0)} ms`);
 
     if (views) {

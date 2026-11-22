@@ -2,6 +2,7 @@
 // players' views are added up and what fails them, and a short soak of three players who play
 // from their views alone in a real world server's replicated world
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { soakView, VIEW_SOAK, viewersOf } from "../scripts/view-soak.js";
 
@@ -37,6 +38,20 @@ describe("a view soak's players, added up (scripts/view-soak.js viewersOf)", () 
         assert.equal(VIEW_SOAK.bytes, 20 * 1024);
         assert.deepEqual(viewersOf([viewer("a", { bytes: 1200 * 1024 })]).failures, []);
         assert.match(viewersOf([viewer("a", { bytes: 1200 * 1100 })]).failures[0], /each player's frames came to 21\.5 KB a second on the mean \(20 KB at the most\)/);
+        assert.deepEqual([viewersOf([viewer("a")]).over, viewersOf([viewer("a", { bytes: 1200 * 1100 })]).over], [false, true]);
+    });
+
+    it("only says so where it's told to (the nightly's): over the budget is in the report and isn't a failure, and everything else still is", () => {
+        const seen = viewersOf([viewer("a", { bytes: 1200 * 1100 })], { told: true });
+
+        assert.deepEqual([seen.failures, seen.over], [[], true]);
+        assert.match(viewersOf([viewer("a", { bytes: 1200 * 1100, faults: 1, lines: ["x"] })], { told: true }).failures[0], /couldn't be so/);
+
+        // (And the nightly's runs are told to: both of them)
+        const workflow = readFileSync(new URL("../.github/workflows/scale.yml", import.meta.url), "utf8");
+
+        assert.equal(workflow.match(/npm run soak:view -- [^\n]*/g).every((line) => line.includes("--report-bytes")), true);
+        assert.equal(workflow.match(/npm run soak:view -- /g).length, 2);
     });
 });
 

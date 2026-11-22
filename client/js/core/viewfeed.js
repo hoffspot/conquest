@@ -68,6 +68,9 @@ export const VIEW_MODES = Object.freeze(["off", "dark", "on"]);
  * game may have let go of those it was sent (its view asked for again). `most`: how many
  * frames not yet said are kept count of.
  */
+/** The room kept in a frame for the whole record of each one gone onto another map (bytes). */
+export const MOVED = 16;
+
 export const LAG = Object.freeze({ levels: 2, raise: 4, sustain: 12, hold: 6, lower: 1, settle: 20, calm: 100, allowed: 2, probe: 40, forget: 1200, most: 64 });
 
 /** What of one of the wild's creatures a game draws it by (core/wilds.js: its `wild`): the rest is the authority's. */
@@ -671,9 +674,27 @@ export class ViewFeed {
 
     #frame(viewer, hero, step, given = null) {
         const { battle } = this.hosting.host;
+        // (How many of those known of have gone onto another map since they were told of)
+        let moved = 0;
 
         for (const entry of viewer.list) {
             entry.slot = this.state.touch(battle, entry.actor, step);
+
+            // (Gone onto another map since the player was told who they are, through a door
+            // say: told again with this very frame, and where they now are on it with it, whole
+            // and before anyone else's, in room kept for it whatever else the frame holds
+            // (MOVED). Told apart, a game had them a step or more on the map they'd left at
+            // where they are on the one they'd come to, or the other way about: its own hero,
+            // by a dungeon's way in, taken to be far from the dungeon, and its floors let go)
+            if (entry.who && entry.who.map !== (entry.actor.map ?? null)) {
+                if (entry.entered) {
+                    entry.entered = false;
+                    viewer.entering++;
+                }
+
+                entry.sent = -1;
+                moved++;
+            }
         }
 
         const { must = 0, may = [], ...sections } = given ?? {};
@@ -772,6 +793,7 @@ export class ViewFeed {
                 return entry?.entered ? entry.index : NONE;
             },
             budget,
+            reserve: moved * MOVED,
             // (A shadow's told of every step, so it knows one had nothing for it)
             // (As is a game played from views alone: its world's time goes by its frames)
             always: this.shadowing.has(viewer.id) || Boolean(this.hosting.session?.viewing?.has(viewer.peer)),

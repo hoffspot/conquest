@@ -280,6 +280,51 @@ describe("a replicated world's link (core/viewing.js)", () => {
         assert.deepEqual(dressOf(host, { kind: "beast", id: "b", wild: { creature: "wolf", elite: true, ai: { anything: 1 } } }), { wild: { creature: "wolf", elite: true } });
     });
 
+    it("has its hero, and anyone it knows of, on a map only where the world had them on that map: through a door, the map told with the place", () => {
+        // (Whenever each player's look round the world falls: every phase of it, KNOWN.every)
+        for (let phase = 0; phase < 5; phase++) {
+            const { host, come, play } = replicated();
+            const ann = come("a", character("Ann"));
+            const bob = come("b", character("Bob"));
+
+            play(20 + phase);
+
+            const [a, b] = [ann.welcome.id, bob.welcome.id];
+            const kept = [ann.link.host, bob.link.host];
+            // (Where the world's had Ann, step by step; and where each game has her after it)
+            const was = [];
+            const had = (map, x, y) => was.some((one) => one.map === map && Math.abs(one.x - x) < 0.02 && Math.abs(one.y - y) < 0.02);
+            let crossed = 0;
+
+            ann.link.command({ type: "enter", link: "tavern-door", run: true });
+
+            for (let k = 0; k < 600 && crossed < 40; k++) {
+                const before = host.battle.actor(a);
+
+                was.push({ map: before.map, x: before.x, y: before.y });
+                play();
+
+                const now = host.battle.actor(a);
+
+                was.push({ map: now.map, x: now.x, y: now.y });
+                crossed += now.map === "taproom" ? 1 : 0;
+
+                for (const [who, game] of [["hers", kept[0]], ["Bob's", kept[1]]]) {
+                    const seen = game.battle.actor(a);
+
+                    if (seen && Number.isFinite(seen.x)) {
+                        assert.ok(had(seen.map, seen.x, seen.y), `in ${who} game Ann's on ${seen.map} at ${seen.x.toFixed(1)}, ${seen.y.toFixed(1)}, where the world never had her (phase ${phase}, step ${k})`);
+                    }
+                }
+            }
+
+            assert.equal(host.battle.actor(a).map, "taproom", "she went in");
+            assert.equal(kept[0].battle.actor(a).map, "taproom", "and her game has her there");
+            assert.equal(kept[1].battle.actor(a) ?? null, null, "and Bob's, out in the town, has let her go");
+            assert.ok(kept[1].battle.actor(b));
+        }
+    });
+
     it("goes in at doors and into a dungeon on floors made here as the world has them, those of the map left let go of with the crossing", () => {
         const { host, come, play } = replicated();
         const ann = come("a", character("Ann"));
@@ -319,14 +364,25 @@ describe("a replicated world's link (core/viewing.js)", () => {
         assert.deepEqual(kept.battle.actors.filter((actor) => actor.map !== "taproom").map(({ id }) => id), [], "nor is anyone else of the town");
         assert.deepEqual([mine().x, mine().y], [host.battle.actor(a).x, host.battle.actor(a).y]);
 
-        // (Those inside come in her frames, on the floor she's on)
+        // (Those inside come in her frames, on the floor she's on: within a second of her own
+        // coming onto it, which her game now has as the world does, with the step she crossed)
         const inside = host.battle.actors.filter((actor) => actor.map === "taproom" && actor.id !== a).map(({ id }) => id).sort();
+        const known = () => kept.battle.actors.filter((actor) => actor.id !== a).map(({ id }) => id).sort();
 
-        assert.deepEqual(kept.battle.actors.filter((actor) => actor.id !== a).map(({ id }) => id).sort(), inside);
+        for (let k = 0; k < 20 && known().length < inside.length; k++) {
+            play();
+        }
+
+        assert.deepEqual(known(), inside);
 
         link.command({ type: "enter", link: "tavern-door", run: true });
         until("town");
-        play(3);
+
+        // (Within a second of her own coming back out, as above)
+        for (let k = 0; k < 20 && !kept.battle.actor(b); k++) {
+            play();
+        }
+
         assert.ok(kept.battle.actor(b), "back out, Bob's there again");
 
         // A dungeon: set down by its way in, she's told how strong it's made, and its floors
