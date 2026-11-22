@@ -198,8 +198,10 @@ test("joining and walking in a replicated world over a link that takes 300 ms th
     const last = await has(page);
 
     sound(last);
-    // (A frame a step played, the walk through: some let go by where the page drew slowly)
-    expect(last.frames).toBeGreaterThan(first.frames + 40);
+    // (Frames played the walk through, and the world's time gone on with them: a run of 9 m is
+    // some 30 of the world's steps, and a page that draws slowly lets some go by)
+    expect(last.frames).toBeGreaterThan(first.frames + 10);
+    expect(last.time).toBeGreaterThan(first.time + 1000);
     await page.context().close();
 });
 
