@@ -27,6 +27,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { NET_VERSION } from "../client/js/core/netplay.js";
 import { isHome } from "./access/addresses.js";
+import { capReason, capWorld, mayPass, mostFor, publicReady } from "./access/cap.js";
 import { ADMIN_PAGE, listenAdmin } from "./admin.js";
 import { ServerIdentity } from "./access/identity.js";
 import { Access } from "./access/index.js";
@@ -182,7 +183,7 @@ export class WorldServer {
             ...(awake ? { awake } : {}),
             // (Its worlds' threads told the most players they take: no more than the server's ceiling
             // as it stands when they're started; or, opened with one in place of their own setting's, that)
-            spawn: (stored, hooks) => new WorldThread(stored, hooks, { mostPlayers: this.limits.mostPlayers ?? null, ceiling: this.settings.get("mostPlayersCeiling"), replication: this.settings.get("replication") }),
+            spawn: (stored, hooks) => new WorldThread(stored, hooks, { mostPlayers: this.limits.mostPlayers ?? null, ceiling: this.ceilingFor(stored.meta.settings), replication: this.settings.get("replication") }),
             onSend: (world, peer, text) => this.play?.send(world, peer, text),
             onBinary: (world, peer, bytes) => this.play?.sendBinary(world, peer, bytes),
             onClose: (world, peer, reason) => this.play?.kicked(world, peer, reason),
@@ -394,14 +395,33 @@ export class WorldServer {
      * was lowered, or brought in from elsewhere).
      */
     mostPlayersOf(meta) {
-        return Math.min(meta.settings.mostPlayers, this.mostPlayersCeiling);
+        return mostFor(meta.settings.mostPlayers, this.mostPlayersCeiling, this.passesCap(meta.settings));
     }
 
-    /** Why a world's settings (as they're to be made or changed) can't be, for asking more players than the server's ceiling lets a world take; or null. */
-    overCeiling(settings) {
+    /** Whether a world of these settings may take more than 8 here (access/cap.js: replicated, public, shared, and the server ready for public worlds). */
+    passesCap(settings) {
+        return mayPass(capWorld(settings), publicReady().ready);
+    }
+
+    /** The ceiling a world of these settings is held to here: the server's, and 8 unless it may pass that. */
+    ceilingFor(settings) {
+        return mostFor(Infinity, this.mostPlayersCeiling, this.passesCap(settings));
+    }
+
+    /**
+     * Why a world's settings (as they're to be made or changed; `kept`: the settings it has, which
+     * these change) can't be, for asking more players than the server's ceiling lets a world
+     * take, or more than 8 of a world that may not pass it (access/cap.js); or null.
+     */
+    overCeiling(settings, kept = {}) {
         const asked = settings?.mostPlayers;
 
-        return Number.isInteger(asked) && asked > this.mostPlayersCeiling && asked <= WORLD_SETTINGS.mostPlayers.max ? `mostPlayers must be a whole number from ${WORLD_SETTINGS.mostPlayers.min} to ${this.mostPlayersCeiling} on this server, not ${asked}.` : null;
+        if (Number.isInteger(asked) && asked > this.mostPlayersCeiling && asked <= WORLD_SETTINGS.mostPlayers.max) {
+            return `mostPlayers must be a whole number from ${WORLD_SETTINGS.mostPlayers.min} to ${this.mostPlayersCeiling} on this server, not ${asked}.`;
+        }
+
+        // (Above what a world's setting goes to at all, its schema says so itself)
+        return asked <= WORLD_SETTINGS.mostPlayers.max ? capReason(asked, capWorld({ ...kept, ...settings }), publicReady().ready) : null;
     }
 
     /**

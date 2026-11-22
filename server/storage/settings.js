@@ -7,6 +7,7 @@
 // refused. A setting added needs no step: it's filled in with its default. Keys it doesn't know
 // are kept, not dropped, so a newer server's settings come through an older one unharmed.
 
+import { ceilingReason, publicReady } from "../access/cap.js";
 import { LIMITS } from "../access/limits.js";
 import { exists, readJSON, writeJSON } from "./files.js";
 import { checkVersion, forward, SERVER_VERSION } from "./versions.js";
@@ -22,8 +23,10 @@ export const SETTINGS_STEPS = Object.freeze({});
  * multiplayer_scaling_plan.md 1-13): players in all its worlds together (access/limits.js
  * LIMITS.players), and in any one world (the game's own: core/netplay.js MOST_PLAYERS, which a
  * world's own setting can't pass either, worlds.js WORLD_SETTINGS). A world's players each play a
- * copy of the whole world, step for step, and that's what 8 is the measure of: no setting here
- * goes above it until worlds are sent to their players another way (the plan's 3-33).
+ * copy of the whole world, step for step, and that's what 8 is the measure of. It goes above 8 a
+ * tier at a time (access/cap.js CAP_TIERS), each changed here by hand once the server's ready for
+ * public worlds (publicReady) and the tier's soak has passed; and even then only a replicated,
+ * public, shared world passes 8 (the plan's 3-33): a world in lockstep never does.
  */
 export const CAPS = Object.freeze({ players: LIMITS.players, mostPlayers: 8 });
 
@@ -216,8 +219,9 @@ export class Settings {
             return { ok: false, reasons: ["Nothing to change."] };
         }
 
+        // (Each by its schema; and the ceiling on a world's players, where its schema lets it above 8, by the cap's own rule)
         const reasons = Object.entries(changes)
-            .map(([key, value]) => settingReason(key, value))
+            .map(([key, value]) => settingReason(key, value) ?? (key === "mostPlayersCeiling" ? ceilingReason(value, this.#values.mostPlayersCeiling, publicReady().ready) : null))
             .filter(Boolean);
 
         if (reasons.length) {

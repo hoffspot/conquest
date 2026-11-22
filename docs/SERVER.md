@@ -827,7 +827,10 @@ through the tunnel listener, so as the internet's.
 A world takes 8 players at the most by its own setting and the server's ceiling
 (`mostPlayersCeiling`), a server 64 in all its worlds (`playersAtOnce`) and 32 play sockets from
 one address (`server/access/limits.js`). The two settings only lower those: 8 and 64 are the most
-they can be set to (`CAPS` in `server/storage/settings.js`; `test/caps.test.js`). A soak with more
+they can be set to (`CAPS` in `server/storage/settings.js`; `test/caps.test.js`). More than 8 in a
+world is for one that's replicated, public and shared, on a server ready for public worlds, a tier
+at a time (16, 25, 50): the rule is `server/access/cap.js`, and till what a public world needs is
+built it lets none through, so 8 it stays (`test/cap.test.js`). A soak with more
 opens its server with them raised, by `limits` among the options of `WorldServer.open`
 (`mostPlayers`, `players`, `socketsPerAddress`). They are options of that call alone: no setting,
 file or request raises them, so a server that's run as one (`npm run world-server`, the Mac app)

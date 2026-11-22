@@ -249,7 +249,7 @@ export class Management {
             firstHero === undefined || FIRST_HEROES.includes(firstHero) ? null : `A first hero is made new or brought in, not ${JSON.stringify(firstHero)}.`,
             ...(settings === undefined ? [] : settings !== null && typeof settings === "object" && !Array.isArray(settings) ? Object.entries(settings).map(([key, value]) => schemaReason(WORLD_SETTINGS, key, value)) : ["A world's settings are an object."]),
             // (No more players than the server lets a world take, unless that's what it has already)
-            settings?.mostPlayers === stored.meta.settings.mostPlayers ? null : this.server.overCeiling(settings),
+            settings?.mostPlayers === stored.meta.settings.mostPlayers ? null : this.server.overCeiling(settings, stored.meta.settings),
             ...Object.keys(changes)
                 .filter((key) => !["name", "description", "heroes", "firstHero", "settings"].includes(key))
                 .map((key) => `A world has nothing called "${key}" to change.`),
