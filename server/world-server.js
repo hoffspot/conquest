@@ -398,6 +398,15 @@ export class WorldServer {
         return mostFor(meta.settings.mostPlayers, this.mostPlayersCeiling, this.passesCap(meta.settings));
     }
 
+    /**
+     * How a world made here is played unless it's said (its setting, newWorlds; the plan's 3-34):
+     * replicated only while that's asked and replicated views are on, so no new world is one
+     * nobody can come into; lockstep otherwise.
+     */
+    get newNetcode() {
+        return this.settings.get("newWorlds") === "replicated" && this.settings.get("replication") === "on" ? "replicated" : "lockstep";
+    }
+
     /** Whether a world of these settings may take more than 8 here (access/cap.js: replicated, public, shared, and the server ready for public worlds). */
     passesCap(settings) {
         return mayPass(capWorld(settings), publicReady().ready);
@@ -442,6 +451,11 @@ export class WorldServer {
         // (Not said: as many as the server lets a world take, which is as many as a world can)
         if (settings !== null && typeof settings === "object" && !Array.isArray(settings) && settings.mostPlayers === undefined) {
             settings = { ...settings, mostPlayers: Math.min(WORLD_SETTINGS.mostPlayers.default, this.mostPlayersCeiling) };
+        }
+
+        // (How it's played, not said: as the server's worlds are made, newNetcode)
+        if (settings !== null && typeof settings === "object" && !Array.isArray(settings) && settings.netcode === undefined) {
+            settings = { ...settings, netcode: this.newNetcode };
         }
 
         // (Its character rule, if it's given one, as the heroes mode and first-hero rule it stands for)
