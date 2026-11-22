@@ -13,7 +13,7 @@ import { SPELLS } from "../client/js/core/spells.js";
 import { EMOTES } from "../client/js/core/emotes.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
 import { isGuid } from "../client/js/core/guid.js";
-import { BLOCKS, blocksOf, clearSave, enterWorld, exportCharacter, forgetCharacter, forgetWorld, hearRefusal, importCharacter, isHero, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadLegends, loadLocalWorld, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, SAVE_VERSION, saveExplored, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, stayOf, visitorOf, MOST_VISITORS, writeSave } from "../client/js/app/save.js";
+import { BLOCKS, blocksOf, clearSave, enterWorld, exportCharacter, forgetCharacter, forgetWorld, hearRefusal, importCharacter, isHero, keepCharacter, keepVisitor, keepWorldClassic, loadCharacters, loadExplored, loadLegends, loadLocalWorld, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, SAVE_VERSION, saveExplored, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, stayOf, visitorOf, MOST_VISITORS, writeSave, worldClassic } from "../client/js/app/save.js";
 import { ago, KEPT_FROM, keepMessage, MESSAGES_KEPT } from "../client/js/app/journal.js";
 import { encode } from "../client/js/core/wire.js";
 import { Standing } from "../client/js/core/standing.js";
@@ -263,6 +263,21 @@ describe("saving (save.js)", () => {
         assert.equal(renameWorld(vale.id, "  "), false);
         assert.equal(enterWorld(wren, "zzzz9999"), null);
         assert.equal(wren.world, vale.id);
+
+        // (How each is opened to others is its own: Classic till it's set otherwise, kept with
+        // the world through a rename and a going in, and nothing to do with another's)
+        const other = loadWorlds().find(({ id }) => id !== vale.id);
+
+        assert.deepEqual([worldClassic(vale.id), worldClassic(other.id), worldClassic("zzzz9999")], [true, true, true]);
+        assert.equal(keepWorldClassic(vale.id, false), true);
+        assert.deepEqual([worldClassic(vale.id), worldClassic(other.id)], [false, true]);
+        assert.equal(renameWorld(vale.id, "Thornvale"), true);
+        enterWorld(wren, vale.id);
+        assert.equal(worldClassic(vale.id), false, "kept with it");
+        assert.equal(loadLocalWorld(vale.id).name, "Thornvale");
+        assert.equal(keepWorldClassic(vale.id, true), true);
+        assert.equal(worldClassic(vale.id), true);
+        assert.equal(keepWorldClassic("zzzz9999", false), false, "not one that isn't kept");
     });
 
     it("forgets a world for good: its war, and what it kept of each character who's been in it; the characters stay, in no world till they go into another", () => {

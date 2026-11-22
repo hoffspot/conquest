@@ -7648,7 +7648,9 @@ the Bindings page till one's chosen.
    the one got ready given up. A game begun from the title instead (`playing`, `playingJoined`) lets
    go of the one got ready; back at the title, another's got ready.
 4. **Playing** (app/game.js): building the world, with a progress bar for each part (the ground,
-   each piece of the town, the characters, compiling every shader before the first frame), then
+   each piece of the town, the characters, compiling every shader before the first frame, and drawing one frame behind the loading
+   screen, so the shadows' shaders are made and what's in sight is on the graphics card before the
+   world's shown: left to the first frame seen, that held an iPhone 2.6 s), then
    the game. First its plan (docs/WORLD.md), which isn't laid out on the page: laying one out is
    a second and a half or more of the page standing still, 60% of building the world, the same
    every time for a seed. A worker lays it out (`app/plans.js`, `plan-worker.js`) and hands it
