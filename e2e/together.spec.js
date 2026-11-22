@@ -2042,3 +2042,121 @@ test("a request shared with the party from the journal: in a party, each request
     await hostContext.close();
     await guestContext.close();
 });
+
+test("a world opened to others with Classic off: its guest's sent views and no copy of the world, walks where they tap and is seen walking by the host, and sees the host walk; Classic put back, the world's opened again as it always was", async ({ ownBrowser: browser }) => {
+    const hostContext = await browser.newContext();
+    const guestContext = await browser.newContext();
+    const host = await hostContext.newPage();
+    const guest = await guestContext.newPage();
+
+    await cheaply(host, guest);
+
+    for (const page of [host, guest]) {
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    await guest.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), BRYN);
+    await host.goto("/?play&seed=2");
+    await playing(host, null, LONGER);
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+    const classic = invite.locator("#inviteclassic");
+
+    // Classic to start with, as it always was
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+    await expect(classic).toBeChecked();
+    expect(await host.evaluate(() => window.pellagos.together.netcode)).toBe("lockstep");
+
+    const first = await invite.locator("#invitecode").textContent();
+
+    // Off, with nobody else in it: opened again, by views, under another code; and kept for this device
+    await invite.locator("#inviteclassicoption").click();
+    await expect(classic).not.toBeChecked();
+    await expect.poll(() => host.evaluate(() => window.pellagos.together?.netcode ?? null), { timeout: 30000 }).toBe("replicated");
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+
+    expect(code).not.toBe(first);
+    expect(await host.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")).hostClassic)).toBe(false);
+    expect(await host.evaluate(() => ({ netcode: window.pellagos.game.hosting.session.netcode, views: window.pellagos.game.hosting.views.mode }))).toEqual({ netcode: "replicated", views: "on" });
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+
+    // The guest joins by the code, as ever: told how the world's played by its host, and played from views
+    await guest.goto(`/?join=${code}`);
+    await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
+    await playing(guest, null, LONGER);
+    await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
+
+    const has = () =>
+        guest.evaluate(() => {
+            const { game, together } = window.pellagos;
+            const me = game.battle.actor(game.me);
+
+            return { me: game.me, viewed: game.viewed, netcode: together.netcode, frames: together.joining.frames, known: game.battle.actors.length, at: me ? [me.x, me.y] : null, host: game.battle.actor("player") ? [game.battle.actor("player").x, game.battle.actor("player").y] : null };
+        });
+
+    await expect.poll(async () => (await has()).frames, { timeout: 60000 }).toBeGreaterThan(20);
+
+    const came = await has();
+    const world = await host.evaluate((id) => {
+        const { game } = window.pellagos;
+        const them = game.battle.actor(id);
+
+        return { all: game.battle.actors.length, them: [them.x, them.y], viewing: game.hosting.session.viewing.size, others: game.others().map(({ name }) => name) };
+    }, came.me);
+
+    expect(came).toMatchObject({ viewed: true, netcode: "replicated" });
+    expect(world.others).toEqual(["Bryn"]);
+    expect(world.viewing).toBe(1);
+    // (No copy: only what's near their hero, the host's player with it, where the world has them)
+    expect(came.known).toBeLessThan(world.all);
+    expect(came.host).not.toBeNull();
+    expect(Math.hypot(came.at[0] - world.them[0], came.at[1] - world.them[1])).toBeLessThan(2);
+
+    // The guest taps the ground and walks: seen going in the host's world
+    await guest.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+
+        game.mapTap({ x: me.x + 6, z: me.y + 2, reach: 0, run: true });
+    });
+    await expect.poll(() => host.evaluate(({ id, from }) => Math.hypot(window.pellagos.game.battle.actor(id).x - from[0], window.pellagos.game.battle.actor(id).y - from[1]), { id: came.me, from: world.them }), { timeout: 60000 }).toBeGreaterThan(4);
+    await expect.poll(async () => Math.hypot((await has()).at[0] - came.at[0], (await has()).at[1] - came.at[1]), { timeout: 60000 }).toBeGreaterThan(4);
+
+    // And the host walks: seen going in the guest's
+    await host.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+
+        game.host.command(game.me, { type: "move", to: [me.square[0] - 6, me.square[1] + 1], run: true });
+    });
+    await expect.poll(async () => Math.hypot((await has()).host[0] - came.host[0], (await has()).host[1] - came.host[1]), { timeout: 60000 }).toBeGreaterThan(4);
+    expect((await has()).frames).toBeGreaterThan(came.frames + 10);
+
+    // Classic put back with the guest in: for the next time, said so, and nothing changes now
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+    await expect(invite.locator("#invitecode")).toHaveText(code);
+    await invite.locator("#inviteclassicoption").click();
+    await expect(classic).toBeChecked();
+    await expect(invite.locator("#inviteclassicnote")).toContainText("the next time");
+    await expect(invite.locator("#invitecode")).toHaveText(code);
+    expect(await host.evaluate(() => window.pellagos.together.netcode)).toBe("replicated");
+
+    // Closed and opened again: Classic, as it always was
+    await invite.getByRole("button", { name: "Close the world to others" }).click();
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+    await expect(classic).toBeChecked();
+    expect(await host.evaluate(() => ({ netcode: window.pellagos.together.netcode, views: window.pellagos.game.hosting.views.mode }))).toEqual({ netcode: "lockstep", views: "off" });
+
+    await hostContext.close();
+    await guestContext.close();
+});
