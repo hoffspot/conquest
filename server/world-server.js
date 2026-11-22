@@ -27,7 +27,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { NET_VERSION } from "../client/js/core/netplay.js";
 import { isHome } from "./access/addresses.js";
-import { capReason, capWorld, mayPass, mostFor, publicReady } from "./access/cap.js";
+import { capReason, capWorld, mayPass, mostFor, publicReady, publicReason } from "./access/cap.js";
 import { ADMIN_PAGE, listenAdmin } from "./admin.js";
 import { ServerIdentity } from "./access/identity.js";
 import { Access } from "./access/index.js";
@@ -437,12 +437,21 @@ export class WorldServer {
      * A world made (as the server's admin or a creator asks: `creator` names them, for its
      * journal), with an owner's key and a player's key. Returns { world, ownerKey, playerKey }.
      */
+    /**
+     * Why a world can't be public as `settings` would have it (`kept`: its settings as they are,
+     * for one being changed), or null (access/cap.js publicReason): only by the shared preset, on
+     * a server ready for public worlds.
+     */
+    notPublic(settings, kept = {}) {
+        return settings !== null && typeof settings === "object" && !Array.isArray(settings) ? publicReason({ ...kept, ...settings }) : null;
+    }
+
     async createWorld({ name, description = "", seed, race, heroes = "kept", firstHero = "new", characters = null, settings = {} }, { creator = null, maker = null } = {}) {
         if (characters !== null && !CHARACTER_RULES.includes(characters)) {
             throw new Error(`A world's characters are ${CHARACTER_RULES.join(", ")}, not ${JSON.stringify(characters)}.`);
         }
 
-        const over = this.overCeiling(settings);
+        const over = this.overCeiling(settings) ?? this.notPublic(settings);
 
         if (over) {
             throw new Error(over);

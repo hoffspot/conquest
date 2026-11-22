@@ -7,7 +7,8 @@
 // each after its soak at 1.25 times the tier.
 //
 // What a public world needs isn't built yet (the plan's 6B-1 to 6B-14, Nanny Mode, Stage 2's
-// shared preset), so publicReady() says no and names what's missing, no world is public or shared,
+// shared preset's rules), so publicReady() says no and names what's missing, no world can be made
+// public (publicReason, below: the settings are there since the plan's 2-1, `public` and `preset`),
 // and every world's cap is 8 in practice. The rule is here, in one place, for those to turn on.
 
 /** The most players a world played in lockstep takes, and any world that isn't all the rule asks (core/netplay.js MOST_PLAYERS). */
@@ -75,8 +76,26 @@ export function ceilingReason(value, now, ready) {
 
 /**
  * A world as the rule reads it, from its settings: its netcode, and whether it's public and
- * shared, which no world is yet (there's no setting for either till the plan's 2-1 and 6B).
+ * shared, which none is taken to be yet: the settings are there (`public`, `preset`: the plan's
+ * 2-1), and reading them here is 3-37's, with the test that pins the cap.
  */
 export function capWorld(settings) {
     return { netcode: settings?.netcode, public: false, shared: false };
+}
+
+/**
+ * Why a world can't be public (`world`: its settings, as they'd be; `ready`: publicReady()), or
+ * null: a public world plays by the shared preset (the plan's 2-1), on a server ready for public
+ * worlds (gate (b)). One that isn't asked to be public can be whatever else it likes.
+ */
+export function publicReason(world, ready = publicReady()) {
+    if (world?.public !== true) {
+        return null;
+    }
+
+    if (world.preset !== "shared") {
+        return "A public world plays by the shared preset: set preset to shared with it.";
+    }
+
+    return ready.ready === true ? null : `public waits on this server being ready for public worlds. It still needs: ${ready.missing.join("; ")}.`;
 }

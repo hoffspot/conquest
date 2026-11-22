@@ -2019,10 +2019,23 @@ test("a request shared with the party from the journal: in a party, each request
     await menu.getByRole("button", { name: "Close" }).click();
 
     // Shared from the journal: Bryn given it as it stands (2 of 4 felled), and told by whom
+    // (Every line each is told is kept as it's said: the banner holds one at a time, and a
+    // messenger's coming, said just after, takes the share's place before it's read here)
+    for (const page of [host, guest]) {
+        await page.evaluate(() => {
+            const banner = document.querySelector("#banner");
+
+            window.told = [];
+            new MutationObserver(() => window.told.push(banner.textContent)).observe(banner, { childList: true, characterData: true, subtree: true });
+        });
+    }
+
+    const told = (page, line) => expect.poll(() => page.evaluate((said) => window.told.some((text) => text.includes(said)), line), { timeout: 30000 }).toBe(true);
+
     await host.keyboard.press("j");
     await share.click();
-    await expect(host.locator("#banner")).toContainText("Shared with Bryn.", { timeout: 30000 });
-    await expect(guest.locator("#banner")).toContainText(`${name} shared a request with you: Thin their numbers.`, { timeout: 30000 });
+    await told(host, "Shared with Bryn.");
+    await told(guest, `${name} shared a request with you: Thin their numbers.`);
 
     for (const page of [host, guest]) {
         expect(await page.evaluate(() => window.pellagos.game.host.players.get("guest-1").standing.requests.map(({ kind, count, until, shared }) => ({ kind, count, until, shared })))).toEqual([{ kind: "bounty", count: 2, until: 999, shared: name }]);
@@ -2036,7 +2049,7 @@ test("a request shared with the party from the journal: in a party, each request
 
     // Shared again: Bryn has it
     await share.click();
-    await expect(host.locator("#banner")).toContainText("None of your party could take it. Bryn has it already.", { timeout: 30000 });
+    await told(host, "None of your party could take it. Bryn has it already.");
     expect(await guest.evaluate(() => window.pellagos.game.standing.requests.length)).toBe(1);
 
     await hostContext.close();

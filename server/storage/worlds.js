@@ -31,6 +31,7 @@ import { BACKUPS, ensureFolder, exists, FILE_MODE, readGzip, readJSON, stampOf, 
 import { KeptHeroes } from "./heroes.js";
 import { MEASURES_FILE, MeasuredRuns } from "./measures.js";
 import { Visitors } from "./visitors.js";
+import { PRESETS } from "../../client/js/core/host.js";
 import { NETCODES } from "../../client/js/core/netplay.js";
 import { schemaReason } from "./settings.js";
 import { forward, SERVER_VERSION } from "./versions.js";
@@ -115,6 +116,15 @@ export const NETCODE_WORDS = Object.freeze({
  */
 export const netcodeOf = (meta) => (typeof meta?.settings?.netcode === "string" ? meta.settings.netcode : "lockstep");
 
+/** Each preset (core/host.js PRESETS) as the management page names it. */
+export const PRESET_WORDS = Object.freeze({
+    company: "Company: a company of friends' rules, as every world's have been",
+    shared: "Shared: the rules of a world shared by strangers, each as it's built (none is yet, so it plays as Company does)",
+});
+
+/** A world's preset (core/host.js PRESETS): company, for a world that doesn't say. */
+export const presetOf = (meta) => (typeof meta?.settings?.preset === "string" ? meta.settings.preset : "company");
+
 /** A world's rules, as its owner sets them (generated/world_server_plan.md §4, §10), as settings.js has a schema. */
 export const WORLD_SETTINGS = Object.freeze({
     mostPlayers: { kind: "integer", min: 1, max: 8, default: 8, about: "The most players in it at once" },
@@ -125,6 +135,8 @@ export const WORLD_SETTINGS = Object.freeze({
     trustedMayInvite: { kind: "boolean", default: false, about: "Trusted players may give others keys" },
     debugCommands: { kind: "boolean", default: false, about: "Its owners may use the debug commands (a field battle, say)" },
     netcode: { kind: "choice", of: NETCODES, words: NETCODE_WORDS, default: "lockstep", about: "How it's played with those who come in (changed only while nobody's in it)" },
+    preset: { kind: "choice", of: PRESETS, words: PRESET_WORDS, default: "company", about: "Its rules, set together (changed only while nobody's in it)" },
+    public: { kind: "boolean", default: false, about: "Public: a world for strangers. Only with the Shared preset, on a server ready for public worlds (none is yet)" },
     experimental: { kind: "boolean", default: false, about: "Experimental: said so on its card, to whoever sees it. For a world that tries what isn't finished" },
 });
 

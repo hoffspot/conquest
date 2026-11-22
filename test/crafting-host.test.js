@@ -887,7 +887,7 @@ describe("a hero's blows in the host (#outfit), kept and carried on", () => {
         assert.deepEqual(again.battle.actor(HOST_PLAYER).blows, { frostBlow: sword.bonuses.frostBlow });
         assert.deepEqual(again.players.get(HOST_PLAYER).progress.gear.mainHand, at.player.progress.gear.mainHand);
         assert.equal(again.checksum(), host.checksum());
-        assert.equal(SNAPSHOT_VERSION, 54, "(what's made is gear as it's kept, its new bonuses kept only where they're set: no step)");
+        assert.equal(SNAPSHOT_VERSION, 55, "(what's made is gear as it's kept, its new bonuses kept only where they're set: no step; 55 is the rules a shared world changes, the plan's 2-1)");
     });
 });
 
@@ -926,7 +926,7 @@ describe("crafting on a joined player's copy of the world (NET_VERSION 231)", ()
             }
         };
 
-        assert.equal(NET_VERSION, 235, "235 an ahead order looked along a leg at a time (docs/WAR.md, the plan's 3-29), 230 junk's, 231 crafting's (docs/CRAFTING.md), 232 mercenaries never lost (docs/WAR.md), 233 a player's far way waiting (docs/WORLD.md), 234 insides drawn by their slots (insides.js INSIDE_SLOTS)");
+        assert.equal(NET_VERSION, 236, "236 the rules a shared world changes, kept with every world (the plan's 2-1), 235 an ahead order looked along a leg at a time (docs/WAR.md, the plan's 3-29), 230 junk's, 231 crafting's (docs/CRAFTING.md), 232 mercenaries never lost (docs/WAR.md), 233 a player's far way waiting (docs/WORLD.md), 234 insides drawn by their slots (insides.js INSIDE_SLOTS)");
         joining.onWelcome = ({ seed, race, snapshot }) => joining.attach(Host.restore(buildWorld({ seed, race }), snapshot));
         joining.hello({ hero: { ...HERO, name: "Bryn", race: "human" }, progress: { gold: 200, pack: [stack("ironIngot", 2), stack("tannedLeather"), stack("demonHorn"), stack("sword", 2), junk("axe", 1, "fine"), junk("potion")] } });
         deliver();

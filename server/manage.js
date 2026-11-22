@@ -44,7 +44,7 @@ import { LAYOUT_VERSION } from "./storage/folder.js";
 import { LoadTest } from "./loadtest.js";
 import { schemaReason } from "./storage/settings.js";
 import { NewerDataError, SERVER_VERSION } from "./storage/versions.js";
-import { BACKUP_NAME, CHARACTER_RULES, FIRST_HEROES, HERO_MODES, HEROES, isOffline, JOURNAL, netcodeOf, NOW, RULE_MODES, ruleOf, settingsOf, STATE, StoredWorld, VISITORS, WORLD_FILE, WORLD_SETTINGS } from "./storage/worlds.js";
+import { BACKUP_NAME, CHARACTER_RULES, FIRST_HEROES, HERO_MODES, HEROES, isOffline, JOURNAL, netcodeOf, NOW, presetOf, RULE_MODES, ruleOf, settingsOf, STATE, StoredWorld, VISITORS, WORLD_FILE, WORLD_SETTINGS } from "./storage/worlds.js";
 
 /** The server's own journal (in its data folder): what's done to the server, not to one world. */
 export { SERVER_JOURNAL };
@@ -250,6 +250,8 @@ export class Management {
             ...(settings === undefined ? [] : settings !== null && typeof settings === "object" && !Array.isArray(settings) ? Object.entries(settings).map(([key, value]) => schemaReason(WORLD_SETTINGS, key, value)) : ["A world's settings are an object."]),
             // (No more players than the server lets a world take, unless that's what it has already)
             settings?.mostPlayers === stored.meta.settings.mostPlayers ? null : this.server.overCeiling(settings, stored.meta.settings),
+            // (Public only by the shared preset, on a server ready for public worlds)
+            settings === undefined ? null : this.server.notPublic(settings, stored.meta.settings),
             ...Object.keys(changes)
                 .filter((key) => !["name", "description", "heroes", "firstHero", "settings"].includes(key))
                 .map((key) => `A world has nothing called "${key}" to change.`),
@@ -268,6 +270,13 @@ export class Management {
         // (How it's played, as its characters: its players' games are each playing it the old way)
         if (settings?.netcode !== undefined && settings.netcode !== netcodeOf(stored.meta) && this.#going(id)) {
             throw new Refused(409, "running", "Take the world offline first (or set it aside): how it's played changes only while nobody's in it.");
+        }
+
+        // (Its preset, as how it's played: it sets rules that change only while a world's empty,
+        // a dungeon for each party and whose a foe's spoils are, and a kept world takes its
+        // preset's rules as it's opened)
+        if (settings?.preset !== undefined && settings.preset !== presetOf(stored.meta) && this.#going(id)) {
+            throw new Refused(409, "running", "Take the world offline first (or set it aside): its preset changes only while nobody's in it.");
         }
 
         const meta = {

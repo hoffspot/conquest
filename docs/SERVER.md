@@ -856,6 +856,25 @@ so in words, with what to do (reload for the newest version), where it would oth
 failed to understand what it was sent. A world can also be marked **Experimental**
 (`experimental`): its card says so in the game's lists, and nothing else changes.
 
+### A world's preset, and public worlds
+
+A world's **preset** (`preset`: `company` or `shared`; the scaling plan's `2-1`) sets together
+the rules a world shared by strangers plays differently from a company of friends': whether
+players of peoples at war are enemies (`pvp`), who may pause (`pause`), whose a foe's spoils are
+(`loot`), how foes answer a crowd (`scaling`), how much the wilds deal to one area (`director`),
+a dungeon for each party (`instances`), a unique met by each character (`rares`), and a shop's
+stock for each (`stock`). Each is a rule kept with the world (`RULES`, `RULE_CHOICES` in
+`client/js/core/host.js`), and each is as it is today until the slice of the plan that builds its
+other way turns it on. None is built yet, so a `shared` world plays exactly as a `company` one
+does; `company` is what every world is unless it says otherwise. The preset changes only while
+nobody's in the world (offline, or set aside), and a kept world takes its preset's rules as it's
+next opened. A world hosted in a browser never sets them.
+
+A world can't be made **public** (`public`) yet. A public world must use the `shared` preset, and
+the server must be ready for public worlds (identity, moderation, Nanny Mode: the plan's gate
+(b)), which no server is; asking for it is refused with what's missing
+(`server/access/cap.js` `publicReason`; `test/rules.test.js`).
+
 **Settings › Replicated views** (`replication`: off, dark or on) is the switch for the netcode
 being built for worlds of more than 8 (generated/multiplayer_scaling_plan.md). It's off.
 
