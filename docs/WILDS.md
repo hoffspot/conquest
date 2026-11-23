@@ -2084,6 +2084,16 @@ and read by no rule yet: who's paid for a kill is still who's near (the plan's `
 It's kept with the world (a character's `tags`, where it has any) and it's the host's alone:
 no game's shown it. (`test/tags.test.js`.)
 
+Who a ledger credits, and how well, is worked out apart from the world (core/credit.js; the
+plan's `2-12`; `test/credit.test.js`), and likewise read by no rule yet:
+
+- `eligible`: everyone with some weight in the ledger who isn't marked away.
+- An ordinary foe pays each of them in full.
+- A leader pays by medal (`tierOf`, `CREDIT`): **gold** for a weight of 5% of its hit points, or
+  half a fair share of them (its hit points split evenly among those credited) if that's less;
+  **silver** for half of gold's line; **bronze** for any tag. They pay 100, 85 and 75% of
+  gold's coin and chance of gear.
+
 ## Wary beasts
 
 The wild's natural beasts roaming out in the world (`core/wary.js` `WARY`: rats, porcupines,
