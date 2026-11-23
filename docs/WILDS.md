@@ -2066,6 +2066,24 @@ warrior can take it off whoever it's on.
   taunted by no one, a player's own weighed by their calling), and the world's checksum takes in
   whom each is on.
 
+### Who's had a hand in it: the tag ledger
+
+Beside its enmity, one of the wild, a colossus or an invasion's raider keeps a ledger of the
+players who've had a hand in its fight (core/battle.js `TAGS`, its `tags`; the scaling plan's
+`2-11`). Under each player:
+
+- the harm they've done it, their followers' counted as theirs;
+- the harm they've taken from it themselves;
+- the hit points they or theirs have mended in those it was on, shared among those on the one
+  mended (`Battle.tagsOf` weighs mending at half, `TAGS.healing`).
+
+Harm is what came off the hit points, never more than there were. A tag is let go once its
+player's been more than 60 m off, or on another map, for a minute (`TAGS.far`, `TAGS.lapse`;
+looked at each second), and a player who leaves the world leaves every ledger. It's recorded
+and read by no rule yet: who's paid for a kill is still who's near (the plan's `2-13` reads it).
+It's kept with the world (a character's `tags`, where it has any) and it's the host's alone:
+no game's shown it. (`test/tags.test.js`.)
+
 ## Wary beasts
 
 The wild's natural beasts roaming out in the world (`core/wary.js` `WARY`: rats, porcupines,

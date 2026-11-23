@@ -213,6 +213,17 @@ export const sitting = (actor) => Boolean(actor.routine?.seated) && (actor.afrai
 /** How long (ms) someone struck, and those of its own who saw, hold it against the striker. */
 export const FOE_MS = 60000;
 
+/**
+ * The tag ledger (generated/multiplayer_scaling_plan.md 2-11): what each player's done to one of
+ * the wild or a raider, kept on it as `tags`, { [player's id]: [harm done it (their own and their
+ * followers'), harm taken from it (their own), hit points mended in those it was on (theirs and
+ * their followers', shared among those on the one mended), when they were last near] }. A tag
+ * lapses once its player's been `far` metres off, or on another map, for `lapse` ms (looked at
+ * every `every` ms). What mending counts for beside harm is `healing` (tagsOf's `weight`).
+ * Recorded, and read by no rule yet.
+ */
+export const TAGS = Object.freeze({ lapse: 60000, far: 60, healing: 0.5, every: 1000 });
+
 /** How long someone who passed for one of a people's is known for what they are, seen through (ms). */
 export const UNMASKED_MS = 120000;
 
@@ -843,7 +854,7 @@ const OPTIONAL = Object.freeze([
     "fightSince", "fought", "guardAt", "guarding", "guise", "haste", "hatchAt", "hidden", "holdFire",
     "holds", "leech", "legendary", "lingering", "lying", "mastered", "mood", "moveAt", "movesAt", "oil",
     "onGuard", "phase", "rallied", "rank", "recovery", "regrowAt", "ruler", "siege", "slipReadyAt",
-    "slips", "snaredUntil", "steeled", "steeledAt", "still", "stoneUntil", "stunned", "tauntProofUntil",
+    "slips", "snaredUntil", "steeled", "steeledAt", "still", "stoneUntil", "stunned", "tags", "tauntProofUntil",
     "tauntReadyAt", "tauntsTaken", "thrownAt", "treadAt", "unmasked", "ward", "warnedAt",
 ]);
 
@@ -2358,7 +2369,7 @@ export class Battle {
 
             // (And no one holds a grudge against it, or remembers seeing or sparing it, being
             // struck by it, or any enmity for it)
-            for (const kept of [other.foes, other.seeing, other.spared, other.struckBy, other.enmity]) {
+            for (const kept of [other.foes, other.seeing, other.spared, other.struckBy, other.enmity, other.tags]) {
                 if (kept && id in kept) {
                     delete kept[id];
                 }
@@ -2418,6 +2429,10 @@ export class Battle {
             if (other.enmity && has(other.enmity, id)) {
                 delete other.enmity[id];
             }
+
+            if (other.tags && has(other.tags, id)) {
+                delete other.tags[id];
+            }
         }
     }
 
@@ -2476,6 +2491,10 @@ export class Battle {
 
             if (other.enmity) {
                 unkept(other.enmity);
+            }
+
+            if (other.tags) {
+                unkept(other.tags);
             }
         }
     }
@@ -3265,6 +3284,10 @@ export class Battle {
         probed && timed("battle.muster");
         this.#march();
         this.#mustered();
+
+        if (this.time % TAGS.every < STEP_MS) {
+            this.#untag();
+        }
 
         // (Who's held this step, Battle.idling: decided for each as its turn comes, by how the
         // maps stood as the step began, and kept for its walking and its blows)
@@ -9707,6 +9730,7 @@ export class Battle {
         for (const ailing of [...actor.afflictions]) {
             if (this.time >= ailing.next) {
                 ailing.next += AFFLICTIONS[ailing.kind].every;
+                this.#tagged(this.actor(ailing.by), actor, Math.min(ailing.damage, actor.hp));
                 actor.hp = Math.max(0, actor.hp - ailing.damage);
                 this.#emit("ail", { id: actor.id, kind: ailing.kind, damage: ailing.damage, hp: actor.hp, maxHp: actor.maxHp, by: ailing.by });
                 // (Its enmity for whoever laid it on, a little: ENMITY lingering; never turned by it)
@@ -9862,6 +9886,7 @@ export class Battle {
             return damage;
         }
 
+        this.#tagged(attacker, target, Math.min(damage, target.hp));
         target.hp = Math.max(0, target.hp - damage);
 
         // (A boss that regrows its hurts, burnt: none regrown a while, #boss `regrow`)
@@ -10044,6 +10069,7 @@ export class Battle {
             const { element } = def;
             const harm = Math.max(1, Math.round(share * (def.bare ? bare : damage) * charmed(target, null, element) * (this.#warded(target, { element }) ? WARD : 1)));
 
+            this.#tagged(attacker, target, Math.min(harm, target.hp));
             target.hp = Math.max(0, target.hp - harm);
 
             // (A boss that regrows its hurts, burnt by fire's: #boss `regrow`)
@@ -10178,7 +10204,103 @@ export class Battle {
 
         for (const other of on) {
             this.#enmity(other, healer, (amount * ENMITY.healing) / on.length);
+            this.#tag(other, this.#tagger(healer), 2, amount / on.length);
         }
+    }
+
+    // The player a deed's put down to in the tag ledger (TAGS): themselves, or the one a follower
+    // follows (theirs in turn, a follower's own called to it); null for anyone else's
+    #tagger(actor) {
+        for (let one = actor, hops = 0; one && hops < 3; one = one.ai === "follow" && one.leader ? this.actor(one.leader) : null, hops++) {
+            if (one.kind === "player") {
+                return one;
+            }
+        }
+
+        return null;
+    }
+
+    // Whether tags are kept on one (TAGS): the wild's, a colossus, or one that picks its own
+    // fights (an invasion's raider)
+    #tagging(actor) {
+        return actor.ai === "wild" || actor.ai === "colossus" || actor.lone === true;
+    }
+
+    // Hit points taken off `target` by `attacker` put in the ledger (TAGS): done to one that
+    // keeps tags by a player or one of theirs; or taken by a player from one that keeps them
+    #tagged(attacker, target, amount) {
+        if (!attacker || !(amount > 0)) {
+            return;
+        }
+
+        if (this.#tagging(target)) {
+            this.#tag(target, this.#tagger(attacker), 0, amount);
+        } else if (target.kind === "player" && this.#tagging(attacker)) {
+            this.#tag(attacker, target, 1, amount);
+        }
+    }
+
+    // `amount` more of one of a player's three counts on one that keeps tags (TAGS: 0 harm done
+    // it, 1 harm taken from it, 2 mending), the player near as of now
+    #tag(holder, player, slot, amount) {
+        if (!player || !(amount > 0) || !this.#tagging(holder)) {
+            return;
+        }
+
+        holder.tags ??= {};
+
+        const tag = (holder.tags[player.id] ??= [0, 0, 0, this.time]);
+
+        tag[slot] += amount;
+        tag[3] = this.time;
+    }
+
+    // The tags whose players have been far off long enough let go (TAGS lapse), and those near
+    // noted as near; one with none left has none (undefined, not an empty ledger: OPTIONAL)
+    #untag() {
+        const actors = this.actors;
+
+        for (let a = 0; a < actors.length; a++) {
+            const holder = actors[a];
+            const tags = holder.tags;
+
+            if (tags === undefined) {
+                continue;
+            }
+
+            let left = 0;
+
+            for (const id in tags) {
+                const player = this.actor(id);
+                const dx = player ? player.x - holder.x : 0;
+                const dy = player ? player.y - holder.y : 0;
+
+                if (player && player.map === holder.map && dx * dx + dy * dy <= TAGS.far * TAGS.far) {
+                    tags[id][3] = this.time;
+                } else if (this.time - tags[id][3] >= TAGS.lapse) {
+                    delete tags[id];
+
+                    continue;
+                }
+
+                left++;
+            }
+
+            if (!left) {
+                holder.tags = undefined;
+            }
+        }
+    }
+
+    /**
+     * The tag ledger of one of the wild or a raider (TAGS), as its players stand in it, in the
+     * order each first tagged it: [{ player (their id), done, taken, healed, weight (done and
+     * taken, and healed at TAGS.healing) }]; none, for one no one's tagged or that keeps none.
+     */
+    tagsOf(id) {
+        const tags = this.actor(id)?.tags;
+
+        return tags ? Object.entries(tags).map(([player, [done, taken, healed]]) => ({ player, done, taken, healed, weight: done + taken + healed * TAGS.healing })) : [];
     }
 
     // One that protects (a hired warrior, its `tactic`): a foe it's going for that's on its leader
