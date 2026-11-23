@@ -92,7 +92,7 @@ describe("a world with no host player (core/host.js RULES)", () => {
     it("keeps its rules with it, each copy and each restored one playing by them; anything unknown as RULES has it", () => {
         const { host } = served();
 
-        assert.deepEqual(RULES, { rest: "host", debug: "host", invasions: true, mortal: false, pvp: "war", loot: "near", scaling: "side", director: "player", instances: "site", rares: "world", stock: "shared" }, "(a world a browser hosts, to begin with; the last seven a shared world's to change: test/rules.test.js)");
+        assert.deepEqual(RULES, { rest: "host", debug: "host", invasions: true, mortal: false, afk: { mark: 10 * MINUTE, out: 30 * MINUTE }, pvp: "war", loot: "near", scaling: "side", director: "player", instances: "site", rares: "world", stock: "shared" }, "(a world a browser hosts, to begin with; the last seven a shared world's to change: test/rules.test.js)");
         assert.deepEqual(host.rules, SERVED);
         assert.deepEqual(host.snapshot().rules, SERVED);
         assert.deepEqual(Host.restore(buildWorld({ seed: 2 }), host.snapshot()).rules, SERVED);
@@ -192,6 +192,79 @@ describe("a world with no host player (core/host.js RULES)", () => {
 });
 
 describe("players away from the game (core/host.js AFK)", () => {
+    it("has a world's own marks as its rule (RULES afk; the plan's 2-8): each a whole number within AFK's bounds, never out sooner than marked; marked and sent out by them", () => {
+        const world = (afk) => new Host(buildWorld({ seed: 2 }), { populate: false, rules: { ...SERVED, afk } });
+
+        assert.deepEqual([AFK.least, AFK.most], [MINUTE, 24 * 60 * MINUTE]);
+        assert.deepEqual(world({ mark: 2 * MINUTE, out: 5 * MINUTE }).rules.afk, { mark: 2 * MINUTE, out: 5 * MINUTE });
+        assert.deepEqual(world({ mark: 20 * MINUTE, out: 5 * MINUTE }).rules.afk, { mark: 20 * MINUTE, out: 20 * MINUTE }, "(never sent out sooner than marked)");
+        assert.deepEqual(world({ mark: 1000, out: "never" }).rules.afk, RULES.afk, "(out of bounds, or no number: the game's own)");
+        assert.deepEqual(world(undefined).rules.afk, RULES.afk);
+        assert.deepEqual(world({ mark: 45 * MINUTE }).rules.afk, { mark: 45 * MINUTE, out: 45 * MINUTE });
+
+        const host = world({ mark: 2 * MINUTE, out: 5 * MINUTE });
+
+        host.join({ id: "p1", hero: HERO });
+        assert.deepEqual(Host.restore(buildWorld({ seed: 2 }), host.snapshot()).rules.afk, { mark: 2 * MINUTE, out: 5 * MINUTE }, "(kept with the world)");
+        host.players.get("p1").lastCommand = host.battle.time - 2 * MINUTE + 10 * STEP_MS;
+        assert.ok(!host.advance(STEP_MS).some(({ type }) => type === "away"), "(not yet)");
+
+        const marked = [];
+
+        for (let k = 0; k < 12; k++) {
+            marked.push(...host.advance(STEP_MS));
+        }
+
+        assert.ok(marked.some(({ type, id, away }) => type === "away" && id === "p1" && away), "marked at its own two minutes");
+        host.players.get("p1").lastCommand = host.battle.time - 5 * MINUTE;
+        assert.ok(host.advance(STEP_MS).some(({ type, id }) => type === "afk" && id === "p1"), "and sent out at its own five");
+    });
+
+    it("counts no one marked away in a fight's size, nor gives them a share of what falls by them; back, they're counted again", () => {
+        const { host } = served();
+        const [one, two] = [host.battle.actor("p1"), host.battle.actor("p2")];
+        const sideOf = (id) => host.strengthOf(id);
+        const both = sideOf("p1");
+
+        assert.equal(both.players, 2, "(side by side: one side of two)");
+        assert.deepEqual(sideOf("p2"), both);
+
+        host.players.get("p2").away = true;
+        assert.equal(sideOf("p1").players, 1, "(the other marked away: a side of one, at once)");
+        assert.ok(sideOf("p1").strength < both.strength);
+        assert.equal(sideOf("p2"), null, "(and no side of their own: nothing's set against one who's away)");
+
+        // (A beast felled between them by the one playing: who's given spoils of it)
+        let wolves = 0;
+        const spoils = () => {
+            const id = `test-wolf-${wolves++}`;
+
+            // (A pack's leader: something of it for everyone it's shared with, spoils.js elitePrize)
+            host.wild.set(id, { creature: "wolf", tier: 1, pack: id, camp: null, lair: null, master: false, elite: "lead" });
+            host.battle.add({ id, kind: "beast", name: "Wolf", weapon: "wolf", team: "wild", square: [one.square[0] + 1, one.square[1]], map: one.map, ai: "wild", hp: 1, wild: { creature: "wolf", tier: 1, temper: "defensive", guard: 0, roam: 0, leash: 4, pack: id, leader: null } });
+            const events = [];
+
+            assert.equal(host.command("p1", { type: "engage", target: id }).ok, true);
+
+            for (let t = 0; t < 20000 && !events.some(({ type, id: whose }) => type === "death" && whose === id); t += STEP_MS) {
+                events.push(...host.advance(STEP_MS));
+            }
+
+            assert.ok(events.some(({ type, id: whose }) => type === "death" && whose === id), "the wolf felled");
+
+            return events.filter(({ type }) => type === "spoils").map(({ id: whose }) => whose).sort();
+        };
+
+        assert.deepEqual(spoils(), ["p1"]);
+        assert.ok(two && !two.dead);
+
+        // (Back at their first command: counted, and given their share)
+        host.command("p2", { type: "stop" });
+        assert.equal(host.players.get("p2").away, false);
+        assert.equal(sideOf("p1").players, 2);
+        assert.deepEqual(spoils(), ["p1", "p2"]);
+    });
+
     it("marks a player away after AFK.mark with no command, at the same step in every copy; back as soon as they do anything", () => {
         const { host, joining, deliver, runner } = together();
         const guest = joining.me;

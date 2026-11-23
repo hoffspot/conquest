@@ -13,7 +13,7 @@
 import { rm } from "node:fs/promises";
 import { salvage } from "../client/js/app/character-file.js";
 import { ExportError, forwardExport, importCharacter } from "../client/js/app/save.js";
-import { Host, presetRules, SNAPSHOT_STEPS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
+import { AFK, Host, presetRules, SNAPSHOT_STEPS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
 import { copyOf } from "../client/js/core/guid.js";
 import { characterFrom } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -22,10 +22,20 @@ import { NewerDataError } from "./storage/versions.js";
 /**
  * The rules of a world the server runs (core/host.js RULES): time passes when everyone rests; debug
  * commands are its owners', if its settings allow them; invasions come to its towns; and the rest
- * as its preset has them (its `preset` setting: core/host.js PRESETS).
+ * as its preset has them (its `preset` setting: core/host.js PRESETS); and its away marks (afkFor).
  */
 export function rulesFor(meta) {
-    return { rest: "everyone", debug: meta.settings?.debugCommands ? "owner" : "none", invasions: true, ...presetRules(meta.settings?.preset) };
+    return { rest: "everyone", debug: meta.settings?.debugCommands ? "owner" : "none", invasions: true, afk: afkFor(meta), ...presetRules(meta.settings?.preset) };
+}
+
+/**
+ * A world's away marks, from its settings (`awayAfter` and `outAfter`, minutes: storage/worlds.js),
+ * as its rule has them (core/host.js AFK: ms); one that keeps neither, the game's own.
+ */
+export function afkFor(meta) {
+    const minutes = (value, otherwise) => (Number.isInteger(value) ? value * 60000 : otherwise);
+
+    return { mark: minutes(meta.settings?.awayAfter, AFK.mark), out: minutes(meta.settings?.outAfter, AFK.out) };
 }
 
 /** Refused: a kept world that can't be carried on (`reason`), for its owner to choose a fresh start from its seed. */
@@ -70,8 +80,9 @@ export async function openWorld(stored, { build = buildWorld } = {}) {
 
     const host = Host.restore(build({ seed: stored.meta.seed, race: stored.meta.race }), snapshot);
 
-    // (Its preset may have been changed since it was kept, which it is only while nobody's in it)
-    host.preset(stored.meta.settings?.preset);
+    // (Its preset may have been changed since it was kept, which it is only while nobody's in it;
+    // and its away marks, which it takes as it's opened)
+    host.preset(stored.meta.settings?.preset, { afk: afkFor(stored.meta) });
 
     const forwarded = snapshot.version === SNAPSHOT_VERSION ? null : snapshot.version;
 

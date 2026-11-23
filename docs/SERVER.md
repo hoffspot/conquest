@@ -286,6 +286,12 @@ in 60 seconds, and then it's saved and set aside, as **Set aside** does without 
 either while anyone else is in it (docs/GAME.md *Passing the time*). Alone in it, your menu stops it, and so does your
 page hidden (its rule **Stopped while its one player's page is hidden**, on unless you turn it off).
 
+A player who does nothing for a while is marked away, and later sent out of the world: after 10
+and 30 minutes unless the world's settings say otherwise (**awayAfter**, 1 to 120 minutes, and
+**outAfter**, 1 to 720; never sent out sooner than marked; a change is taken when the world's
+next opened). One marked away isn't counted in a fight's size, and has no share of what falls by
+them, till they do something again (docs/WAR.md, *Away from the game*).
+
 **Coming in, in turn.** Everyone who comes into a world is sent the whole of it, which is the
 dearest thing its thread does for one player. So a world lets two come in at once (its setting
 `welcomes`, 0 to 8; 0 lets any number, as it was before there was a setting): the rest wait in the

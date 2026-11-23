@@ -14,7 +14,7 @@ import { buildWorld } from "../client/js/core/overworld.js";
 import { publicReady, publicReason } from "../server/access/cap.js";
 import { ADMIN_HEADER, ADMIN_VALUE } from "../server/admin.js";
 import { STOP_NOTICE } from "../server/manage.js";
-import { openWorld, rulesFor } from "../server/reopen.js";
+import { afkFor, openWorld, rulesFor } from "../server/reopen.js";
 import { schemaReason } from "../server/storage/settings.js";
 import { presetOf, PRESET_WORDS, settingsOf, WORLD_SETTINGS } from "../server/storage/worlds.js";
 import { WorldServer } from "../server/world-server.js";
@@ -107,8 +107,8 @@ describe("the rules a shared world changes (core/host.js RULE_CHOICES)", () => {
     });
 
     it("gives a server's world its preset's rules with the server's own, a kept one as it's opened", () => {
-        assert.deepEqual(rulesFor({ settings: {} }), { rest: "everyone", debug: "none", invasions: true, ...presetRules("company") });
-        assert.deepEqual(rulesFor({ settings: { preset: "shared", debugCommands: true } }), { rest: "everyone", debug: "owner", invasions: true, ...presetRules("shared") });
+        assert.deepEqual(rulesFor({ settings: {} }), { rest: "everyone", debug: "none", invasions: true, afk: RULES.afk, ...presetRules("company") });
+        assert.deepEqual(rulesFor({ settings: { preset: "shared", debugCommands: true, awayAfter: 4, outAfter: 15 } }), { rest: "everyone", debug: "owner", invasions: true, afk: { mark: 4 * 60000, out: 15 * 60000 }, ...presetRules("shared") });
 
         const host = new Host(buildWorld({ seed: 2 }), { populate: false, rules: { rest: "everyone", debug: "owner", mortal: true } });
 
@@ -124,7 +124,10 @@ describe("the rules a shared world changes (core/host.js RULE_CHOICES)", () => {
 
         assert.ok(SNAPSHOT_VERSION >= 55);
         assert.equal(forward.version, 55);
-        assert.deepEqual(forward.rules, { ...RULES, rest: "everyone", debug: "owner", mortal: true });
+        // (Its away marks are a rule since: not this step's, filled in as it's restored, rulesOf)
+        const then = Object.fromEntries(Object.entries(RULES).filter(([key]) => key !== "afk"));
+
+        assert.deepEqual(forward.rules, { ...then, rest: "everyone", debug: "owner", mortal: true });
         assert.deepEqual(kept.rules, { rest: "everyone", debug: "owner", invasions: true, mortal: true }, "(the one kept left as it was)");
     });
 });
@@ -224,6 +227,26 @@ describe("a world's preset and public settings, on a server", () => {
         const { host } = await openWorld(stored);
 
         assert.deepEqual(host.rules, { ...RULES, rest: "everyone", debug: "none" });
+    });
+
+    it("keeps a world's away marks as settings, in minutes (the plan's 2-8): 10 and 30 unless it says, taken as its rule when it's next opened", async () => {
+        const details = (await admin("GET", `/worlds/${world.world}`)).json;
+
+        assert.deepEqual([details.settings.awayAfter, details.settings.outAfter], [10, 30]);
+        assert.deepEqual([WORLD_SETTINGS.awayAfter.min, WORLD_SETTINGS.awayAfter.max, WORLD_SETTINGS.outAfter.min, WORLD_SETTINGS.outAfter.max], [1, 120, 1, 720]);
+        assert.deepEqual(afkFor({ settings: {} }), { mark: 10 * 60000, out: 30 * 60000 }, "(a world kept before them: the game's own)");
+        assert.equal((await admin("PATCH", `/worlds/${world.world}`, { settings: { awayAfter: 0 } })).status, 400);
+        assert.equal((await admin("PATCH", `/worlds/${world.world}`, { settings: { outAfter: 721 } })).status, 400);
+
+        const changed = await admin("PATCH", `/worlds/${world.world}`, { settings: { awayAfter: 4, outAfter: 2 } });
+
+        assert.equal(changed.status, 200);
+        assert.deepEqual([changed.json.settings.awayAfter, changed.json.settings.outAfter], [4, 2]);
+
+        const { host } = await openWorld(server.worlds.get(world.world));
+
+        assert.deepEqual(host.rules.afk, { mark: 4 * 60000, out: 4 * 60000 }, "(never sent out sooner than marked)");
+        assert.equal((await admin("PATCH", `/worlds/${world.world}`, { settings: { awayAfter: 10, outAfter: 30 } })).status, 200);
     });
 
     it("stops a world with notice from the management page, and not one that isn't going (manage.js stopSoon; the plan's 2-7)", async () => {

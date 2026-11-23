@@ -1097,7 +1097,7 @@ function worldSettings(world) {
             Object.entries(schema).map(([key, setting]) =>
                 setting.kind === "boolean" ? check(key, setting.about, world.settings[key]) : setting.kind === "choice" ? choice(key, setting, world.settings[key], going) : field(`${setting.about} (${setting.min} to ${setting.max})`, h("input", { type: "number", name: key, min: String(setting.min), max: String(setting.max), value: String(world.settings[key]) })),
             ),
-            h("p", { class: "muted small" }, "A player away 10 minutes is marked away; after 30 they're sent out. Resting always needs everyone there."),
+            h("p", { class: "muted small" }, "A player who does nothing is marked away, then sent out, after the minutes above; a change to those is taken when the world's next opened. With anyone else in the world a rest passes no time, and no one can pause it."),
         ),
         status,
         h("button", { type: "submit", class: "primary" }, "Save"),

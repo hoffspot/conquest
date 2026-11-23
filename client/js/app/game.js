@@ -75,7 +75,7 @@ import { actionFor, heldBy, keyMap, keyOf, keysOf, mouseOf } from "./keys.js";
 import { PICKED, pickInFront } from "./gamepad.js";
 import { Surroundings } from "./surroundings.js";
 import { Conversation, MENDERS_LISTED, treeFor, upstairsIs } from "../core/dialogue.js";
-import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, READY, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, snagChoice, snaggable, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
+import { AFK, CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, READY, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, snagChoice, snaggable, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
 import { dress, HELD_LOOKS, UNIQUE_LOOKS } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, gearLook, levelOf, offHandFree } from "../core/gear.js";
 import { EFFECTS } from "../core/legendary.js";
@@ -11691,7 +11691,7 @@ export class Game {
         this.hud.setAway(id, shown);
 
         if (shown && id === this.me) {
-            this.hud.message(id === HOST_PLAYER ? "You're marked away (AFK) till you do something." : "You're marked away (AFK) till you do something. After 30 minutes away you'll be sent out of the world.", 5);
+            this.hud.message(id === HOST_PLAYER ? "You're marked away (AFK) till you do something." : `You're marked away (AFK) till you do something. After ${Math.round((this.worldview.rules?.afk?.out ?? AFK.out) / 60000)} minutes away you'll be sent out of the world.`, 5);
         }
     }
 

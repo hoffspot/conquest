@@ -3451,6 +3451,15 @@ world. Each player's last command is kept in the world (its snapshot), so every 
 at the same step; the host sends them out (`Hosting.kick`, from core/runner.js), and their going
 is recorded as any going is. (`SNAPSHOT_VERSION` 27; `NET_VERSION` 112.)
 
+The 10 and the 30 are the game's own, and a world's rule (`RULES` `afk`: `{ mark, out }`, ms; the
+scaling plan's 2-8): a world on a server sets its own in its settings (**awayAfter** and
+**outAfter**, minutes; docs/SERVER.md), from a minute to a day, never sent out sooner than marked,
+taken as the world's next opened. And one marked away is out of what the world makes of who's
+there, at once: they're not counted in a fight's size (`Host.#groups`: the wild's answer to a
+side, what the wilds deal), and they've no share of what falls within reach of them (`#spoils`)
+nor of a chest or a hoard opened where they stand. Back at their first command.
+(`NET_VERSION` 239; `test/hostless.test.js`.)
+
 **Coming in again on another device** (core/netplay.js `Hosting` `#takeOver`). One whose character
 is in the world already, on another device, or on a link gone dead without a word (a crash, a
 phone gone from its network) whose place is still kept, takes it over as it stands, at once: the

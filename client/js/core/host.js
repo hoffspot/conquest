@@ -510,6 +510,29 @@ export const REST = Object.freeze({ clear: 40, least: 5 * 60000, burns: 3 * 6000
 export const DUEL = Object.freeze({ reach: 40, askMs: 30000, startMs: 3000, apart: 60 });
 
 /**
+ * A player who's given no command for a while (ms of the world's time, which stands still while
+ * the world's stopped): marked away (AFK, by their name, seen by everyone) after `mark`, and sent
+ * out of the world after `out` (any but the host's own player: they're the world). Kept in the
+ * world, so every copy marks them at the same step (generated/world_server_plan.md §4). These
+ * are a world's to begin with: its own are its rule (RULES `afk`; the scaling plan's 2-8), each
+ * from `least` to `most`, and never sent out sooner than marked.
+ *
+ * One marked away is out of what the world makes of who's there, at once: the size of a fight
+ * (#groups: the wild's answer to a side, and what the wilds deal), a share of what falls near
+ * them (#spoils) and of a chest or a hoard opened where they stand. Back at their first command.
+ */
+export const AFK = Object.freeze({ mark: 10 * 60000, out: 30 * 60000, least: 60000, most: 24 * 60 * 60000 });
+
+// A world's away marks as given ({ mark, out }, ms), either left as AFK has it if it isn't a whole
+// number within AFK's bounds; never sent out sooner than marked
+function afkOf(given) {
+    const fits = (value) => Number.isInteger(value) && value >= AFK.least && value <= AFK.most;
+    const mark = fits(given?.mark) ? given.mark : AFK.mark;
+
+    return Object.freeze({ mark, out: Math.max(mark, fits(given?.out) ? given.out : AFK.out) });
+}
+
+/**
  * A world's rules (generated/world_server_plan.md §3.2), kept with it (its snapshot), so every copy
  * of it plays by them:
  *  - `rest`: who passes its time by resting, alone in it (REST: with anyone else in the world no
@@ -521,9 +544,11 @@ export const DUEL = Object.freeze({ reach: 40, askMs: 30000, startMs: 3000, apar
  *  - `mortal`: whether the players' hired adventurers can die (docs/WAR.md *Mercenaries that
  *    grow*): the fall that would send one home to mend (followers.js MENDING) its last. Off to
  *    begin with; set by the world's host's player or an owner (the "rule" command);
+ *  - `afk`: how long without a command before a player's marked away, and before they're sent
+ *    out ({ mark, out }, ms: AFK);
  *  - and the rules a world shared by strangers changes (RULE_CHOICES), each as it is today.
  */
-export const RULES = Object.freeze({ rest: "host", debug: "host", invasions: true, mortal: false, pvp: "war", loot: "near", scaling: "side", director: "player", instances: "site", rares: "world", stock: "shared" });
+export const RULES = Object.freeze({ rest: "host", debug: "host", invasions: true, mortal: false, afk: Object.freeze({ mark: AFK.mark, out: AFK.out }), pvp: "war", loot: "near", scaling: "side", director: "player", instances: "site", rares: "world", stock: "shared" });
 
 /**
  * The rules a world shared by strangers plays by (generated/multiplayer_scaling_plan.md Stage 2,
@@ -571,20 +596,13 @@ function rulesOf(rules = {}, choices = RULE_CHOICES) {
         debug: ["host", "owner", "none"].includes(rules?.debug) ? rules.debug : RULES.debug,
         invasions: typeof rules?.invasions === "boolean" ? rules.invasions : RULES.invasions,
         mortal: typeof rules?.mortal === "boolean" ? rules.mortal : RULES.mortal,
+        afk: afkOf(rules?.afk),
         ...Object.fromEntries(Object.entries(choices).map(([key, { of, built }]) => [key, built && of.includes(rules?.[key]) ? rules[key] : of[0]])),
     });
 }
 
 /** A world's rules as `rules` would have them (rulesOf), for the tests of a rule not built yet (`choices`). */
 export const ruled = (rules, choices = RULE_CHOICES) => rulesOf(rules, choices);
-
-/**
- * A player who's given no command for a while (ms of the world's time, which stands still while
- * the world's stopped): marked away (AFK, by their name, seen by everyone) after `mark`, and sent
- * out of the world after `out` (any but the host's own player: they're the world). Kept in the
- * world, so every copy marks them at the same step (generated/world_server_plan.md §4).
- */
-export const AFK = Object.freeze({ mark: 10 * 60000, out: 30 * 60000 });
 
 /**
  * A player's role in a world (generated/world_server_plan.md §7.4), as they came into it (Host.join):
@@ -6224,7 +6242,8 @@ export class Host {
         for (const player of this.players.values()) {
             const actor = this.battle.actor(player.id);
 
-            if (!actor || actor.dead || actor.map !== fallen.map || hypot(actor.x - fallen.x, actor.y - fallen.y) > SPOILS_REACH) {
+            // (Nor one marked away, standing by: AFK)
+            if (!actor || actor.dead || player.away || actor.map !== fallen.map || hypot(actor.x - fallen.x, actor.y - fallen.y) > SPOILS_REACH) {
                 continue;
             }
 
@@ -11678,11 +11697,12 @@ export class Host {
     }
 
     // The players in groups (strength.js groupsOf: those on one map within STRENGTH.apart of one
-    // another, one after another), the standing only: each { players, actors (theirs, in the
+    // another, one after another), the standing only, and none marked away: each { players, actors (theirs, in the
     // same order), leader (their party's leader, if they're in the group, or the first of them),
     // actor (the leader's) }, in the order of their first
     #groups() {
-        const standing = [...this.players.values()].map((player) => ({ player, actor: this.battle.actor(player.id) })).filter(({ actor }) => actor && !actor.dead);
+        // (Nor one marked away: out of a fight's size at once, AFK)
+        const standing = [...this.players.values()].filter((player) => !player.away).map((player) => ({ player, actor: this.battle.actor(player.id) })).filter(({ actor }) => actor && !actor.dead);
         const at = new Map(standing.map((one) => [one.player.id, one]));
         const tally = { pairs: 0 };
         const groups = groupsOf(standing.map(({ player, actor }) => ({ id: player.id, map: actor.map, x: actor.x, y: actor.y })), STRENGTH.apart, tally);
@@ -11699,7 +11719,7 @@ export class Host {
         });
     }
 
-    // The group a player's in (#groups), or null (fallen, or not playing)
+    // The group a player's in (#groups), or null (fallen, marked away, or not playing)
     #groupOf(playerId) {
         return this.#groups().find(({ players }) => players.some((player) => player.id === playerId)) ?? null;
     }
@@ -15786,7 +15806,7 @@ export class Host {
 
         for (const player of this.players.values()) {
             const actor = this.battle.actor(player.id);
-            const there = actor && !actor.dead && (dropped.hoard ? building.maps.includes(actor.map) : actor.map === dropped.map && hypot(actor.x - dropped.square[0] - 0.5, actor.y - dropped.square[1] - 0.5) <= SPOILS_REACH);
+            const there = actor && !actor.dead && !player.away && (dropped.hoard ? building.maps.includes(actor.map) : actor.map === dropped.map && hypot(actor.x - dropped.square[0] - 0.5, actor.y - dropped.square[1] - 0.5) <= SPOILS_REACH);
 
             if (!there) {
                 continue;
@@ -16754,11 +16774,12 @@ export class Host {
     }
 
     /**
-     * The world's rules as a preset has them (PRESETS, presetRules), the rest as they were: as a
-     * kept world's opened (server/reopen.js), before anyone's in it, so nobody's told.
+     * The world's rules as a preset has them (PRESETS, presetRules), and its away marks as its
+     * settings have them (`afk`: AFK), the rest as they were: as a kept world's opened
+     * (server/reopen.js), before anyone's in it, so nobody's told.
      */
-    preset(preset) {
-        this.rules = rulesOf({ ...this.rules, ...presetRules(preset) });
+    preset(preset, { afk = this.rules.afk } = {}) {
+        this.rules = rulesOf({ ...this.rules, ...presetRules(preset), afk });
     }
 
     // One of the world's rules changed (RULES mortal), by whoever may (debugs: its host's player,
@@ -18864,16 +18885,17 @@ export class Host {
     // own player) to be sent out of the world, everyone told (core/runner.js sends them out)
     #idle() {
         const now = this.battle.time;
+        const { afk } = this.rules;
 
         for (const player of this.players.values()) {
             const idle = now - player.lastCommand;
 
-            if (!player.away && idle >= AFK.mark) {
+            if (!player.away && idle >= afk.mark) {
                 player.away = true;
                 this.#event("away", { id: player.id, away: true, name: player.hero.name });
             }
 
-            if (!player.out && idle >= AFK.out && player.id !== HOST_PLAYER) {
+            if (!player.out && idle >= afk.out && player.id !== HOST_PLAYER) {
                 player.out = true;
                 this.#event("afk", { id: player.id, name: player.hero.name });
             }
