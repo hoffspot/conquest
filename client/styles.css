@@ -6971,6 +6971,59 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     margin-top: 10px;
 }
 
+/* The Players tab's players found by name (app/partypanel.js playersPage) */
+.party-search {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 40px;
+    margin-bottom: 8px;
+    padding: 0 12px;
+    border-radius: 9px;
+    border: 1px solid var(--field-border);
+    background: rgba(0, 0, 0, 0.25);
+    color: var(--ink);
+    font: inherit;
+    font-size: 16px;
+}
+
+.party-search:focus-visible {
+    outline: 2px solid var(--gold-bright);
+}
+
+/* Its headings: the player's party, those near, everyone else */
+.party-section {
+    list-style: none;
+    margin: 10px 0 4px;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.party-section:first-child {
+    margin-top: 0;
+}
+
+.party-section.party-none {
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 14px;
+}
+
+/* A page of them at a time: Previous, which page, Next */
+.party-pager {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.party-page {
+    font-size: 13px;
+    color: var(--muted);
+}
+
 /* What's said in the party and to the player, on screen a few seconds just above the quick actions
    (where they rise in a fight), then faded (hud.js chatLine: Game options' Party chat on screen):
    a few short lines, the newest at the foot, never in the way of a tap */
