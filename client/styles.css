@@ -7138,7 +7138,30 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     color: #e6dcff;
 }
 
-/* Whom the Chat's line goes to: the party, or one player */
+/* A shout, heard by everyone near (app/partypanel.js #chat; core/netplay.js SHOUT): amber */
+.chat-line.shout .chat-name,
+.chat-line.shout.mine .chat-name {
+    color: var(--gold-bright);
+}
+
+/* Hear shouts, under the Chat's line: on, or turned off */
+.chat-shouts {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+    font-size: 13px;
+    color: var(--ink);
+    cursor: pointer;
+}
+
+.chat-shouts input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--gold-bright);
+}
+
+/* Whom the Chat's line goes to: the party, one player, or everyone near (a shout) */
 .chat-to {
     flex: none;
     max-width: 38%;

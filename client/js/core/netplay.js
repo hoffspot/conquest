@@ -71,9 +71,10 @@
 //                                                    a word to the host and back's taken it lately,
 //                                                    ms, once it's timed one: Joining lately; the
 //                                                    host's, to show)
-//                    { kind: "chat", text, to }                (a line to their party; or, `to` a
+//                    { kind: "chat", text, to, shout }         (a line to their party; `shout`: true, to
+//                                                    everyone near them, SHOUT; or, `to` a
 //                                                    player's id, a direct message to them)
-//                    { kind: "dms", party, world }             (which direct messages they take: from
+//                    { kind: "dms", party, world, shout }      (which lines they take: shouts, and direct messages from
 //                                                    their party, from anyone else in the world)
 //                    { kind: "own", own }                      (what its game keeps of its hero that
 //                                                    isn't the world's, as it's changed: any of
@@ -140,7 +141,7 @@ import { WARY } from "./wary.js";
  * Bumped whenever what's said changes: a game of another version can't join. (Not for what's
  * added and opted into: contribution.md, section 3.)
  */
-export const NET_VERSION = 239;
+export const NET_VERSION = 240;
 
 /**
  * The ways a world can be played with those who join it (its netcode): `lockstep`, each game
@@ -375,10 +376,22 @@ export const CHAT = Object.freeze({ most: 200, burst: 5, burstMs: 10000, kept: 5
  * Why a line wasn't said (as host.js REFUSALS names them): nothing to say, in no party, too many too
  * quickly; a direct message to no one in the world, or to one not taking that kind ("closed").
  */
-export const CHAT_REFUSED = Object.freeze(["empty", "unpartied", "chatty", "nobody", "closed"]);
+export const CHAT_REFUSED = Object.freeze(["empty", "unpartied", "chatty", "nobody", "closed", "shoutsOff", "repeated"]);
 
-/** Which direct messages a player takes till they say otherwise: from their party, and from anyone else in the world. */
-export const DMS_TAKEN = Object.freeze({ party: true, world: true });
+/**
+ * Which lines a player takes till they say otherwise: direct messages from their party and from
+ * anyone else in the world, and shouts (SHOUT).
+ */
+export const DMS_TAKEN = Object.freeze({ party: true, world: true, shout: true });
+
+/**
+ * A shout (generated/multiplayer_scaling_plan.md 2-9, where it was `say`): a typed line heard by
+ * every player within `reach` metres of the one who shouts it, on their map, in a party with them
+ * or not; `burst` of them at most in `burstMs` of the world's time, and none the same as their
+ * last within it ("repeated"). A player who's turned shouts off (DMS_TAKEN `shout`: their game's
+ * Hear shouts) is sent none, and can't shout themselves ("shoutsOff").
+ */
+export const SHOUT = Object.freeze({ reach: 60, burst: 3, burstMs: 10000 });
 
 /**
  * A line as it's said: whatever's not to be seen (control characters) and runs of spaces made one
@@ -691,6 +704,8 @@ export class Session {
 
         // Which direct messages each player takes, as they've said (DMS_TAKEN till they have)
         this.dms = new Map();
+        /** What each player's shouted lately (SHOUT), by id: [{ at, text }]. */
+        this.shouted = new Map();
     }
 
     /** What sends the world itself to those who've joined (the Hosting's other part). */
@@ -818,7 +833,7 @@ export class Session {
                 break;
             case "chat": {
                 const id = this.players.get(peer);
-                const said = id ? this.#say(id, message.text, typeof message.to === "string" ? message.to : null) : null;
+                const said = id ? (message.shout === true ? this.#shout(id, message.text) : this.#say(id, message.text, typeof message.to === "string" ? message.to : null)) : null;
 
                 if (said && !said.ok) {
                     this.hosting.post(peer, "unsaid", encode({ kind: "unsaid", reason: said.reason, ...(said.name ? { name: said.name } : {}) }));
@@ -858,13 +873,67 @@ export class Session {
      * (CHAT_REFUSED: nothing to say, in no party, too many lines too quickly, no such player, or
      * one not taking that kind of message: `name`, theirs).
      */
-    chat(text, { to = null } = {}) {
-        return this.#say(HOST_PLAYER, text, to);
+    chat(text, { to = null, shout = false } = {}) {
+        return shout ? this.#shout(HOST_PLAYER, text) : this.#say(HOST_PLAYER, text, to);
     }
 
-    /** Which direct messages a player takes (`party`, `world`: DMS_TAKEN), as they say (the host's own player's, as the game says). */
-    takeDms(id, { party = true, world = true } = {}) {
-        this.dms.set(id, { party: party !== false, world: world !== false });
+    /** Which lines a player takes (`party`, `world`, `shout`: DMS_TAKEN), as they say (the host's own player's, as the game says). */
+    takeDms(id, { party = true, world = true, shout = true } = {}) {
+        this.dms.set(id, { party: party !== false, world: world !== false, shout: shout !== false });
+    }
+
+    // A line shouted by a player (SHOUT): to every player on their map within SHOUT.reach of them
+    // who takes shouts, and back to the one who shouted; no one else. Refused of one who's turned
+    // shouts off, of more than SHOUT.burst in a while, and of the same line again within it
+    #shout(id, said) {
+        const text = chatLine(said);
+
+        if (!text) {
+            return { ok: false, reason: "empty" };
+        }
+
+        if (!(this.dms.get(id) ?? DMS_TAKEN).shout) {
+            return { ok: false, reason: "shoutsOff" };
+        }
+
+        const now = this.host.battle.time;
+        const lately = (this.shouted.get(id) ?? []).filter(({ at }) => at > now - SHOUT.burstMs);
+
+        this.shouted.set(id, lately);
+
+        if (lately.length >= SHOUT.burst) {
+            return { ok: false, reason: "chatty" };
+        }
+
+        if (lately.at(-1)?.text === text) {
+            return { ok: false, reason: "repeated" };
+        }
+
+        lately.push({ at: now, text });
+
+        const from = this.host.battle.actor(id);
+        const line = { from: id, name: this.host.players.get(id)?.hero.name ?? "", text, shout: true };
+        const sent = encode({ kind: "chat", ...line });
+        const hears = (other) => {
+            const actor = this.host.battle.actor(other);
+            const [dx, dy] = from && actor ? [actor.x - from.x, actor.y - from.y] : [Infinity, Infinity];
+
+            return other === id || (actor?.map === from?.map && dx * dx + dy * dy <= SHOUT.reach * SHOUT.reach && (this.dms.get(other) ?? DMS_TAKEN).shout);
+        };
+
+        for (const member of [...this.host.players.keys()].filter(hears)) {
+            if (member === HOST_PLAYER) {
+                this.onChat(line);
+            } else {
+                const peer = [...this.players].find(([, player]) => player === member)?.[0];
+
+                if (peer !== undefined) {
+                    this.hosting.post(peer, "chat", sent);
+                }
+            }
+        }
+
+        return { ok: true };
     }
 
     // A line said by a player to their party: to each in it (the host's own player told here, the
@@ -1512,6 +1581,7 @@ export class Session {
 
     #left(id, peer) {
         this.said.delete(id);
+        this.shouted.delete(id);
 
         const place = this.host.placeOf(id);
         const vitals = this.host.vitalsOf(id);
@@ -2331,7 +2401,7 @@ export class Joining {
                 const dm = (message.dm === "party" || message.dm === "world") && typeof message.to === "string" ? { to: message.to, toName: typeof message.toName === "string" ? message.toName : "", dm: message.dm } : {};
 
                 if (text && typeof message.from === "string") {
-                    this.onChat({ from: message.from, name: typeof message.name === "string" ? message.name : "", text, ...dm });
+                    this.onChat({ from: message.from, name: typeof message.name === "string" ? message.name : "", text, ...dm, ...(message.shout === true ? { shout: true } : {}) });
                 }
 
                 break;
@@ -2353,21 +2423,21 @@ export class Joining {
      * to them (heard back too). Returns { ok: true, pending: true }, or, with nothing to say,
      * { ok: false, reason: "empty" }.
      */
-    chat(text, { to = null } = {}) {
+    chat(text, { to = null, shout = false } = {}) {
         const line = chatLine(text);
 
         if (!line) {
             return { ok: false, reason: "empty" };
         }
 
-        this.send(encode({ kind: "chat", text: line, ...(typeof to === "string" ? { to } : {}) }));
+        this.send(encode({ kind: "chat", text: line, ...(shout ? { shout: true } : typeof to === "string" ? { to } : {}) }));
 
         return { ok: true, pending: true };
     }
 
     /** Tell the host which direct messages its player takes (`party`, `world`: DMS_TAKEN); said again as its link comes back (resync). */
-    takeDms({ party = true, world = true } = {}) {
-        this.dms = { party: party !== false, world: world !== false };
+    takeDms({ party = true, world = true, shout = true } = {}) {
+        this.dms = { party: party !== false, world: world !== false, shout: shout !== false };
         this.send(encode({ kind: "dms", ...this.dms }));
     }
 

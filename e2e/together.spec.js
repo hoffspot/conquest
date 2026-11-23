@@ -1342,6 +1342,103 @@ test("the party menu's Players tab lists everyone playing in the world, the play
     await guestContext.close();
 });
 
+test("a shout from the Chat's To: heard by Bryn near, in no party, a moment on their screen and in their chat; Bryn turns Hear shouts off: sent none, no Shout in their To, kept with their settings; on again and too far off, not heard", async ({ ownBrowser: browser }) => {
+    const hostContext = await browser.newContext();
+    const guestContext = await browser.newContext();
+    const host = await hostContext.newPage();
+    const guest = await guestContext.newPage();
+
+    await cheaply(host, guest);
+
+    for (const page of [host, guest]) {
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    await guest.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), BRYN);
+    await host.goto("/?play&seed=2");
+    await playing(host, null, LONGER);
+    await undrawn(host);
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+    const ada = await host.evaluate(() => window.pellagos.game.host.players.get("player").hero.name);
+
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+    await guest.goto(`/?join=${code}`);
+    await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
+    await playing(guest, null, LONGER);
+    await undrawn(guest);
+    await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
+
+    // The host, in no party, shouts from the Chat: To, Shout (nearby)
+    const menu = host.getByRole("dialog", { name: "Party" });
+    const theirs = guest.getByRole("dialog", { name: "Party" });
+    const to = menu.getByRole("combobox", { name: "Who to say it to" });
+    const shouting = menu.getByRole("textbox", { name: "Something to shout to everyone nearby" });
+    const shout = async (text) => {
+        await to.selectOption({ label: "Shout (nearby)" });
+        await shouting.fill(text);
+        await shouting.press("Enter");
+        await expect(menu.locator(".chat-line.shout.mine").last()).toHaveText(`You shout: ${text}`, { timeout: 30000 });
+    };
+    // (A message to Bryn alone, and Bryn's game having it: whatever was sent Bryn before it has come)
+    const reached = async (text) => {
+        await to.selectOption("guest-1");
+        await menu.getByRole("textbox", { name: "Something to say to Bryn" }).fill(text);
+        await menu.getByRole("textbox", { name: "Something to say to Bryn" }).press("Enter");
+        await expect.poll(() => guest.evaluate((said) => window.pellagos.game.chatLines.some((line) => line.text === said), text), { timeout: 30000 }).toBe(true);
+    };
+
+    await host.locator("#partybutton").click();
+    await menu.getByRole("tab", { name: "Chat" }).click();
+    await expect(menu.getByRole("checkbox", { name: "Hear shouts from players nearby" })).toBeChecked();
+    await shout("Anyone about?");
+
+    // Bryn, near: a moment on screen, and in their chat
+    await expect(guest.locator("#hud .chatfeed-line").last()).toHaveText(`${ada} shouts: Anyone about?`, { timeout: 30000 });
+    await guest.locator("#partybutton").click();
+    await theirs.getByRole("tab", { name: "Chat" }).click();
+    await expect(theirs.locator(".chat-line.shout")).toHaveText([`${ada} shouts: Anyone about?`]);
+
+    // Bryn turns Hear shouts off: no Shout in their To, kept, the host told; the next isn't sent
+    const hears = theirs.getByRole("checkbox", { name: "Hear shouts from players nearby" });
+
+    await expect(theirs.getByRole("combobox", { name: "Who to say it to" }).locator("option")).toHaveText(["Party", "Shout (nearby)", ada]);
+    await hears.uncheck();
+    await expect(theirs.getByRole("combobox", { name: "Who to say it to" }).locator("option")).toHaveText(["Party", ada]);
+    expect(await guest.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")).hearShouts)).toBe(false);
+    await expect.poll(() => host.evaluate(() => window.pellagos.game.hosting.session.dms.get("guest-1")?.shout), { timeout: 30000 }).toBe(false);
+    await shout("Still about?");
+    await reached("One");
+    await expect(theirs.locator(".chat-line.shout")).toHaveCount(1);
+
+    // On again, and heard again
+    await hears.check();
+    await expect.poll(() => host.evaluate(() => window.pellagos.game.hosting.session.dms.get("guest-1")?.shout), { timeout: 30000 }).toBe(true);
+    await shout("And now?");
+    await expect(theirs.locator(".chat-line.shout")).toHaveText([`${ada} shouts: Anyone about?`, `${ada} shouts: And now?`], { timeout: 30000 });
+
+    // Bryn further off than a shout carries, in the host's world: not heard
+    await host.evaluate(() => {
+        window.pellagos.game.host.battle.actor("guest-1").x += 61;
+    });
+    await host.waitForTimeout(10500);
+    await shout("Too far?");
+    await reached("Two");
+    await expect(theirs.locator(".chat-line.shout")).toHaveCount(2);
+
+    await hostContext.close();
+    await guestContext.close();
+});
+
 test("a direct message from the Players tab: To Bryn in the host's chat, From the host in Bryn's, a moment on Bryn's screen and gone; refused while Bryn takes no world messages, the host told; Bryn blocks the host: their messages and invites never reach Bryn, the host none the wiser; unblocked from Game options' Blocked players", async ({ ownBrowser: browser }) => {
     const hostContext = await browser.newContext();
     const guestContext = await browser.newContext();

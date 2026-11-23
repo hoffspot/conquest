@@ -43,6 +43,9 @@ const element = (tag, className, text = "") => Object.assign(document.createElem
 /** How long a button asked twice (Leave party, Remove) waits to be pressed again, to be sure (ms). */
 export const DISMISS_SURE_MS = 3000;
 
+/** Whom the Chat's line goes to when it's shouted (core/netplay.js SHOUT): everyone near, not a player's id. */
+export const SHOUT_TO = "*shout";
+
 /** What can be said to the party with a tap (the chat's quick phrases). */
 export const QUICK_PHRASES = Object.freeze(["On my way!", "Wait for me.", "Follow me!", "Help!", "Ready.", "Thanks!", "Well fought!", "Back to town."]);
 
@@ -216,7 +219,13 @@ export class PartyPanel {
                 this.input.value = "";
             }
         });
-        this.chatBody.append(this.chatLog, this.chatNote, this.quick, this.form);
+        // (Shouts heard, or turned off: the lines of anyone near, in the player's party or not,
+        // core/netplay.js SHOUT. Off, none is sent them, and they can't shout)
+        this.shoutsSwitch = element("label", "chat-shouts");
+        this.shoutsBox = Object.assign(document.createElement("input"), { type: "checkbox", checked: true });
+        this.shoutsBox.addEventListener("change", () => this.onShouts(this.shoutsBox.checked));
+        this.shoutsSwitch.append(this.shoutsBox, element("span", "chat-shouts-text", "Hear shouts from players nearby"));
+        this.chatBody.append(this.chatLog, this.chatNote, this.quick, this.form, this.shoutsSwitch);
         this.shownLine = null;
 
         // Everyone playing in the world, and what can be done about them here
@@ -271,6 +280,7 @@ export class PartyPanel {
          */
         this.onMessage = () => {};
         this.onChatTo = () => {};
+        this.onShouts = () => {};
         this.onBlock = () => {};
     }
 
@@ -387,33 +397,37 @@ export class PartyPanel {
 
     // The chat as it is: its lines made again only when there's a new one (the newest kept in view,
     // if it was), how many haven't been seen on its tab, and whether there's anyone to say anything to
-    #chat({ lines, unread, canSay, to = null, targets = [] }) {
+    #chat({ lines, unread, canSay, to = null, targets = [], shouts = null }) {
         const unseen = unreadLabel(unread);
+        const shouting = to === SHOUT_TO && shouts === true;
         const toName = targets.find(({ id }) => id === to)?.name ?? null;
 
         this.chatBadge.textContent = unseen;
         this.chatBadge.hidden = !unseen;
         this.chatTab.setAttribute("aria-label", unseen ? `Chat, ${unread} unread` : "Chat");
-        this.chatNote.textContent = canSay ? "" : "Ask another player to your party to talk with them here, or choose one in To to message them.";
+        this.chatNote.textContent = canSay ? "" : shouts ? "Ask another player to your party to talk with them here, choose one in To to message them, or choose Shout to be heard by everyone near you." : "Ask another player to your party to talk with them here, or choose one in To to message them.";
         this.chatNote.hidden = canSay;
         this.input.disabled = !canSay;
         this.sendButton.disabled = !canSay;
-        this.input.placeholder = toName ? `Say something to ${toName}` : "Say something to your party";
-        this.input.setAttribute("aria-label", toName ? `Something to say to ${toName}` : "Something to say to your party");
+        this.input.placeholder = shouting ? "Shout to everyone nearby" : toName ? `Say something to ${toName}` : "Say something to your party";
+        this.input.setAttribute("aria-label", shouting ? "Something to shout to everyone nearby" : toName ? `Something to say to ${toName}` : "Something to say to your party");
+        this.shoutsSwitch.hidden = shouts === null;
+        this.shoutsBox.checked = shouts !== false;
 
         // (Whom to: the party, then each player, made again only as they change)
-        const shown = JSON.stringify(targets);
+        const shown = JSON.stringify([targets, shouts]);
 
         if (shown !== this.targetsShown) {
             this.targetsShown = shown;
             this.toPicker.replaceChildren(
                 Object.assign(document.createElement("option"), { value: "", textContent: "Party" }),
+                ...(shouts ? [Object.assign(document.createElement("option"), { value: SHOUT_TO, textContent: "Shout (nearby)" })] : []),
                 ...targets.map(({ id, name, party }) => Object.assign(document.createElement("option"), { value: id, textContent: party ? `${name} (party)` : name })),
             );
         }
 
-        this.toPicker.value = toName ? to : "";
-        this.toPicker.hidden = !targets.length;
+        this.toPicker.value = shouting ? SHOUT_TO : toName ? to : "";
+        this.toPicker.hidden = !targets.length && !shouts;
 
         for (const button of this.quick.children) {
             button.disabled = !canSay;
@@ -431,11 +445,11 @@ export class PartyPanel {
         this.shownLine = newest;
         log.replaceChildren(
             ...(lines.length
-                ? lines.map(({ name, text, mine = false, system = false, dm = null }) => {
-                      const line = element("li", `chat-line${mine ? " mine" : ""}${system ? " system" : ""}${dm ? " dm" : ""}`);
+                ? lines.map(({ name, text, mine = false, system = false, dm = null, shout = false }) => {
+                      const line = element("li", `chat-line${mine ? " mine" : ""}${system ? " system" : ""}${dm ? " dm" : ""}${shout ? " shout" : ""}`);
 
                       if (!system) {
-                          line.append(element("span", "chat-name", dm ? `${mine ? "To" : "From"} ${name}` : name), ": ");
+                          line.append(element("span", "chat-name", dm ? `${mine ? "To" : "From"} ${name}` : shout ? (mine ? "You shout" : `${name} shouts`) : name), ": ");
                       }
 
                       line.append(element("span", "chat-text", text));

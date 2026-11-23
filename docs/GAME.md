@@ -2649,7 +2649,11 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   player's and theirs alike, is in violet (`--whisper`): "To Cai: ...", "From Cai: ..."; one that
   isn't taken says why in the banner ("Cai isn't taking direct messages."). **Message**, by each
   of the party on the Party tab and by everyone on the Players tab, opens the Chat To them, ready
-  to type (game.js `#messageTo`). With **Party chat on screen** (Game options' Chat and players,
+  to type (game.js `#messageTo`). Playing with others, To has **Shout (nearby)** too (docs/WAR.md
+  *Parties*, Shouts): the line's heard by every player within 60 m, in the party or not, each
+  such line in gold, "Cai shouts: ...", the player's own "You shout: ...", and it needs no party. Under the line to type, **Hear
+  shouts from players nearby** (`PartyPanel` `shoutsSwitch`, `hearShouts`; on to start with)
+  turns them off: none are shown, and To has no Shout. With **Party chat on screen** (Game options' Chat and players,
   `chatOnScreen`, on to start with), each line said, the party's or a direct message, shows a
   moment just above the Action Bar too (where it rises in a fight), small, three at most,
   the newest at the foot, faded after six seconds (hud.js `chatLine`, `CHAT_FEED`), unless the

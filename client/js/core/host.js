@@ -1288,6 +1288,8 @@ export const REFUSALS = Object.freeze({
     unpartied: "You're not in a party.",
     chatty: "Not so fast: give it a moment before saying more.",
     nobody: "They're not in the world now.",
+    shoutsOff: "You've turned shouts off: turn Hear shouts on in the Chat to shout.",
+    repeated: "You've just shouted that.",
     closed: "They aren't taking direct messages.",
     leader: "Only the party's leader can do that.",
     member: "They're not in your party.",

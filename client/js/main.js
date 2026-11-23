@@ -1023,7 +1023,8 @@ function applyChat(game = state.game) {
     game.chatOnScreen = settings.chatOnScreen;
     game.blocked = settings.blocked;
     game.onBlocked = (blocked) => applySetting("blocked", blocksOf(blocked));
-    game.takeDms({ party: !settings.refusePartyDms, world: !settings.refuseWorldDms });
+    game.onHearShouts = (on) => applySetting("hearShouts", Boolean(on));
+    game.takeDms({ party: !settings.refusePartyDms, world: !settings.refuseWorldDms, shout: settings.hearShouts });
 }
 
 // The players blocked (Game options: Chat and players, Blocked players): each by name, where (this
@@ -6580,7 +6581,7 @@ function applySetting(key, value) {
     } else if (key === "quickSix") {
         state.game?.showQuick(quickShown());
         state.quickSetup?.showCount(quickShown());
-    } else if (key === "chatOnScreen" || key === "refusePartyDms" || key === "refuseWorldDms" || key === "blocked") {
+    } else if (key === "chatOnScreen" || key === "refusePartyDms" || key === "refuseWorldDms" || key === "hearShouts" || key === "blocked") {
         applyChat();
 
         if (key === "blocked") {
