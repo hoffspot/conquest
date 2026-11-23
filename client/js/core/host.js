@@ -496,6 +496,18 @@ const THREAD_TOWARD = 0.5;
 export const REST = Object.freeze({ clear: 40, least: 5 * 60000, burns: 3 * 60000 });
 
 /**
+ * A duel between two players (generated/multiplayer_scaling_plan.md 2-3; the "duel" command): one
+ * asks another within `reach` metres on their map, who has `askMs` to answer; accepted, it begins
+ * `startMs` after, the two heroes and their companies enemies of each other and of no one else by
+ * it; it's over when one yields, when one's hero is felled by the other's side (down a moment,
+ * battle.js DUEL_DOWN_MS, and up where they fell: no death), when they're `apart` metres from each
+ * other or on different maps, or when either leaves. Nothing's won by it but the saying so. A
+ * player who isn't accepting duels (the game's option, told to the host: `accepting`) is never
+ * asked: whoever tries is told they aren't, and they nothing.
+ */
+export const DUEL = Object.freeze({ reach: 40, askMs: 30000, startMs: 3000, apart: 60 });
+
+/**
  * A world's rules (generated/world_server_plan.md §3.2), kept with it (its snapshot), so every copy
  * of it plays by them:
  *  - `rest`: who passes its time by resting: "host" (its host's player, HOST_PLAYER: a world a
@@ -527,7 +539,7 @@ export const RULES = Object.freeze({ rest: "host", debug: "host", invasions: tru
  *  - `stock`: what a shop has sold is gone for everyone ("shared"), or for each character.
  */
 export const RULE_CHOICES = Object.freeze({
-    pvp: Object.freeze({ of: Object.freeze(["war", "optin"]), shared: "optin", slice: "2-2", built: false }),
+    pvp: Object.freeze({ of: Object.freeze(["war", "optin"]), shared: "optin", slice: "2-2", built: true }),
     pause: Object.freeze({ of: Object.freeze(["owner", "none"]), shared: "none", slice: "2-7", built: false }),
     loot: Object.freeze({ of: Object.freeze(["near", "tagged"]), shared: "tagged", slice: "2-13", built: false }),
     scaling: Object.freeze({ of: Object.freeze(["side", "crowd"]), shared: "crowd", slice: "2-16", built: false }),
@@ -1241,6 +1253,14 @@ export const REFUSALS = Object.freeze({
     depot: "A depot can be built only in another people's lands, if we can pay for it, two at most.",
     orders: "Those orders can't be carried out.",
     unsummoned: "No one's calling you.",
+    duelist: "No one there to duel.",
+    duelFar: "Too far away to ask them to a duel.",
+    dueling: "One of you is in a duel already.",
+    duelAsked: "They've been asked to a duel already.",
+    noDuels: "This player is not accepting duels.",
+    duelsOff: "You're not accepting duels: turn Accept duels on in the options first.",
+    unchallenged: "No one's asked you to a duel.",
+    notDueling: "You're not in a duel.",
     partied: "They're in a party already.",
     partyFull: "The party's full: four at most.",
     asked: "They've been asked already.",
@@ -1489,7 +1509,7 @@ export class Host {
         this.stockaded = null;
         this.#fortsChanged();
         this.#stockadesChanged({ tell: false });
-        this.battle = new Battle(world, { seed, relations: (a, b) => this.#against(a, b), allied: (a, b) => this.#allied(a, b), haven: (actor) => this.#haven(actor), nerve: (actor, player) => this.#nerve(actor, player), sworn: (actor, enemy) => this.#sworn(actor, enemy) });
+        this.battle = new Battle(world, { seed, relations: (a, b) => this.#against(a, b), allied: (a, b) => this.#allied(a, b), haven: (actor) => this.#haven(actor), nerve: (actor, player) => this.#nerve(actor, player), sworn: (actor, enemy) => this.#sworn(actor, enemy), dueling: (a, b) => this.#dueling(a, b), truce: (a, b) => this.#truce(a, b) });
         this.#wire();
 
         /**
@@ -1869,6 +1889,13 @@ export class Host {
         this.invites = new Map();
         this.nextParty = 1;
         /**
+         * Duels (DUEL): who's been asked to one, by the one asked ({ from, until }); who's in one,
+         * by each of the two ({ with, at: when it begins }); and who isn't accepting them.
+         */
+        this.duelAsks = new Map();
+        this.duels = new Map();
+        this.noDuels = new Set();
+        /**
          * Those of the player's party who aren't in the battle here, by id: { map, x, y, hp,
          * maxHp, dead, and, inside, out ([x, y] in the world) and inside (its name) }, as last told. Only a world kept as a server tells it has any
          * (core/viewing.js, the summary's `fellows`): a world that's played has everyone.
@@ -2245,6 +2272,9 @@ export class Host {
             }
         }
 
+        // (And their duel over, their asking to one, or being asked, forgotten)
+        this.#duelGone(id);
+
         this.battle.remove(id);
         this.players.delete(id);
 
@@ -2563,6 +2593,8 @@ export class Host {
                 return this.#answer(player, Boolean(command.come));
             case "party":
                 return this.#partyCommand(player, command);
+            case "duel":
+                return this.#duelCommand(player, command);
             case "treasure":
                 return this.#treasureCommand(player, command);
             case "read":
@@ -2853,6 +2885,12 @@ export class Host {
             }
         }
 
+        // (Asked to a duel, and no answer in time: lapsed, the one who asked told; and a duel whose
+        // two are far apart, or on different maps: over)
+        if (this.duelAsks.size || this.duels.size) {
+            this.#duelsTick();
+        }
+
         // (A party's ready check, and no answer from some in time: over, whoever hadn't said, not)
         for (const party of this.parties.values()) {
             if (party.ready && party.ready.until <= this.battle.time) {
@@ -3100,13 +3138,15 @@ export class Host {
             }
 
             // (A people's enemy brought down by a player, before their soldiers' eyes)
-            if (event.type === "death") {
+            if (event.type === "death" && !event.duel) {
                 this.#owed(event);
             }
 
             // (A player fallen in a boss's arena: back outside its door, their own way back after:
             // #arenaFell, #arenaBack)
-            if (event.type === "death" && this.players.has(event.id)) {
+            if (event.type === "death" && event.duel) {
+                this.#duelFell(event);
+            } else if (event.type === "death" && this.players.has(event.id)) {
                 this.#arenaFell(event.id);
             } else if (event.type === "respawn" && this.players.has(event.id)) {
                 this.#arenaBack(event.id);
@@ -3115,12 +3155,14 @@ export class Host {
             // (A follower knocked down: wounded (MENDING), up again a while after (battle.js
             // DOWNED); with as many wounds as they can take, gone home to mend, or where
             // mercenaries can die (RULES mortal), dead; one that falls and doesn't rise, gone)
-            if (event.type === "death" && this.followers.has(event.id)) {
+            if (event.type === "death" && this.followers.has(event.id) && !event.duel) {
                 this.#knockedDown(event);
             }
 
             // (A follower up again where they fell)
-            if (event.type === "respawn" && event.rose && this.followers.has(event.id)) {
+            if (event.type === "respawn" && event.rose && this.followers.get(event.id)?.duelDown) {
+                delete this.followers.get(event.id).duelDown;
+            } else if (event.type === "respawn" && event.rose && this.followers.has(event.id)) {
                 const one = this.followers.get(event.id);
 
                 one.record.rises += 1;
@@ -3129,7 +3171,7 @@ export class Host {
             }
 
             // (A companion by magic fallen: gone from their side, and taken away a while after)
-            if (event.type === "death" && this.companions.has(event.id)) {
+            if (event.type === "death" && this.companions.has(event.id) && !event.duel) {
                 const { leader, creature } = this.companions.get(event.id);
 
                 this.companions.delete(event.id);
@@ -3596,6 +3638,10 @@ export class Host {
             parties: copy([...this.parties.values()]),
             invites: copy([...this.invites.entries()]),
             nextParty: this.nextParty,
+            // (Duels, kept only where there are any: a world kept before them has none)
+            ...(this.duelAsks.size ? { duelAsks: copy([...this.duelAsks.entries()]) } : {}),
+            ...(this.duels.size ? { duels: copy([...this.duels.entries()]) } : {}),
+            ...(this.noDuels.size ? { noDuels: [...this.noDuels] } : {}),
             hired: [...this.hired],
             wild: [...this.wild.entries()],
             packs: copy([...this.packs.entries()]),
@@ -3784,7 +3830,7 @@ export class Host {
         host.messengersAt = snapshot.messengersAt ?? 0;
         host.rareLooked = snapshot.rareLooked ?? null;
         host.courtWarned = new Map(snapshot.courtWarned ?? []);
-        host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b), allied: (a, b) => host.#allied(a, b), haven: (actor) => host.#haven(actor), nerve: (actor, player) => host.#nerve(actor, player), sworn: (actor, enemy) => host.#sworn(actor, enemy) });
+        host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b), allied: (a, b) => host.#allied(a, b), haven: (actor) => host.#haven(actor), nerve: (actor, player) => host.#nerve(actor, player), sworn: (actor, enemy) => host.#sworn(actor, enemy), dueling: (a, b) => host.#dueling(a, b), truce: (a, b) => host.#truce(a, b) });
         host.#wire();
         host.rules = rulesOf(snapshot.rules);
         host.lookAt = snapshot.lookAt;
@@ -3820,6 +3866,9 @@ export class Host {
         host.parties = new Map((snapshot.parties ?? []).map((party) => [party.id, structuredClone(party)]));
         host.partyIds = new Map([...host.parties.values()].flatMap(({ id, members }) => members.map((member) => [member, id])));
         host.invites = new Map(structuredClone(snapshot.invites ?? []));
+        host.duelAsks = new Map(structuredClone(snapshot.duelAsks ?? []));
+        host.duels = new Map(structuredClone(snapshot.duels ?? []));
+        host.noDuels = new Set(snapshot.noDuels ?? []);
         host.nextParty = snapshot.nextParty ?? 1;
         host.hired = new Set(snapshot.hired ?? []);
         host.wild = new Map(structuredClone(snapshot.wild ?? []));
@@ -4040,6 +4089,11 @@ export class Host {
 
         if (event.type === "thrown") {
             this.#horseFell(event);
+        }
+
+        // (In a duel: nothing's learnt by a blow of it, nor won by a fall)
+        if (event.duel || (this.duels.size > 0 && event.type === "hit" && event.by && this.#duelBlow(event))) {
+            return;
         }
 
         // (What a player's followers do, their leader's: their Command grows by it, and what they
@@ -16794,6 +16848,261 @@ export class Host {
     /** The party a player's in ({ id, leader, members }: the longest in it first), or null. */
     partyFor(playerId) {
         return this.parties.get(this.partyIds.get(playerId)) ?? null;
+    }
+
+    /** The duel a player's in ({ with, at }), or null; and who's asked them to one ({ from, until }), or null. */
+    duelOf(playerId) {
+        return this.duels.get(playerId) ?? null;
+    }
+
+    challenge(playerId) {
+        return this.duelAsks.get(playerId) ?? null;
+    }
+
+    /** Whether a player's accepting duels (they are, till their game says not: DUEL). */
+    acceptsDuels(playerId) {
+        return !this.noDuels.has(playerId);
+    }
+
+    // Whether two are enemies by a duel (battle.js `dueling`): one's a player in one with the
+    // other's, or theirs, and it's begun
+    #dueling(a, b) {
+        if (this.duels.size === 0) {
+            return false;
+        }
+
+        const one = this.#ownerOf(a);
+        const duel = one === null ? undefined : this.duels.get(one);
+
+        return duel !== undefined && duel.with === this.#ownerOf(b) && this.battle.time >= duel.at;
+    }
+
+    // Whether two are kept from each other by the world's rules (battle.js `truce`; RULES pvp
+    // "optin"): players and theirs, of different players, who fight only by a duel
+    #truce(a, b) {
+        if (this.rules.pvp !== "optin") {
+            return false;
+        }
+
+        const one = this.#ownerOf(a);
+        const other = this.#ownerOf(b);
+
+        return one !== null && other !== null && one !== other;
+    }
+
+    // Everyone on a player's side of a duel: their hero, and whoever follows it
+    #duelSide(playerId) {
+        return this.battle.actors.filter((actor) => this.#ownerOf(actor) === playerId).map((actor) => actor.id);
+    }
+
+    // The "duel" command (DUEL): `accepting` (`on`: whether they are), `ask` (`who`), `accept`,
+    // `decline`, `yield`
+    #duelCommand(player, { do: what, who, on }) {
+        switch (what) {
+            case "accepting": {
+                if (typeof on !== "boolean") {
+                    return refuse("command");
+                }
+
+                if (on) {
+                    this.noDuels.delete(player.id);
+                } else {
+                    this.noDuels.add(player.id);
+                }
+
+                return OK;
+            }
+            case "ask": {
+                const other = typeof who === "string" ? this.players.get(who) : null;
+
+                if (!other || who === player.id) {
+                    return refuse("duelist");
+                }
+
+                if (this.noDuels.has(player.id)) {
+                    return refuse("duelsOff");
+                }
+
+                // (Not accepting them: the asker told so, and they nothing)
+                if (this.noDuels.has(who)) {
+                    return refuse("noDuels");
+                }
+
+                const mine = this.battle.actor(player.id);
+                const theirs = this.battle.actor(who);
+
+                if (!mine || !theirs || mine.dead || theirs.dead) {
+                    return refuse("dead");
+                }
+
+                if (mine.map !== theirs.map || distanceBetween(mine.square, theirs.square) > DUEL.reach) {
+                    return refuse("duelFar");
+                }
+
+                if (this.duels.has(player.id) || this.duels.has(who)) {
+                    return refuse("dueling");
+                }
+
+                // (Asked by them already: asking back is saying yes)
+                if (this.duelAsks.get(player.id)?.from === who) {
+                    return this.#duelBegin(player, other);
+                }
+
+                if (this.duelAsks.has(who) || this.duelAsks.has(player.id)) {
+                    return refuse("duelAsked");
+                }
+
+                const until = this.battle.time + DUEL.askMs;
+
+                this.duelAsks.set(who, { from: player.id, until });
+                this.#event("duel", { id: who, change: "asked", from: player.id, name: player.hero.name, until });
+                this.#event("duel", { id: player.id, change: "sent", who, name: other.hero.name });
+
+                return OK;
+            }
+            case "accept": {
+                const asked = this.duelAsks.get(player.id);
+                const asker = asked && this.players.get(asked.from);
+
+                if (!asker) {
+                    return refuse("unchallenged");
+                }
+
+                if (this.duels.has(player.id) || this.duels.has(asker.id)) {
+                    return refuse("dueling");
+                }
+
+                return this.#duelBegin(player, asker);
+            }
+            case "decline": {
+                const asked = this.duelAsks.get(player.id);
+
+                if (!asked) {
+                    return refuse("unchallenged");
+                }
+
+                this.duelAsks.delete(player.id);
+                this.#event("duel", { id: asked.from, change: "declined", who: player.id, name: player.hero.name });
+
+                return OK;
+            }
+            case "yield": {
+                const duel = this.duels.get(player.id);
+
+                if (!duel) {
+                    return refuse("notDueling");
+                }
+
+                this.#duelOver(player.id, "yielded", duel.with);
+
+                return OK;
+            }
+            default:
+                return refuse("command");
+        }
+    }
+
+    // A duel begun between the one who said yes and the one who asked: each told, and when
+    #duelBegin(player, asker) {
+        const at = this.battle.time + DUEL.startMs;
+
+        this.duelAsks.delete(player.id);
+        this.duels.set(player.id, { with: asker.id, at });
+        this.duels.set(asker.id, { with: player.id, at });
+        this.#event("duel", { id: player.id, change: "begun", with: asker.id, name: asker.hero.name, at });
+        this.#event("duel", { id: asker.id, change: "begun", with: player.id, name: player.hero.name, at });
+
+        return OK;
+    }
+
+    // A player's duel over (`why`: "yielded", "fell", "apart", "left"; `winner`: who won it, or
+    // null): the two sides at peace again (battle.js reconcile), and each told
+    #duelOver(id, why, winner = null) {
+        const duel = this.duels.get(id);
+
+        if (!duel) {
+            return;
+        }
+
+        const other = duel.with;
+
+        this.duels.delete(id);
+        this.duels.delete(other);
+        this.battle.reconcile(this.#duelSide(id), this.#duelSide(other));
+
+        for (const [one, against] of [
+            [id, other],
+            [other, id],
+        ]) {
+            // (Whoever's left isn't told)
+            if (this.players.has(one) && !(why === "left" && one === id)) {
+                this.#event("duel", { id: one, change: "over", why, with: against, name: this.players.get(against)?.hero.name ?? "", winner });
+            }
+        }
+    }
+
+    // A player gone from the world: their duel over, and their asking, or being asked, forgotten
+    #duelGone(id) {
+        const duel = this.duels.get(id);
+
+        if (duel) {
+            this.#duelOver(id, "left", duel.with);
+        }
+
+        for (const [asked, ask] of [...this.duelAsks]) {
+            if (asked === id || ask.from === id) {
+                this.duelAsks.delete(asked);
+            }
+        }
+
+        this.noDuels.delete(id);
+    }
+
+    // Each step: an asking not answered in time lapsed; a duel whose two are too far apart, or on
+    // different maps, over, no one's
+    #duelsTick() {
+        for (const [id, asked] of [...this.duelAsks]) {
+            if (asked.until <= this.battle.time) {
+                this.duelAsks.delete(id);
+                this.#event("duel", { id: asked.from, change: "unanswered", who: id, name: this.players.get(id)?.hero.name ?? "" });
+                this.#event("duel", { id, change: "lapsed", from: asked.from });
+            }
+        }
+
+        for (const [id, duel] of [...this.duels]) {
+            if (id > duel.with) {
+                continue;
+            }
+
+            const one = this.battle.actor(id);
+            const other = this.battle.actor(duel.with);
+
+            if (!one || !other || one.map !== other.map || distanceBetween(one.square, other.square) > DUEL.apart) {
+                this.#duelOver(id, "apart");
+            }
+        }
+    }
+
+    // Whether a blow's one of a duel: struck by one side of it on the other
+    #duelBlow({ id, by }) {
+        const struck = this.battle.actor(id);
+        const striker = this.battle.actor(by);
+
+        return Boolean(struck && striker && this.#dueling(struck, striker));
+    }
+
+    // One felled in a duel by the one they're with, or theirs (battle.js: a "death" told `duel`):
+    // a hero, and the duel's over, the other's; anyone else of a company is only down a moment,
+    // as the hero is (no wound, no parting: #knockedDown and the rest are passed by)
+    #duelFell(event) {
+        if (this.players.has(event.id) && this.duels.has(event.id)) {
+            this.#duelOver(event.id, "fell", this.duels.get(event.id).with);
+        }
+
+        // (A follower: up again with nothing said of it, nor counted among their rises)
+        if (this.followers.has(event.id)) {
+            this.followers.get(event.id).duelDown = true;
+        }
     }
 
     /** The other players in a player's party, the longest in it first (none, in none). */

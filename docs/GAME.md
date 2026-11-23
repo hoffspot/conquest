@@ -1748,6 +1748,42 @@ weapons, each weapon should have a separate slot for an "effect" ... visual and 
     each piece's as they're worn. Each counts in their might (`warded`: what it keeps off, its stone
     skin's share of a fight at one blow every 1.5 seconds).
 
+### Duels (core/host.js DUEL; core/battle.js `dueling`, `truce`)
+
+Two players can fight each other by a duel, in any world. One asks the other from the Party
+menu's Players tab (**Duel**; "Challenged" while they're asked), within 40 m on the same map; the
+other is shown "*Name* challenges you to a duel." with Accept, Decline and Ignore, and has 30
+seconds to answer. Asking back is saying yes. One asking at a time, and one duel at a time, for
+each player. The command is `duel` (`do`: `ask` with `who`, `accept`, `decline`, `yield`,
+`accepting` with `on`); the host tells each of the two by a `duel` event (`asked`, `sent`,
+`declined`, `unanswered`, `lapsed`, `begun`, `over`), which no one else hears.
+
+- **It begins** three seconds after it's accepted. From then the two heroes and their companies
+  (their hired adventurers, their companions, whatever they've called to their side) are enemies
+  of each other and of no one else: in one party or of one people though they be, and whatever
+  their peoples' war. Nobody else can be struck by it or join it, and a blow in it makes no
+  enemy of the other's people, so a town's guards stay out of it.
+- **It's over** when one yields (**Yield**, where Duel was), when one's hero is felled by the
+  other's side, when the two are 60 m apart or on different maps, or when either leaves the
+  world. Both sides are at peace again at once: what each held against the other is let go.
+- **No one dies of it.** A hero felled in a duel, and anyone of a company felled in one, is down
+  three seconds and up where they fell with three tenths of their health (battle.js
+  `DUEL_DOWN_MS`, `DOWNED`): not woken in the market square, no wound for a follower, no
+  companion lost. Nothing's won either: no spoils, no skill learnt by its blows, no favour owed,
+  no request counted.
+- **Accept duels** (Game options, Chat and players; on to start with, kept with the game's
+  settings) is told to the host when it's off. A player who isn't accepting duels is never
+  asked: whoever tries is told "This player is not accepting duels.", and they're shown nothing
+  at all. Nor can they ask anyone while it's off.
+- **Where players fight only by a duel.** A world's rule `pvp` is `war` (players of peoples at
+  war are enemies, as ever: every world a browser hosts, and a server's `company` worlds) or
+  `optin` (a server's `shared` worlds, docs/SERVER.md *A world's preset*): there players and
+  their companies are never each other's enemies unless they're in a duel.
+
+A game sent views is told its own duel in its summary (`duels`), so it knows whose enemy it is
+without a copy of the world. Tests: `test/duel.test.js`, and two browsers in
+`e2e/together.spec.js`.
+
 ### Riding (core/mounts.js)
 
 A player buys a horse at a stable and rides it (the owner: "Players should be able to purchase a
@@ -2629,8 +2665,9 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   asked twice: the party's Remove); each messaged (**Message**), and **Block**ed (asked twice;
   "Blocked" among their chips, and **Unblock**): their direct messages and party invites never
   reach the player, and they're none the wiser (game.js `block`, `isBlocked`; docs/WAR.md
-  *Parties*); with a line at the foot on what can be done. Game options' **Chat and players** has
-  Party chat on screen, **Refuse party DMs**, **Refuse world DMs** and Refuse party invites (each
+  *Parties*); and anyone challenged to a duel (**Duel**, or **Yield** to the one the player's
+  in one with: *Duels*, above); with a line at the foot on what can be done. Game options' **Chat and players** has
+  Party chat on screen, **Refuse party DMs**, **Refuse world DMs**, **Accept duels** and Refuse party invites (each
   kept with a hero a world server keeps but the first), **War messengers** (on to start with: a
   messenger finds the player with a war mission when the war's near them, docs/WAR.md *War
   missions by messenger*; `messengers`, sent to a server-kept world's host as the player's own

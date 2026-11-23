@@ -374,6 +374,8 @@ export class Viewing extends Joining {
         // (The trades they're in, as the summary has them: an event's word of one, #trade, is
         // sooner, and this is what a view told again begins from)
         host.trades = new Map(structuredClone([...(parts.get("trades") ?? [])]));
+        // (And the duel they're in, core/host.js DUEL: an event's word of it, #duel, is sooner)
+        host.duels = new Map(structuredClone([...(parts.get("duels") ?? [])]));
         this.#props(parts.get("props"));
 
         // (The legends, as much of them as is this player's to know, core/summary.js loreOf:
@@ -685,6 +687,8 @@ export class Viewing extends Joining {
         for (const event of mirror.events) {
             if (event.type === "trade") {
                 this.#trade(event);
+            } else if (event.type === "duel") {
+                this.#duel(event);
             } else if (event.type === "projectile") {
                 this.#loose(event);
             } else if (event.type === "fizzle") {
@@ -800,6 +804,18 @@ export class Viewing extends Joining {
 
             return true;
         });
+    }
+
+    // The player's duel, as the events that tell of it say it stands (core/host.js DUEL): begun,
+    // both its sides kept where the battle asks who's whose enemy (Host.duels); over, let go
+    #duel(event) {
+        if (event.change === "begun") {
+            this.host.duels.set(event.id, { with: event.with, at: event.at });
+            this.host.duels.set(event.with, { with: event.id, at: event.at });
+        } else if (event.change === "over") {
+            this.host.duels.delete(event.id);
+            this.host.duels.delete(event.with);
+        }
     }
 
     // A trade the player's in, as the events that tell of it say it stands: kept where the game

@@ -2056,6 +2056,138 @@ test("a request shared with the party from the journal: in a party, each request
     await guestContext.close();
 });
 
+test("a duel between two players: asked from the Players tab, the other's asked and says yes, and it begins, the two enemies of each other; yielded from the tab, it's over and they're at peace; with Accept duels off, whoever asks is told they aren't accepting duels and they're shown nothing", async ({ ownBrowser: browser }) => {
+    const hostContext = await browser.newContext();
+    const guestContext = await browser.newContext();
+    const host = await hostContext.newPage();
+    const guest = await guestContext.newPage();
+
+    await cheaply(host, guest);
+
+    for (const page of [host, guest]) {
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    await guest.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), BRYN);
+    await host.goto("/?play&seed=2");
+    await playing(host, null, LONGER);
+    await undrawn(host);
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+    const ada = await host.evaluate(() => window.pellagos.game.host.players.get("player").hero.name);
+
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+    await guest.goto(`/?join=${code}`);
+    await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
+    await playing(guest, null, LONGER);
+    await undrawn(guest);
+    await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
+
+    // (Bryn beside the host, in both worlds: a duel's asked of one near)
+    await inHostsWorld(
+        host,
+        guest,
+        () => {
+            const { battle } = window.pellagos.game.host;
+            const [me, bryn] = [battle.actor("player"), battle.actor("guest-1")];
+            const [x, y] = [me.square[0] + 2, me.square[1]];
+
+            Object.assign(bryn, { map: me.map, square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null });
+        },
+        () => {
+            const { battle } = window.pellagos.game.host;
+            const [me, bryn] = [battle.actor("player"), battle.actor("guest-1")];
+
+            return Boolean(me && bryn) && me.map === bryn.map && Math.abs(me.square[0] - bryn.square[0]) <= 3 && Math.abs(me.square[1] - bryn.square[1]) <= 3;
+        },
+    );
+
+    // (Every line each is told is kept as it's said: the banner holds one at a time)
+    for (const page of [host, guest]) {
+        await page.evaluate(() => {
+            const banner = document.querySelector("#banner");
+
+            window.told = [];
+            new MutationObserver(() => window.told.push(banner.textContent)).observe(banner, { childList: true, characterData: true, subtree: true });
+        });
+    }
+
+    const told = (page, line) => expect.poll(() => page.evaluate((said) => window.told.some((text) => text.includes(said)), line), { timeout: 30000 }).toBe(true);
+    const enemies = (page) => page.evaluate(() => window.pellagos.game.host.battle.hostile(window.pellagos.game.host.battle.actor("player"), window.pellagos.game.host.battle.actor("guest-1")));
+    const menu = host.getByRole("dialog", { name: "Party" });
+    const asking = menu.locator('.party-everyone-list .party-player[data-id="guest-1"] .party-duel');
+    const asked = guest.getByRole("dialog", { name: `${ada} challenges you to a duel.` });
+
+    // Asked from the Players tab; Bryn says yes; it begins, and the two are enemies in both worlds
+    await host.locator("#partybutton").click();
+    await menu.getByRole("tab", { name: "Players" }).click();
+    await expect(asking).toHaveText("Duel");
+    expect(await enemies(host)).toBe(false);
+    await asking.click();
+    await told(host, "You challenge Bryn to a duel.");
+    await expect(asking).toHaveText("Challenged", { timeout: 30000 });
+    await expect(asking).toBeDisabled();
+    await expect(asked).toBeVisible({ timeout: 30000 });
+    await asked.getByRole("button", { name: "Accept" }).click();
+    await told(host, "Your duel with Bryn begins.");
+    await told(guest, `Your duel with ${ada} begins.`);
+    await expect(asking).toHaveText("Yield", { timeout: 30000 });
+
+    for (const page of [host, guest]) {
+        await expect.poll(() => enemies(page), { timeout: 30000 }).toBe(true);
+    }
+
+    // Yielded from the tab: over, Bryn's, and they're at peace
+    await asking.click();
+    await told(host, "You yield the duel to Bryn.");
+    await told(guest, `${ada} yields: the duel is yours.`);
+    await expect(asking).toHaveText("Duel", { timeout: 30000 });
+
+    for (const page of [host, guest]) {
+        await expect.poll(() => enemies(page), { timeout: 30000 }).toBe(false);
+    }
+
+    await menu.getByRole("button", { name: "Close" }).click();
+
+    // Bryn turns Accept duels off (Game options, Chat and players): the host's told when they
+    // ask, and Bryn's shown nothing
+    await expect(guest.locator("#duelswitch")).toBeChecked();
+    await guest.locator("#menubutton").click();
+    await guest.locator("#optionsbutton").click();
+    await guest.locator("#chatbutton").click();
+    await guest.locator("label:has(#duelswitch)").click();
+    await expect(guest.locator("#duelswitch")).not.toBeChecked();
+    await guest.locator("#chatback").click();
+    await guest.locator("#optionsback").click();
+    await guest.locator("#resumebutton").click();
+    await expect.poll(() => host.evaluate(() => window.pellagos.game.host.acceptsDuels("guest-1")), { timeout: 30000 }).toBe(false);
+
+    const before = await guest.evaluate(() => window.told.length);
+
+    await host.locator("#partybutton").click();
+    await menu.getByRole("tab", { name: "Players" }).click();
+    await asking.click();
+    await told(host, "This player is not accepting duels.");
+    await expect(asking).toHaveText("Duel");
+    await host.waitForTimeout(1500);
+    await expect(guest.getByRole("dialog", { name: /challenges you to a duel/ })).toHaveCount(0);
+    expect(await guest.evaluate(() => window.told.length)).toBe(before);
+    expect(await host.evaluate(() => window.pellagos.game.host.challenge("guest-1"))).toBe(null);
+    expect(await guest.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")).acceptDuels)).toBe(false);
+
+    await hostContext.close();
+    await guestContext.close();
+});
+
 test("a world opened to others with Classic off: its guest's sent views and no copy of the world, walks where they tap and is seen walking by the host, and sees the host walk; Classic put back, the world's opened again as it always was", async ({ ownBrowser: browser }) => {
     const hostContext = await browser.newContext();
     const guestContext = await browser.newContext();

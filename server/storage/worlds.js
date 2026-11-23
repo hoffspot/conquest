@@ -119,7 +119,7 @@ export const netcodeOf = (meta) => (typeof meta?.settings?.netcode === "string" 
 /** Each preset (core/host.js PRESETS) as the management page names it. */
 export const PRESET_WORDS = Object.freeze({
     company: "Company: a company of friends' rules, as every world's have been",
-    shared: "Shared: the rules of a world shared by strangers, each as it's built (none is yet, so it plays as Company does)",
+    shared: "Shared: the rules of a world shared by strangers, each as it's built. So far: players fight each other only by a duel, whatever their peoples' war",
 });
 
 /** A world's preset (core/host.js PRESETS): company, for a world that doesn't say. */
