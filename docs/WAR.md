@@ -3615,6 +3615,19 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   (`{ kind: "unsaid", reason: "closed", name }`: "Bryn isn't taking direct messages."). To no one
   in the world, or to themselves, it's refused (`nobody`). Held back with the party's lines (5 in
   10 seconds, together). What two games say to each other changed (`NET_VERSION` 184).
+- **Shouts** (`Hosting.chat`'s `shout`; the Chat's To, **Shout (nearby)**; core/netplay.js
+  `SHOUT`, `Session.#shout`). A line shouted (`{ kind: "chat", text, shout: true }`) goes to
+  every player on the shouter's map within 60 m of them (`SHOUT.reach`), in their party or not,
+  and back to the shouter (`{ kind: "chat", from, name, text, shout: true }`); to no one else.
+  Three in 10 seconds of the world's time (`SHOUT.burst`, counted apart from the party's lines),
+  and the same line again within them isn't heard (`unsaid`: `chatty`, `repeated`). Each player
+  says whether they take shouts with the direct messages they take (`{ kind: "dms", ..., shout
+  }`; `DMS_TAKEN`), as the Chat's **Hear shouts from players nearby** has it (`hearShouts`, on to
+  start with: a play setting, kept with a hero a world server keeps). Off, they're sent none, their
+  To has no Shout, and what they'd shout is refused (`shoutsOff`): the one switch filters shouts
+  out and turns them off. A blocked player's shouts are let go of as their messages are. It's the
+  host's `Session` that sends them, so they're the same played by lockstep and by views. What two
+  games say to each other changed (`NET_VERSION` 240).
 - **Blocked** (the party menu's Players tab; Game options, **Blocked players**). Whom a player's
   blocked is theirs alone, never told the host or anyone: their game lets go of a blocked
   player's direct messages as they come, and of their party invites (as **Refuse party invites**

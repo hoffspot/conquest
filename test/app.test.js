@@ -489,7 +489,8 @@ describe("saving (save.js)", () => {
         assert.deepEqual(playSettingsOf({ autoSnag: "yes", openWay: Number.NaN, snagGrades: [3], shake: null, autoLock: 1 }), {});
         assert.deepEqual([playSettingsOf(null), playSettingsOf(["autoSnag"])], [{}, {}]);
         assert.deepEqual(Object.keys(playSettingsOf(SETTINGS_DEFAULTS)), [...PLAY_SETTINGS], "every one of them, as they start");
-        assert.ok(["refuseInvites", "refusePartyDms", "refuseWorldDms"].every((key) => PLAY_SETTINGS.includes(key)), "whose invites and direct messages they take, theirs");
+        assert.ok(["refuseInvites", "refusePartyDms", "refuseWorldDms", "hearShouts"].every((key) => PLAY_SETTINGS.includes(key)), "whose invites, direct messages and shouts they take, theirs");
+        assert.equal(SETTINGS_DEFAULTS.hearShouts, true, "(shouts heard, till they're turned off)");
         assert.ok(!PLAY_SETTINGS.includes("chatOnScreen") && !PLAY_SETTINGS.includes("blocked"), "(the chat on screen this device's; whom they've blocked kept by world: main.js keptSettings)");
     });
 

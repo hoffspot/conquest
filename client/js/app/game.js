@@ -195,7 +195,7 @@ import { JournalPanel, bearing, keepMessage, regardOf } from "./journal.js";
 import { ReaderPanel } from "./reader.js";
 import { Journey } from "./journey.js";
 import { SpellbookPanel } from "./spellbook.js";
-import { PartyPanel } from "./partypanel.js";
+import { PartyPanel, SHOUT_TO } from "./partypanel.js";
 import { PackPanel } from "./pack.js";
 import { Governor } from "./governor.js";
 import { PHASE, telemetry } from "./telemetry.js";
@@ -1845,6 +1845,8 @@ export class Game {
         this.blocked = [];
         this.worldKey = `world:${world.seed}`;
         this.onBlocked = () => {};
+        /** Hear shouts turned on or off in the party menu's Chat (core/netplay.js SHOUT): told, to be kept. */
+        this.onHearShouts = () => {};
 
         if (remote) {
             remote.onChat = (line) => this.chatHeard(line);
@@ -2877,6 +2879,7 @@ export class Game {
             this.#showParty();
         };
         this.partyPanel.onBlock = (id, on) => this.block(id, on);
+        this.partyPanel.onShouts = (on) => this.hearShouts(on);
         this.fate = new FatePanel(this.hud.root);
         this.talk.onChoose = (index) => this.#say(index);
         this.talk.onClose = () => this.#endTalk();
@@ -12542,7 +12545,12 @@ export class Game {
         }
 
         // (Saying to someone who's gone, or blocked since: to the party again)
-        if (this.chatTo && (!this.worldview.players.has(this.chatTo) || this.isBlocked(this.chatTo))) {
+        if (this.chatTo && this.chatTo !== SHOUT_TO && (!this.worldview.players.has(this.chatTo) || this.isBlocked(this.chatTo))) {
+            this.chatTo = null;
+        }
+
+        // (Shouting, with shouts turned off since: to the party again)
+        if (this.chatTo === SHOUT_TO && !this.dmsTaken.shout) {
             this.chatTo = null;
         }
 
@@ -12555,6 +12563,8 @@ export class Game {
             unread: this.chatUnread,
             canSay: Boolean(together && (this.chatTo || party)),
             to: this.chatTo,
+            // (Shouts heard, and to be shouted: core/netplay.js SHOUT, the Chat's Hear shouts)
+            shouts: together ? Boolean(this.dmsTaken.shout) : null,
             targets: others.map(({ id, hero }) => ({ id, name: hero.name, party: Boolean(party?.members.includes(id)) })).sort((a, b) => b.party - a.party || a.name.localeCompare(b.name)),
         };
     }
@@ -12563,16 +12573,17 @@ export class Game {
      * A line said in the player's party (core/netplay.js: heard as it's sent on to those in it,
      * their own lines too): into the chat; another's with a chime, and counted unread till it's seen.
      */
-    chatHeard({ from, name, text, to = null, toName = "", dm = null }) {
+    chatHeard({ from, name, text, to = null, toName = "", dm = null, shout = false }) {
         const mine = from === this.me;
 
-        // (A direct message from someone the player's blocked: let go of, unheard; they're not told)
-        if (dm && !mine && this.isBlocked(from)) {
+        // (A direct message, or a shout, from someone the player's blocked: let go of, unheard;
+        // they're not told. And a shout that came as shouts were being turned off)
+        if ((dm || shout) && !mine && (this.isBlocked(from) || (shout && !this.dmsTaken.shout))) {
             return;
         }
 
         // (A direct message by whom it's with: the one it's to, or from)
-        const line = dm ? { name: mine ? toName : name, text, mine, dm, with: mine ? to : from } : { name: mine ? "You" : name, text, mine };
+        const line = dm ? { name: mine ? toName : name, text, mine, dm, with: mine ? to : from } : { name: mine ? "You" : name, text, mine, ...(shout ? { shout: true } : {}) };
         const reading = this.partyPanel?.open && this.partyPanel.tab === "chat";
 
         this.#chatLine(line);
@@ -12586,13 +12597,27 @@ export class Game {
 
         // (And a moment on screen, just above the Action Bar, unless the chat's open to read)
         if (this.chatOnScreen && !reading) {
-            this.hud.chatLine({ who: dm ? `${mine ? "To" : "From"} ${line.name}` : line.name, text, mine, dm: Boolean(dm) });
+            this.hud.chatLine({ who: dm ? `${mine ? "To" : "From"} ${line.name}` : shout ? (mine ? "You shout" : `${line.name} shouts`) : line.name, text, mine, dm: Boolean(dm) });
+        }
+    }
+
+    /**
+     * Shouts heard, or not (the party menu's Chat: Hear shouts; core/netplay.js SHOUT): the host
+     * told, which sends none to one who's turned them off; kept (onHearShouts); the chat shown again.
+     */
+    hearShouts(on) {
+        this.takeDms({ ...this.dmsTaken, shout: Boolean(on) });
+        this.onHearShouts(Boolean(on));
+        this.sound?.play("tap");
+
+        if (this.partyPanel?.open) {
+            this.#showParty();
         }
     }
 
     /** Which direct messages the player takes (Game options: from their party, from anyone else in the world), told to the host. */
-    takeDms({ party = true, world = true } = {}) {
-        this.dmsTaken = { party, world };
+    takeDms({ party = true, world = true, shout = true } = {}) {
+        this.dmsTaken = { party, world, shout };
         this.hosting?.takeDms(this.me, this.dmsTaken);
         this.remote?.takeDms(this.dmsTaken);
     }
@@ -12790,8 +12815,9 @@ export class Game {
             return;
         }
 
-        const to = this.chatTo;
-        const said = !to && !this.worldview.partyFor(this.me) ? { ok: false, reason: "unpartied" } : this.hosting ? this.hosting.chat(text, { to }) : this.remote ? this.remote.chat(text, { to }) : { ok: false, reason: "unpartied" };
+        const shout = this.chatTo === SHOUT_TO;
+        const to = shout ? null : this.chatTo;
+        const said = !shout && !to && !this.worldview.partyFor(this.me) ? { ok: false, reason: "unpartied" } : this.hosting ? this.hosting.chat(text, { to, shout }) : this.remote ? this.remote.chat(text, { to, shout }) : { ok: false, reason: "unpartied" };
 
         if (said.ok) {
             this.sound?.play("tap");

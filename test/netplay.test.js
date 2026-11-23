@@ -16,7 +16,7 @@ import { newGuid } from "../client/js/core/guid.js";
 import { HOST_PLAYER, Host, OWN } from "../client/js/core/host.js";
 import { Navigation } from "../client/js/core/navigation.js";
 import { MOTION } from "../client/js/core/motion.js";
-import { AGAIN, CHAT, chatLine, characterFrom, CHECK_EVERY, HEARD, Hosting, Joining, LATELY, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, QUIET, SELF, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
+import { AGAIN, CHAT, chatLine, DMS_TAKEN, SHOUT, characterFrom, CHECK_EVERY, HEARD, Hosting, Joining, LATELY, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, QUIET, SELF, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { selfOf } from "../client/js/core/selfstate.js";
 import { decode, encode } from "../client/js/core/wire.js";
@@ -1480,6 +1480,83 @@ describe("playing together (netplay.js)", () => {
         catchUp(cass.joining);
         assert.equal(bryn.joining.host.checksum(), host.checksum());
         assert.equal(cass.joining.host.checksum(), host.checksum());
+    });
+
+    it("shouts a line to every player near on the sayer's map, in their party or not, and to no one further; one who's turned shouts off is sent none and can't shout; the same line again and too many at once refused", () => {
+        const { host, hosting, join, deliver, play } = opened();
+        const bryn = join(guest("Bryn"));
+        const cass = join(guest("Cass"));
+        const heard = { host: [], bryn: [], cass: [] };
+        const unsaid = { bryn: [], cass: [] };
+
+        hosting.onChat = (line) => heard.host.push(line);
+
+        for (const [who, { joining }] of [["bryn", bryn], ["cass", cass]]) {
+            joining.onChat = (line) => heard[who].push(line);
+            joining.onUnsaid = (reason) => unsaid[who].push(reason);
+        }
+
+        assert.deepEqual(DMS_TAKEN, { party: true, world: true, shout: true });
+        assert.deepEqual(SHOUT, { reach: 60, burst: 3, burstMs: 10000 });
+
+        // Bryn, in no party, shouts: heard by all three, each where they came in
+        assert.deepEqual(bryn.joining.chat("Anyone selling arrows?", { shout: true }), { ok: true, pending: true });
+        deliver();
+
+        const first = { from: "guest-1", name: "Bryn", text: "Anyone selling arrows?", shout: true };
+
+        assert.deepEqual(heard, { host: [first], bryn: [first], cass: [first] });
+
+        // Cass turns shouts off: sent none, and can't shout
+        cass.joining.takeDms({ shout: false });
+        deliver();
+        assert.deepEqual(hosting.chat("By the well", { shout: true }), { ok: true });
+        deliver();
+        assert.deepEqual(heard.bryn.at(-1), { from: HOST_PLAYER, name: "Ada", text: "By the well", shout: true });
+        assert.deepEqual(heard.host.at(-1), heard.bryn.at(-1));
+        assert.equal(heard.cass.length, 1);
+        cass.joining.chat("Hello?", { shout: true });
+        deliver();
+        assert.deepEqual(unsaid.cass, ["shoutsOff"]);
+        assert.equal(heard.bryn.length, 2, "(what one who's turned shouts off shouts, heard by no one)");
+
+        // The same line again, refused; and a fourth within ten seconds
+        assert.deepEqual(hosting.chat("By the well", { shout: true }), { ok: false, reason: "repeated" });
+        assert.deepEqual(hosting.chat("Two", { shout: true }), { ok: true });
+        assert.deepEqual(hosting.chat("Three", { shout: true }), { ok: true });
+        assert.deepEqual(hosting.chat("Four", { shout: true }), { ok: false, reason: "chatty" });
+        assert.deepEqual(bryn.joining.chat("Mine aren't counted with yours", { shout: true }), { ok: true, pending: true });
+        deliver();
+        assert.equal(heard.host.at(-1).text, "Mine aren't counted with yours");
+        assert.deepEqual(unsaid.bryn, []);
+
+        const until = host.battle.time + SHOUT.burstMs;
+
+        while (host.battle.time <= until) {
+            play(1);
+        }
+
+        assert.deepEqual(hosting.chat("Four", { shout: true }), { ok: true });
+        deliver();
+
+        // Bryn further off than a shout carries: not heard there, nor Bryn's here
+        const told = heard.bryn.length;
+
+        host.battle.actor("guest-1").x += SHOUT.reach + 1;
+        assert.deepEqual(hosting.chat("Still there?", { shout: true }), { ok: true });
+        bryn.joining.chat("Over here", { shout: true });
+        deliver();
+        assert.equal(heard.host.at(-1).text, "Still there?");
+        assert.equal(heard.bryn.length, told + 1);
+        assert.equal(heard.bryn.at(-1).text, "Over here", "(their own, heard back)");
+
+        // On another map, however near
+        host.battle.actor("guest-1").x -= SHOUT.reach + 1;
+        host.battle.actor("guest-1").map = "elsewhere";
+        play(Math.ceil(SHOUT.burstMs / 50));
+        hosting.chat("And now?", { shout: true });
+        deliver();
+        assert.notEqual(heard.bryn.at(-1).text, "And now?");
     });
 
     it("sends a direct message to one player and back to the sayer alone: a party one in their party, a world one to anyone else; one not taken never sent, the sayer told whose; to no one, refused; which are taken said again as the link comes back", () => {

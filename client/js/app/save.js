@@ -131,6 +131,9 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     // and from anyone else in the world, not taken, the one saying it told so)
     refusePartyDms: false,
     refuseWorldDms: false,
+    // (Shouts, core/netplay.js SHOUT: heard from anyone near, and shouted, till it's turned off in
+    // the party menu's Chat)
+    hearShouts: true,
     // (What's said in the party and to the player shown a few seconds just above the quick
     // actions too, then faded: hud.js chatLine)
     chatOnScreen: true,
@@ -220,7 +223,7 @@ export const SETTINGS_DEFAULTS = Object.freeze({
  * camera's turned by hand and follows, which go by whether it's touched or pointed at with a
  * mouse.
  */
-export const PLAY_SETTINGS = Object.freeze(["autoSnag", "snagGrades", "snagKinds", "autoLock", "resistSummons", "refuseInvites", "acceptDuels", "messengers", "refusePartyDms", "refuseWorldDms", "battleCam", "openWay", "invertTilt", "shake"]);
+export const PLAY_SETTINGS = Object.freeze(["autoSnag", "snagGrades", "snagKinds", "autoLock", "resistSummons", "refuseInvites", "acceptDuels", "messengers", "hearShouts", "refusePartyDms", "refuseWorldDms", "battleCam", "openWay", "invertTilt", "shake"]);
 
 /** How many blocked players are kept (in every world together), and the longest word of one kept (blocksOf). */
 export const BLOCKS = Object.freeze({ most: 200, length: 120 });
