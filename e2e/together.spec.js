@@ -1306,7 +1306,7 @@ test("the party menu's Players tab lists everyone playing in the world, the play
     await expect(theirRows.nth(1).locator(".party-name")).toHaveText(`♛ ${ada}`);
     await expect(theirRows.nth(1).locator(".player-chip")).toHaveText(["Leads your party"]);
     await expect(theirs.locator(".party-everyone-list .party-remove")).toHaveCount(0);
-    await expect(theirRows.nth(1).locator("button")).toHaveText(["Message", "Block"]);
+    await expect(theirRows.nth(1).locator("button")).toHaveText(["Duel", "Message", "Block"]);
     await expect(theirs.locator(".party-everyone-note")).toHaveText("Only your party's leader can dismiss anyone from it.");
     await theirs.getByRole("button", { name: "Close" }).click();
 
