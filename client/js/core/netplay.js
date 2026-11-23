@@ -59,10 +59,11 @@
 //                    { kind: "ready" }                         (its copy of the world made: playing)
 //                    { kind: "away", hidden }                  (its page hidden, or shown again: Hosting
 //                                                    `hidden`)
-//                    { kind: "hold", held, everyone }          (its player's menu open, or shut: on a
+//                    { kind: "hold", held }                    (its player's menu open, or shut: on a
 //                                                    world server the world stopped for its one
-//                                                    player; everyone: Pause for everyone, an
-//                                                    owner's, the world stopped for all)
+//                                                    player. `everyone`, Pause for everyone, is
+//                                                    no longer said nor heard: no one stops a
+//                                                    world for all, the plan's 2-7)
 //                    { kind: "command", seq, command }
 //                    { kind: "again" }                         (gone astray: the world again; answered
 //                                                    no oftener than AGAIN allows)
@@ -92,6 +93,8 @@
 //                    { kind: "state", snapshot, paused }       (the world again, and whether it's stopped)
 //                    { kind: "paused", paused, why, by }       (the host's world stopped, why (PAUSES),
 //                                                    and by whom; or going again)
+//                    { kind: "stopping", seconds }             (a world server's keeper is stopping the
+//                                                    world, so long from now: Session `stopping`)
 //                    { kind: "refused", reason }
 //                    { kind: "queued", place }                 (their hello heard, others coming in
 //                                                    before them: how many are ahead of them and
@@ -137,7 +140,7 @@ import { WARY } from "./wary.js";
  * Bumped whenever what's said changes: a game of another version can't join. (Not for what's
  * added and opted into: contribution.md, section 3.)
  */
-export const NET_VERSION = 237;
+export const NET_VERSION = 238;
 
 /**
  * The ways a world can be played with those who join it (its netcode): `lockstep`, each game
@@ -284,9 +287,9 @@ export const SELF = Object.freeze({ every: 2, again: 1000 });
 export const QUIET = Object.freeze({ ms: 4000 });
 
 /**
- * Why a world's stopped, as those in it are told (Hosting.pause). Its host stopped it for everyone
- * ("host": Pause for everyone, from the menu; on a world server, one of its owners, `by` them,
- * till they let it go or their link drops). The host's page is hidden, so its world, on that
+ * Why a world's stopped, as those in it are told (Hosting.pause). ("host" was its host, or a
+ * server world's owner, stopping it for everyone: no one does now, the scaling plan's 2-7, and
+ * nothing says it; the name stays so it's never given another meaning.) The host's page is hidden, so its world, on that
  * device, can't move on ("away"). A world server's one player has left it a while ("alone": their
  * page hidden, or their menu open). Or no one's game in a world server's world is ready yet
  * ("waiting"). Nothing else stops a world anyone else is in.
@@ -788,7 +791,7 @@ export class Session {
                 break;
             case "hold":
                 if (this.players.has(peer)) {
-                    this.onHold(peer, message.held === true, message.held === true && message.everyone === true);
+                    this.onHold(peer, message.held === true);
                 }
 
                 break;
@@ -1404,6 +1407,14 @@ export class Session {
 
         this.paused = paused;
         this.hosting.postTo([...this.reached(), ...this.viewing], "paused", encode({ kind: "paused", paused: Boolean(paused), ...paused }));
+    }
+
+    /**
+     * Everyone in the world told it's to be stopped `seconds` from now (a world server's keeper's
+     * doing, with notice: server/manage.js stopSoon), whichever way they play it.
+     */
+    stopping(seconds) {
+        this.hosting.postTo([...this.reached(), ...this.viewing], "stopping", encode({ kind: "stopping", seconds }));
     }
 
     /** Who's still here (the relay's word, the host's link back): anyone else who'd joined, gone. */
@@ -2150,11 +2161,10 @@ export class Joining {
 
         /**
          * As it's told the host: whether its page is hidden (away), and whether its player's
-         * holding the world (hold: their menu open), and for everyone.
+         * holding the world (hold: their menu open).
          */
         this.hidden = false;
         this.held = false;
-        this.everyone = false;
 
         /** What its game keeps of its hero that isn't the world's (core/host.js OWN), as it's told the host. */
         this.mine = {};
@@ -2169,6 +2179,8 @@ export class Joining {
         this.onWelcome = () => {};
         this.onState = () => {};
         this.onRefused = () => {};
+        /** The world's to be stopped by its server's keeper, in so many seconds (a "stopping"). */
+        this.onStopping = () => {};
         this.onKicked = () => {};
 
         /**
@@ -2297,6 +2309,9 @@ export class Joining {
                 this.paused = pausedOf(message.paused === true ? message : null);
                 this.#last = null;
                 break;
+            case "stopping":
+                this.onStopping(Number.isFinite(message.seconds) ? message.seconds : 0);
+                break;
             case "refused":
                 this.onRefused(message.reason, message);
                 break;
@@ -2365,11 +2380,9 @@ export class Joining {
         this.send(encode({ kind: "again" }));
 
         // (And how its player is, said again, as what it said meanwhile may have been lost too:
-        // its page shown again, their menu shut. Their pause for everyone ended with the link,
-        // server/world-worker.js: not asked for again)
-        this.everyone = false;
+        // its page shown again, their menu shut)
         this.send(encode({ kind: "away", hidden: this.hidden }));
-        this.send(encode({ kind: "hold", held: this.held, everyone: false }));
+        this.send(encode({ kind: "hold", held: this.held }));
 
         if (Object.keys(this.mine).length) {
             this.send(encode({ kind: "own", own: this.mine }));
@@ -2472,16 +2485,13 @@ export class Joining {
      * everyone: an owner's, on the world server, the world stopped for all), or letting it go.
      * Said only as it changes.
      */
-    hold(held, { everyone = false } = {}) {
-        const all = Boolean(held && everyone);
-
-        if (Boolean(held) === this.held && all === this.everyone) {
+    hold(held) {
+        if (Boolean(held) === this.held) {
             return;
         }
 
         this.held = Boolean(held);
-        this.everyone = all;
-        this.send(encode({ kind: "hold", held: this.held, everyone: all }));
+        this.send(encode({ kind: "hold", held: this.held }));
     }
 
     /**

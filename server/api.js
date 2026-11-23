@@ -50,6 +50,7 @@
 //                                           offline, or set aside; or its heroes mode and first-hero rule, as they're kept)
 //   DELETE /worlds/:id {confirm}            deleted, its name typed (its backups kept)
 //   POST   /worlds/:id/start, /aside, /save                          its life
+//   POST   /worlds/:id/stop                                          stopped with a minute's notice to those in it
 //   POST   /worlds/:id/offline, /online     taken offline for upkeep (everyone sent out, "offline",
 //                                           nobody let in, its character rule changeable), back online
 //   POST   /worlds/:id/keys/:key/show       a key that works, shown again: { key }
@@ -622,6 +623,11 @@ export function apiHandler(server, { mac = false } = {}) {
             const principal = managing(request, world, "world.manage");
 
             return doing(() => (what === "start" ? manage.start(world) : what === "aside" ? manage.setAside(world, `set aside by ${byOf(principal)}`) : manage.save(world)));
+        }],
+        ["POST", new RegExp(`^/worlds/${WORLD}/stop$`), async (request, body, [, world]) => {
+            const principal = managing(request, world, "world.manage");
+
+            return doing(() => manage.stopSoon(world, { by: byOf(principal) }));
         }],
         ["POST", new RegExp(`^/worlds/${WORLD}/(offline|online)$`), async (request, body, [, world, what]) => {
             const principal = managing(request, world, "world.manage");

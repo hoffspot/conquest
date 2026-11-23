@@ -1488,6 +1488,14 @@ function saveNow() {
     save?.();
 }
 
+// A world on a server about to be stopped by its server's keeper (core/netplay.js "stopping": the
+// management page's Stop with notice): said to the player, with how long they have
+function worldStopping(seconds) {
+    const left = Math.max(1, Math.round(seconds));
+
+    state.game?.hud.message(`This world will be stopped in ${left} second${left === 1 ? "" : "s"} by its server's keeper. It's saved: you can come back when it's started again.`, Math.min(left, 20));
+}
+
 function pause() {
     keepPlace();
 
@@ -1495,12 +1503,10 @@ function pause() {
         return;
     }
 
-    // (The world stops only with no one else in it: else it goes on under the menu, unless its
-    // host, or on a world server one of its owners, pauses it for everyone. Joined to another's
-    // world, it isn't this game's to open to others)
-    state.everyone = false;
+    // (The world stops only with no one else in it: else it goes on under the menu, and no one
+    // can stop it for everyone: the scaling plan's 2-7. Joined to another's world, it isn't this
+    // game's to open to others)
     state.game.pause();
-    $("#pauseallbutton").hidden = !mayPauseAll();
     $("#menunote").textContent = "Others are playing: the world goes on.";
     $("#menunote").hidden = state.game.host.pausable;
     $("#invitebutton").hidden = Boolean(state.game.remote);
@@ -1515,56 +1521,7 @@ function resume() {
     stopBinding();
     fullScreen.play();
 
-    // (A pause for everyone over: their world going again for all; a world server's let go of as
-    // the game starts again, Joining hold)
-    if (state.everyone) {
-        state.everyone = false;
-        state.together?.hosting?.pause(document.hidden ? "away" : null);
-    }
-
     state.game?.start();
-}
-
-// Whether the player may stop the world for everyone from the menu (Pause for everyone), with
-// anyone else in it to stop it for: the host of their own world open to others, with friends in
-// it; or one of the owners of a world on a server. (With no one else in it, the menu stops it)
-function mayPauseAll() {
-    const game = state.game;
-
-    if (!game) {
-        return false;
-    }
-
-    if (game.remote) {
-        return Boolean(state.onServer) && game.host.players.get(game.me)?.role === "owner" && game.host.players.size > 1;
-    }
-
-    return (state.together?.hosting?.players.size ?? 0) > 0;
-}
-
-// The world stopped for everyone (Pause for everyone), till Resume: their own, on this device,
-// those in it told why (core/netplay.js Hosting pause, "host"); a world server's, asked of it as
-// one of its owners (Joining hold), till they resume or their link drops
-function pauseAll() {
-    const game = state.game;
-
-    if (!$("#menu").open || !mayPauseAll()) {
-        return;
-    }
-
-    state.everyone = true;
-
-    if (game.remote) {
-        game.remote.hold(true, { everyone: true });
-    } else {
-        game.stop();
-        state.together.hosting.pause("host");
-    }
-
-    $("#pauseallbutton").hidden = true;
-    $("#menunote").textContent = "Paused for everyone, till you resume.";
-    $("#menunote").hidden = false;
-    $("#resumebutton").focus();
 }
 
 // The menu's pages: the main one; Game options, and a page for each group of them (Action Wheel
@@ -2702,8 +2659,8 @@ async function openToOthers(game, { reclaim = null, via = undefined } = {}) {
                 fetcher.hold("someone joining", { for: 5000 });
                 showInvite();
 
-                // (Unless its host has paused it for everyone: then whoever comes is told so)
-                if (!state.game?.running && !state.everyone) {
+                // (Its host's menu open, the world stopped while they were alone: going again)
+                if (!state.game?.running) {
                     state.game?.start();
                 }
             },
@@ -3120,6 +3077,7 @@ async function joinByCode(code, save, tell, { broker = undefined } = {}) {
 
     tell.stage("ask");
     setTogether(joined);
+    joined.joining.onStopping = worldStopping;
     joined.joining.onRefused = (reason, said) => {
         joined.close();
         setTogether(null);
@@ -5229,6 +5187,7 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
 
     setTogether(joined);
     state.onServer = { client, entered, kept };
+    joined.joining.onStopping = worldStopping;
     joined.joining.onRefused = (reason, said) => {
         joined.close();
         setTogether(null);
@@ -5800,7 +5759,6 @@ $("#invite").addEventListener("cancel", (event) => {
 
 $("#menubutton").addEventListener("click", pause);
 $("#resumebutton").addEventListener("click", resume);
-$("#pauseallbutton").addEventListener("click", pauseAll);
 $("#quitbutton").addEventListener("click", quit);
 $("#optionsbutton").addEventListener("click", () => menuPage("options"));
 
@@ -6544,10 +6502,10 @@ window.addEventListener("pagehide", () => telemetry.closed());
 
 // Pause when the page is hidden (switching apps on a phone), and silence it; a world open to
 // others can't move on while it's hidden, and those in it are told so (and, shown again, that it's
-// going again, unless its host has paused it for everyone)
+// going again)
 document.addEventListener("visibilitychange", () => {
     state.session?.sound.setHidden(document.hidden);
-    state.together?.hosting?.pause(document.hidden ? "away" : state.everyone ? "host" : null);
+    state.together?.hosting?.pause(document.hidden ? "away" : null);
 
     // (A joined game says so to whoever hosts its world: a world server, which stops for its one
     // player; a player's own, which knows who's away: core/netplay.js Hosting `hidden`)

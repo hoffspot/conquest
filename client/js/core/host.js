@@ -489,9 +489,11 @@ const THREAD_TOWARD = 0.5;
  * Passing the time (the terrain plan's M7e, §9 Night in play): sleeping in a room at an inn, or
  * camping out in the world (no camp within a settlement, nor with anything hostile within `clear`
  * metres), to the next sunrise or sunset at least `least` ms of play off; the camp's fire burning
- * on `burns` ms of the battle's time after, lighting what's round it as a war camp's does. Who
- * passes the time is the world's rule (RULES rest): its host (everyone's woken with them; anyone
- * else just rests), or everyone in it resting at once.
+ * on `burns` ms of the battle's time after, lighting what's round it as a war camp's does. Time
+ * is passed only by a player alone in the world (the owner's ruling of 23 November 2026;
+ * generated/multiplayer_scaling_plan.md 2-5, 2-6): with anyone else in it, a rest mends the
+ * rester and theirs, and the world's clock is left as it is. Alone, who passes it is the world's
+ * rule (RULES rest): its host's player, or everyone in it resting, which is then the one there is.
  */
 export const REST = Object.freeze({ clear: 40, least: 5 * 60000, burns: 3 * 60000 });
 
@@ -510,9 +512,9 @@ export const DUEL = Object.freeze({ reach: 40, askMs: 30000, startMs: 3000, apar
 /**
  * A world's rules (generated/world_server_plan.md §3.2), kept with it (its snapshot), so every copy
  * of it plays by them:
- *  - `rest`: who passes its time by resting: "host" (its host's player, HOST_PLAYER: a world a
- *    browser hosts), or "everyone" (only once every player in it is resting, at an inn or in camp,
- *    the time passed the shortest of their rests: a world with no host player, a world server's);
+ *  - `rest`: who passes its time by resting, alone in it (REST: with anyone else in the world no
+ *    rest passes any): "host" (its host's player, HOST_PLAYER: a world a browser hosts), or
+ *    "everyone" (every player in it resting: a world with no host player, a world server's);
  *  - `debug`: who may use the debug commands (a field battle called up): "host" (its host's
  *    player), "owner" (its owners: Host.join's `role`), or "none";
  *  - `invasions`: whether invasions come to the towns the players are in (core/invasions.js);
@@ -521,16 +523,17 @@ export const DUEL = Object.freeze({ reach: 40, askMs: 30000, startMs: 3000, apar
  *    begin with; set by the world's host's player or an owner (the "rule" command);
  *  - and the rules a world shared by strangers changes (RULE_CHOICES), each as it is today.
  */
-export const RULES = Object.freeze({ rest: "host", debug: "host", invasions: true, mortal: false, pvp: "war", pause: "owner", loot: "near", scaling: "side", director: "player", instances: "site", rares: "world", stock: "shared" });
+export const RULES = Object.freeze({ rest: "host", debug: "host", invasions: true, mortal: false, pvp: "war", loot: "near", scaling: "side", director: "player", instances: "site", rares: "world", stock: "shared" });
 
 /**
  * The rules a world shared by strangers plays by (generated/multiplayer_scaling_plan.md Stage 2,
  * `2-1`): for each, what it can be (`of`, today's first: RULES has it), what the `shared` preset
  * makes it (`shared`), the slice that builds its other way (`slice`), and whether that's built
  * (`built`). One not built yet can only be as it is today, whatever a world's given: a rule
- * nothing plays by isn't kept as if it were. Each slice turns its own on.
+ * nothing plays by isn't kept as if it were. Each slice turns its own on. (`pause`, who may stop
+ * a world for everyone, was one of them: no one may, in any world, by the owner's ruling of 23
+ * November 2026, so it's no rule now and its name isn't used again.)
  *  - `pvp`: players of peoples at war are enemies ("war"), or only by a duel or their flags;
- *  - `pause`: an owner may stop the world for everyone ("owner"), or no one may;
  *  - `loot`: a wild foe's spoils go to those near it ("near"), or to those who fought it;
  *  - `scaling`: a foe's answer to a bigger side grows with it ("side"), or is softened for a crowd;
  *  - `director`: the wilds deal to each player ("player"), or no more than an area can hold;
@@ -540,7 +543,6 @@ export const RULES = Object.freeze({ rest: "host", debug: "host", invasions: tru
  */
 export const RULE_CHOICES = Object.freeze({
     pvp: Object.freeze({ of: Object.freeze(["war", "optin"]), shared: "optin", slice: "2-2", built: true }),
-    pause: Object.freeze({ of: Object.freeze(["owner", "none"]), shared: "none", slice: "2-7", built: false }),
     loot: Object.freeze({ of: Object.freeze(["near", "tagged"]), shared: "tagged", slice: "2-13", built: false }),
     scaling: Object.freeze({ of: Object.freeze(["side", "crowd"]), shared: "crowd", slice: "2-16", built: false }),
     director: Object.freeze({ of: Object.freeze(["player", "area"]), shared: "area", slice: "2-18", built: false }),
@@ -18710,6 +18712,16 @@ export class Host {
     // everyone told (each woken); anyone else just rests. In a world where everyone rests (RULES
     // rest "everyone"), they rest till everyone in it is resting too (#restTogether)
     #sleep(player, actor, where, until = null) {
+        // (Others in the world: no rest passes its time, anyone's. They're mended, they and
+        // theirs, and that's all of it: REST)
+        if (this.players.size > 1) {
+            player.resting = null;
+            this.#restMends(player);
+            this.#event("slept", { id: actor.id, where, passed: 0, ...(until !== null ? { until } : {}) });
+
+            return;
+        }
+
         if (this.rules.rest === "everyone") {
             player.resting = { where, until };
             this.#restTogether();
@@ -18767,9 +18779,10 @@ export class Host {
         return this.war ? (until !== null ? campFor(elapsed, until) : untilWaking(elapsed, REST.least)) : 0;
     }
 
-    // Everyone in the world resting at once (RULES rest "everyone"): its time passed by the
-    // shortest of their rests, and each woken, told how long it was (the rest that ended it); else
-    // those resting told how many they're waiting on
+    // The one player in the world resting (RULES rest "everyone": a world with no host player):
+    // its time passed by their rest, and they're woken, told how long it was. (No one waits on
+    // anyone to rest any more: with others in the world a rest passes no time, #sleep; the
+    // "resting" event that said how many were still up is no longer told, its name not used again)
     #restTogether() {
         const players = [...this.players.values()];
         const resting = players.filter(({ resting }) => resting);
@@ -18778,8 +18791,16 @@ export class Host {
             return;
         }
 
-        if (resting.length < players.length) {
-            this.#event("resting", { ids: resting.map(({ id }) => id), waiting: players.length - resting.length });
+        // (More than one in the world, some resting from a world kept before rests stopped
+        // passing its time with others in it: up, mended, and no time passed)
+        if (players.length > 1) {
+            for (const player of resting) {
+                const { where } = player.resting;
+
+                player.resting = null;
+                this.#restMends(player);
+                this.#event("slept", { id: player.id, where, passed: 0 });
+            }
 
             return;
         }

@@ -215,21 +215,16 @@ test("a world opened to others: an elf joins it by its code, is brought in by th
     await expect(guest.locator("#netstatus")).toBeHidden({ timeout: 30000 });
     await expect(host.locator("#menunote")).toHaveText("Others are playing: the world goes on.");
 
-    // Paused for everyone from the host's menu: the guest's told, and the world stands still (its
-    // time where it was a second later) till the host resumes it
-    await host.locator("#pauseallbutton").click();
-    await expect(host.locator("#menunote")).toHaveText("Paused for everyone, till you resume.");
-    await expect(host.locator("#pauseallbutton")).toBeHidden();
-    await expect(guest.locator("#netstatus")).toHaveText("The host has paused the game.", { timeout: 30000 });
+    // No one stops the world for everyone (the scaling plan's 2-7): the host's menu has no such
+    // button, and the world goes on under it, in both games, till they resume
+    await expect(host.locator("#pauseallbutton")).toHaveCount(0);
+    await expect(host.locator("#menu").getByRole("button", { name: /Pause for everyone/ })).toHaveCount(0);
 
-    const stoppedAt = await host.evaluate(() => window.pellagos.game.battle.time);
+    const under = await guest.evaluate(() => window.pellagos.game.battle.time);
 
-    await expect.poll(() => guest.evaluate(() => window.pellagos.game.battle.time), { timeout: 30000 }).toBe(stoppedAt);
-    await guest.waitForTimeout(1000);
-    expect(await host.evaluate(() => window.pellagos.game.battle.time)).toBe(stoppedAt);
+    await expect.poll(() => guest.evaluate(() => window.pellagos.game.battle.time), { timeout: 30000 }).toBeGreaterThan(under + 1000);
+    await expect(guest.locator("#netstatus")).toBeHidden();
     await host.locator("#resumebutton").click();
-    await expect(guest.locator("#netstatus")).toBeHidden({ timeout: 30000 });
-    await expect.poll(() => guest.evaluate(() => window.pellagos.game.battle.time), { timeout: 30000 }).toBeGreaterThan(stoppedAt);
 
     // Nothing from the host for a while (its world stopped, without a word): the guest's told
     // they're waiting for it

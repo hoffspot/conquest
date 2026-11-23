@@ -622,7 +622,7 @@ describe("junk on a joined player's copy of the world (NET_VERSION 230)", () => 
             }
         };
 
-        assert.equal(NET_VERSION, 237, "237 duels, and players fighting only by them where the rules say (the plan's 2-2 and 2-3), 236 the rules a shared world changes, kept with every world (the plan's 2-1), 235 an ahead order looked along a leg at a time (docs/WAR.md, the plan's 3-29), 230 junk's, 231 crafting's (docs/CRAFTING.md), 232 mercenaries never lost (docs/WAR.md), 233 a player's far way waiting (docs/WORLD.md), 234 insides drawn by their slots (insides.js INSIDE_SLOTS)");
+        assert.equal(NET_VERSION, 238, "238 no rest passing a world's time with others in it, no pause for everyone, and a keeper's notice of stopping (the plan's 2-5 to 2-7), 237 duels, and players fighting only by them where the rules say (the plan's 2-2 and 2-3), 236 the rules a shared world changes, kept with every world (the plan's 2-1), 235 an ahead order looked along a leg at a time (docs/WAR.md, the plan's 3-29), 230 junk's, 231 crafting's (docs/CRAFTING.md), 232 mercenaries never lost (docs/WAR.md), 233 a player's far way waiting (docs/WORLD.md), 234 insides drawn by their slots (insides.js INSIDE_SLOTS)");
         joining.onWelcome = ({ seed, race, snapshot }) => joining.attach(Host.restore(buildWorld({ seed, race }), snapshot));
         joining.hello({ hero: { ...HERO, name: "Bryn", race: "human" }, progress: { gold: 3, pack: [junk("potion", 3), stack("meal", 2), junk("ale", 4), { ...stack("ale"), junk: "x".repeat(20) }] } });
         deliver();

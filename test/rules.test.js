@@ -13,6 +13,7 @@ import { Host, PRESETS, presetRules, RULE_CHOICES, ruled, RULES, SNAPSHOT_STEPS,
 import { buildWorld } from "../client/js/core/overworld.js";
 import { publicReady, publicReason } from "../server/access/cap.js";
 import { ADMIN_HEADER, ADMIN_VALUE } from "../server/admin.js";
+import { STOP_NOTICE } from "../server/manage.js";
 import { openWorld, rulesFor } from "../server/reopen.js";
 import { schemaReason } from "../server/storage/settings.js";
 import { presetOf, PRESET_WORDS, settingsOf, WORLD_SETTINGS } from "../server/storage/worlds.js";
@@ -63,7 +64,7 @@ function raw(port, { method = "GET", route = "/", headers = {}, body = null }) {
 
 describe("the rules a shared world changes (core/host.js RULE_CHOICES)", () => {
     it("has each as it is today in RULES, its other way named with the slice that builds it, and only those built whose slices are (pvp: 2-2)", () => {
-        assert.deepEqual(Object.keys(RULE_CHOICES), ["pvp", "pause", "loot", "scaling", "director", "instances", "rares", "stock"]);
+        assert.deepEqual(Object.keys(RULE_CHOICES), ["pvp", "loot", "scaling", "director", "instances", "rares", "stock"]);
 
         for (const [key, { of, shared, slice, built }] of Object.entries(RULE_CHOICES)) {
             assert.equal(RULES[key], of[0], `${key}: today's first`);
@@ -75,8 +76,10 @@ describe("the rules a shared world changes (core/host.js RULE_CHOICES)", () => {
 
         assert.deepEqual(
             Object.fromEntries(Object.entries(RULE_CHOICES).map(([key, { shared }]) => [key, shared])),
-            { pvp: "optin", pause: "none", loot: "tagged", scaling: "crowd", director: "area", instances: "party", rares: "character", stock: "personal" },
+            { pvp: "optin", loot: "tagged", scaling: "crowd", director: "area", instances: "party", rares: "character", stock: "personal" },
         );
+        // (`pause` was one: no one stops a world for everyone now, in any world, so it's no rule: the plan's 2-7)
+        assert.equal(Object.hasOwn(RULES, "pause"), false);
     });
 
     it("keeps a rule that isn't built as it is today whatever a world's given, and one that is as it's given", () => {
@@ -99,7 +102,7 @@ describe("the rules a shared world changes (core/host.js RULE_CHOICES)", () => {
         assert.deepEqual(presetRules("shared", NONE), today, "(none built: as a company's)");
         assert.deepEqual(presetRules(undefined), today);
         assert.deepEqual(presetRules("company", BUILT), today);
-        assert.deepEqual(presetRules("shared", BUILT), { pvp: "optin", pause: "none", loot: "tagged", scaling: "crowd", director: "area", instances: "party", rares: "character", stock: "personal" });
+        assert.deepEqual(presetRules("shared", BUILT), { pvp: "optin", loot: "tagged", scaling: "crowd", director: "area", instances: "party", rares: "character", stock: "personal" });
         assert.deepEqual(presetRules("shared", { ...NONE, loot: BUILT.loot }), { ...today, loot: "tagged" }, "(one built: that one alone)");
     });
 
@@ -221,5 +224,31 @@ describe("a world's preset and public settings, on a server", () => {
         const { host } = await openWorld(stored);
 
         assert.deepEqual(host.rules, { ...RULES, rest: "everyone", debug: "none" });
+    });
+
+    it("stops a world with notice from the management page, and not one that isn't going (manage.js stopSoon; the plan's 2-7)", async () => {
+        assert.equal(STOP_NOTICE, 60);
+
+        const idle = await admin("POST", `/worlds/${world.world}/stop`, {});
+
+        assert.deepEqual([idle.status, idle.json.error], [409, "not-going"]);
+        assert.equal((await admin("POST", `/worlds/${world.world}/start`, {})).status, 200);
+        await until(() => server.registry.lifeOf(world.world).state, "the world open");
+
+        // (Asked: its players given a minute; asked again meanwhile, the same notice runs on)
+        const asked = await admin("POST", `/worlds/${world.world}/stop`, {});
+
+        assert.equal(asked.status, 200);
+        assert.ok(asked.json.stopping > 55 && asked.json.stopping <= 60, `${asked.json.stopping} s`);
+        assert.equal(server.manage.stops.size, 1);
+        assert.ok((await admin("POST", `/worlds/${world.world}/stop`, {})).json.stopping <= asked.json.stopping);
+        assert.equal(server.manage.stops.size, 1);
+        assert.ok(server.registry.entries.get(world.world)?.thread, "still going, till its notice is up");
+
+        // (Its notice up: set aside, saved. A short one, for the test)
+        server.manage.forgetStops();
+        await server.manage.stopSoon(world.world, { by: "the tests", seconds: 0.2 });
+        await until(() => !server.registry.entries.get(world.world)?.thread, "the world set aside");
+        assert.equal(server.manage.stops.size, 0);
     });
 });

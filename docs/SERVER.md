@@ -278,9 +278,12 @@ In the game, in the world: the menu's **World**, or **World** at the top of the 
   World Hosted on a Server (the server's **Enter a short code**). It works once, for half an hour.
   Host on a Server makes one too, as the world's made.
 
-In the menu, with anyone else in the world: **Pause for everyone**. The world stops for all in it,
-each told who paused it, till you resume; if your link drops meanwhile, it goes on for the others.
-Nothing else stops a world anyone else is in. Alone in it, your menu stops it, and so does your
+Nothing in the game stops a world anyone else is in: there's no pausing it for everyone, for its
+owners or anyone (the scaling plan's 2-7). To stop one that people are in, use **Stop with
+notice** on its card in the management page: everyone in it is told at once that it'll be stopped
+in 60 seconds, and then it's saved and set aside, as **Set aside** does without the notice
+(`server/manage.js` `stopSoon`, `STOP_NOTICE`; `POST /worlds/:id/stop`). Resting passes no time
+either while anyone else is in it (docs/GAME.md *Passing the time*). Alone in it, your menu stops it, and so does your
 page hidden (its rule **Stopped while its one player's page is hidden**, on unless you turn it off).
 
 **Coming in, in turn.** Everyone who comes into a world is sent the whole of it, which is the
@@ -860,7 +863,7 @@ failed to understand what it was sent. A world can also be marked **Experimental
 
 A world's **preset** (`preset`: `company` or `shared`; the scaling plan's `2-1`) sets together
 the rules a world shared by strangers plays differently from a company of friends': whether
-players of peoples at war are enemies (`pvp`), who may pause (`pause`), whose a foe's spoils are
+players of peoples at war are enemies (`pvp`), whose a foe's spoils are
 (`loot`), how foes answer a crowd (`scaling`), how much the wilds deal to one area (`director`),
 a dungeon for each party (`instances`), a unique met by each character (`rares`), and a shop's
 stock for each (`stock`). Each is a rule kept with the world (`RULES`, `RULE_CHOICES` in

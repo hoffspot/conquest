@@ -190,7 +190,7 @@ describe("a world in a thread of its own (server/world-worker.js, world-thread.j
         assert.match(journal, /\(empty\)/, "saved as it emptied");
     });
 
-    it("stops its clock for its one player (their menu open, or their page hidden), never by itself with anyone else in; for everyone only by one of its owners, till they let it go or their link drops; and a game back on its link says again how it is", async () => {
+    it("stops its clock for its one player (their menu open, or their page hidden), never with anyone else in, by itself or by anyone, its owners neither (the plan's 2-7); and a game back on its link says again how it is", async () => {
         const store = new WorldStore(await scratch());
         const stored = await store.create({ name: "Stillwater", seed: 3, race: "human" });
         const states = [];
@@ -228,30 +228,35 @@ describe("a world in a thread of its own (server/world-worker.js, world-thread.j
         bea.joining.hold(true);
         await still(true, "not stopped by a page hidden or a menu, with anyone else in");
 
-        // Pause for everyone: a player's (not an owner's) stops nothing; an owner's stops it for
-        // everyone, saying who, and her link dropping ends it
-        bea.joining.hold(true, { everyone: true });
+        // No one stops it for everyone (the plan's 2-7): a player's asking does nothing, and an
+        // owner's no more, said as an older game's menu said it
+        bea.joining.send(encode({ kind: "hold", held: true, everyone: true }));
         await still(true, "not stopped by a player's pause for everyone");
-        bea.joining.hold(false);
+        bea.joining.send(encode({ kind: "hold", held: false }));
         ada.joining.away(false);
-        ada.joining.hold(true, { everyone: true });
-        await runs(false, "stopped for everyone");
-        await until(() => bea.joining.paused?.why === "host", "Bea told why");
-        assert.deepEqual(bea.joining.paused, { why: "host", by: "Ada" });
+        ada.joining.send(encode({ kind: "hold", held: true, everyone: true }));
+        await still(true, "nor by an owner's");
+        assert.equal(bea.joining.paused, null);
+
+        // (Its server's keeper can stop it, with notice: everyone in it told how long they have)
+        const noticed = [];
+
+        bea.joining.onStopping = (seconds) => noticed.push(seconds);
+        world.stopping(60);
+        await until(() => noticed.length === 1, "Bea told it's being stopped");
+        assert.deepEqual(noticed, [60]);
+        Object.assign(ada.joining, { held: true });
         world.drop("p1");
-        await runs(true, "going again for Bea, Ada's link dropped");
-        await until(() => bea.joining.paused === null, "Bea told it's going");
+        await still(true, "going on for Bea, Ada's link dropped");
 
         // Back, alone (Bea gone), her menu still open (and her page hidden meanwhile): her game
-        // says so again as its link comes back, and it stops for her, as her pause for everyone
-        // ended with her link; and her page shown again, and her menu shut, said while her link
+        // says so again as its link comes back, and it stops for her; and her page shown again, and her menu shut, said while her link
         // was down, lost, said again as it's back: going again
         world.leave("p2");
         ada.joining.away(true);
         world.back("p1");
         ada.joining.resync();
         await runs(false, "stopped for her alone, as her game says");
-        assert.equal(ada.joining.everyone, false);
         world.drop("p1");
 
         const send = ada.joining.send;
