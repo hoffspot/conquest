@@ -46,6 +46,40 @@ export const DISMISS_SURE_MS = 3000;
 /** Whom the Chat's line goes to when it's shouted (core/netplay.js SHOUT): everyone near, not a player's id. */
 export const SHOUT_TO = "*shout";
 
+/** The Players tab: how many players a page of it shows, and how near (m, on the player's map) counts as nearby. */
+export const PLAYERS_PAGE = Object.freeze({ size: 25, near: 150 });
+
+/**
+ * The Players tab's players, as a page of it shows them: those whose name has `search` in it
+ * (any case; all, with none), in the order given, a page of PLAYERS_PAGE.size, under the heading
+ * each belongs to: the player and their party, those near (`near`), and everyone else. Returns
+ * { found (how many matched), page (the one shown: the nearest there is to the one asked for),
+ * pages, sections: [{ key, title, players }] (those with anyone on this page) }.
+ */
+export function playersPage(everyone, { search = "", page = 0 } = {}) {
+    const wanted = search.trim().toLowerCase();
+    const sectionOf = (player) => (player.me || player.party?.yours ? "party" : player.near ? "near" : "world");
+    const keys = ["party", "near", "world"];
+    const found = everyone
+        .filter(({ name }) => !wanted || name.toLowerCase().includes(wanted))
+        .map((player) => ({ player, key: sectionOf(player) }))
+        .sort((a, b) => keys.indexOf(a.key) - keys.indexOf(b.key));
+    const pages = Math.max(1, Math.ceil(found.length / PLAYERS_PAGE.size));
+    const shown = Math.min(Math.max(0, Math.floor(page) || 0), pages - 1);
+    const onPage = found.slice(shown * PLAYERS_PAGE.size, (shown + 1) * PLAYERS_PAGE.size);
+    const partied = everyone.some((player) => !player.me && player.party?.yours);
+    const titles = { party: partied ? "Your party" : "You", near: "Nearby", world: "Everyone else" };
+
+    return {
+        found: found.length,
+        page: shown,
+        pages,
+        sections: keys
+            .map((key) => ({ key, title: `${titles[key]} (${found.filter((entry) => entry.key === key).length})`, players: onPage.filter((entry) => entry.key === key).map(({ player }) => player) }))
+            .filter(({ players }) => players.length),
+    };
+}
+
 /** What can be said to the party with a tap (the chat's quick phrases). */
 export const QUICK_PHRASES = Object.freeze(["On my way!", "Wait for me.", "Follow me!", "Help!", "Ready.", "Thanks!", "Well fought!", "Back to town."]);
 
@@ -234,8 +268,35 @@ export class PartyPanel {
         this.everyoneHeading = element("h3", "journal-heading", "In this world");
         this.everyoneList = element("ul", "journal-list party-everyone-list");
         this.everyoneNote = element("p", "journal-note party-everyone-note");
-        this.everyoneBody.append(this.everyoneHeading, this.everyoneList, this.everyoneNote);
+        // (Found by name, and a page of them at a time: PLAYERS_PAGE)
+        this.everyoneSearch = element("input", "party-search");
+        Object.assign(this.everyoneSearch, { type: "search", maxLength: 40, autocomplete: "off", placeholder: "Find a player by name" });
+        this.everyoneSearch.setAttribute("aria-label", "Find a player by name");
+        this.everyoneSearch.setAttribute("enterkeyhint", "search");
+        this.everyoneSearch.addEventListener("input", () => {
+            this.everyonePage = 0;
+            this.#everyone(this.everyoneGiven);
+        });
+        this.everyonePager = element("div", "party-pager");
+        this.everyonePrevious = element("button", "journal-button party-previous", "Previous");
+        this.everyoneNext = element("button", "journal-button party-next", "Next");
+        this.everyonePageOf = element("span", "party-page");
+        this.everyonePageOf.setAttribute("aria-live", "polite");
+
+        for (const [button, by] of [[this.everyonePrevious, -1], [this.everyoneNext, 1]]) {
+            button.type = "button";
+            button.addEventListener("click", () => {
+                this.everyonePage += by;
+                this.#everyone(this.everyoneGiven);
+                this.everyoneBody.scrollTop = 0;
+            });
+        }
+
+        this.everyonePager.append(this.everyonePrevious, this.everyonePageOf, this.everyoneNext);
+        this.everyoneBody.append(this.everyoneHeading, this.everyoneSearch, this.everyoneList, this.everyonePager, this.everyoneNote);
         this.everyoneShown = null;
+        this.everyoneGiven = { everyone: [], leads: false, full: false, partied: false };
+        this.everyonePage = 0;
 
         this.panel.append(header, this.tabs, this.body, this.chatBody, this.everyoneBody);
         root.append(this.panel);
@@ -544,16 +605,27 @@ export class PartyPanel {
     // party's players are): each with what they are, how they stand, where they are, and the one
     // thing that can be done about them here: asked to the player's party, or put out of it
     #everyone({ everyone, leads, full, partied }) {
-        const shown = JSON.stringify({ everyone, leads, full, partied });
+        const search = this.everyoneSearch.value;
+        const shown = JSON.stringify({ everyone, leads, full, partied, search, page: this.everyonePage });
+
+        this.everyoneGiven = { everyone, leads, full, partied };
 
         if (shown === this.everyoneShown) {
             return;
         }
 
+        const { found, page, pages, sections } = playersPage(everyone, { search, page: this.everyonePage });
+
         this.everyoneShown = shown;
+        this.everyonePage = page;
         this.everyoneHeading.textContent = `In this world (${everyone.length})`;
+        this.everyonePager.hidden = pages < 2;
+        this.everyonePrevious.disabled = page === 0;
+        this.everyoneNext.disabled = page >= pages - 1;
+        this.everyonePageOf.textContent = `Page ${page + 1} of ${pages}`;
         this.everyoneList.replaceChildren(
-            ...everyone.map((player) => {
+            ...(found ? [] : [element("li", "party-section party-none", `No one here is called "${search.trim()}".`)]),
+            ...sections.flatMap(({ key, title, players }) => [element("li", `party-section ${key}`, title), ...players.map((player) => {
                 const { id, name, me, title = "", where = "", can = null } = player;
                 const leads = Boolean(player.party?.leads);
                 const row = element("li", `party-player everyone${leads ? " leader" : ""}${player.away ? " away" : ""}${me ? " me" : ""}`);
@@ -615,7 +687,7 @@ export class PartyPanel {
                 row.append(text, actions);
 
                 return row;
-            }),
+            })]),
         );
         this.everyoneNote.textContent = full
             ? "Your party's full: four play together in one at most."

@@ -6,7 +6,7 @@ import { LOOKS } from "../client/js/characters/peoples.js";
 import { formatBytes, Loader } from "../client/js/app/loader.js";
 import { ICONS, ITEM_ICONS } from "../client/js/app/icons.js";
 import { messagePlace, PARTY_ICON, partyFit, PLATE_SIZE, plateScale } from "../client/js/app/hud.js";
-import { memberKind, playerStatus, QUICK_PHRASES, timeLeft, unreadLabel } from "../client/js/app/partypanel.js";
+import { memberKind, PLAYERS_PAGE, playersPage, playerStatus, QUICK_PHRASES, timeLeft, unreadLabel } from "../client/js/app/partypanel.js";
 import { buildingsOf, compassTurn, interiorColours, mapColours, Minimap, paintPatch, paintingPatch, treesOf } from "../client/js/app/minimap.js";
 import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, flicked, flickReach, FLIP, iconOf, offensive, pickerEntries, PLACES, QUICK, QUICK_SHOWN, QUICK_TWO, readWheels, ROLES, rolesOf, sectorPath, wheelPlace, WHEELS, whomFor } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
@@ -1822,6 +1822,34 @@ describe("the bars over the others (hud.js)", () => {
         assert.deepEqual(said({ me: true, hostile: true }), ["free: In no party"], "(never at war with themselves)");
         assert.deepEqual(said({ blocked: true, party: { yours: false, leads: true, leader: "Cai" } }), ["blocked: Blocked", "partied: Leads a party"], "(blocked, first)");
         assert.deepEqual(said({ me: true, blocked: true }), ["free: In no party"], "(never blocked by themselves)");
+    });
+
+    it("sets the Players tab's players out under headings (the player and their party, those near, everyone else), those found by name alone, 25 to a page", () => {
+        const me = { id: "player", name: "Ada", me: true, party: { yours: true } };
+        const few = [me, { id: "a", name: "Bryn", party: { yours: true } }, { id: "b", name: "Cass", near: true }, { id: "c", name: "Bran", party: { yours: false } }, { id: "d", name: "Dov", near: true, party: { yours: true } }];
+        const laid = (page) => page.sections.map(({ key, title, players }) => [key, title, players.map(({ name }) => name).join(" ")]);
+
+        assert.deepEqual(PLAYERS_PAGE, { size: 25, near: 150 });
+        assert.deepEqual(laid(playersPage(few)), [["party", "Your party (3)", "Ada Bryn Dov"], ["near", "Nearby (1)", "Cass"], ["world", "Everyone else (1)", "Bran"]], "(one of the party near is of the party; each heading with how many are under it)");
+        assert.deepEqual({ ...playersPage(few), sections: null }, { found: 5, page: 0, pages: 1, sections: null });
+        assert.deepEqual(laid(playersPage([{ ...me, party: null }, few[2]])), [["party", "You (1)", "Ada"], ["near", "Nearby (1)", "Cass"]], "(in no party: You; no heading with no one under it)");
+
+        // Found by name: any part of it, any case
+        assert.deepEqual(laid(playersPage(few, { search: " BR " })), [["party", "Your party (1)", "Bryn"], ["world", "Everyone else (1)", "Bran"]]);
+        assert.deepEqual(playersPage(few, { search: "zz" }), { found: 0, page: 0, pages: 1, sections: [] });
+
+        // 25 to a page, the headings counting everyone found, a page asked for past the last the last
+        const many = [{ ...me, party: null }, ...Array.from({ length: 59 }, (_, k) => ({ id: `g${k}`, name: `Guest ${String(k).padStart(2, "0")}`, near: k < 30 }))];
+        const first = playersPage(many);
+        const second = playersPage(many, { page: 1 });
+        const last = playersPage(many, { page: 9 });
+
+        assert.deepEqual([first.found, first.pages, first.page], [60, 3, 0]);
+        assert.deepEqual(first.sections.map(({ title, players }) => [title, players.length]), [["You (1)", 1], ["Nearby (30)", 24]]);
+        assert.deepEqual(second.sections.map(({ title, players }) => [title, players.length]), [["Nearby (30)", 6], ["Everyone else (29)", 19]]);
+        assert.deepEqual([last.page, last.sections.map(({ players }) => players.length)], [2, [10]]);
+        assert.equal(new Set([first, second, last].flatMap(({ sections }) => sections.flatMap(({ players }) => players.map(({ id }) => id)))).size, 60, "(everyone on one page, and one alone)");
+        assert.deepEqual(playersPage(many, { search: "guest 0", page: 3 }).sections.map(({ players }) => players.length), [10]);
     });
 
     it("turns the compass (the minimap folded away) for its N to point north as the camera sees it, clockwise from 0 to a full turn", () => {

@@ -2657,7 +2657,11 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   `chatOnScreen`, on to start with), each line said, the party's or a direct message, shows a
   moment just above the Action Bar too (where it rises in a fight), small, three at most,
   the newest at the foot, faded after six seconds (hud.js `chatLine`, `CHAT_FEED`), unless the
-  Chat's open to read; all of it's still in the Chat. **Players** is everyone playing in the world (`PartyPanel #everyone`, game.js
+  Chat's open to read; all of it's still in the Chat. **Players** is everyone playing in the world, under headings (partypanel.js `playersPage`):
+  the player and their party ("Your party (3)"; "You (1)" in none), **Nearby** (on the player's
+  map within 150 m, `PLAYERS_PAGE.near`) and **Everyone else**, each with how many are under it;
+  **Find a player by name** above them shows those with what's typed in their name alone; and 25
+  to a page (`PLAYERS_PAGE.size`), with Previous and Next once there are more. (`PartyPanel #everyone`, game.js
   `#everyone`; "In this world (N)"), the player first, then the rest of their party (the longest
   in it first), then everyone else by name, each with what they are (their standing and people:
   "Knight of the Elves"), how they stand as chips (`playerStatus`: "In your party", "Leads your

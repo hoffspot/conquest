@@ -1267,6 +1267,22 @@ test("the party menu's Players tab lists everyone playing in the world, the play
     await expect(bryn.locator(".party-invite")).toHaveText("Invite");
     await expect(menu.locator(".party-everyone-note")).toHaveText("Invite anyone in no party: you'll lead the party you make together, up to four in it.");
 
+    // Under headings: the player, then those near; found by name; one page, so nothing to turn
+    const headings = menu.locator(".party-everyone-list .party-section");
+    const find = menu.getByRole("searchbox", { name: "Find a player by name" });
+
+    await expect(headings).toHaveText(["You (1)", "Nearby (1)"]);
+    await expect(menu.locator(".party-pager")).toBeHidden();
+    await find.fill("bry");
+    await expect(rows).toHaveCount(1);
+    await expect(headings).toHaveText(["Nearby (1)"]);
+    await expect(menu.locator(".party-everyone .journal-heading")).toHaveText("In this world (2)");
+    await find.fill("zz");
+    await expect(rows).toHaveCount(0);
+    await expect(headings).toHaveText(['No one here is called "zz".']);
+    await find.fill("");
+    await expect(rows).toHaveCount(2);
+
     // (A world on a device, not a server: no World button, the server's World panel)
     await expect(menu.getByRole("button", { name: "World" })).toBeHidden();
 
@@ -1287,6 +1303,7 @@ test("the party menu's Players tab lists everyone playing in the world, the play
     await expect(mine.locator(".party-name")).toHaveText(`♛ ${ada} (you)`);
     await expect(mine.locator(".player-chip")).toHaveText(["You lead your party"]);
     await expect(menu.locator(".party-everyone-note")).toHaveText("Invite anyone in no party to yours; Dismiss puts someone out of it.");
+    await expect(menu.locator(".party-everyone-list .party-section")).toHaveText(["Your party (2)"]);
 
     // Bryn's own: the host leading their party, and no one for Bryn to put out of it (the host
     // there to message, or block)

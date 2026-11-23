@@ -195,7 +195,7 @@ import { JournalPanel, bearing, keepMessage, regardOf } from "./journal.js";
 import { ReaderPanel } from "./reader.js";
 import { Journey } from "./journey.js";
 import { SpellbookPanel } from "./spellbook.js";
-import { PartyPanel, SHOUT_TO } from "./partypanel.js";
+import { PartyPanel, PLAYERS_PAGE, SHOUT_TO } from "./partypanel.js";
 import { PackPanel } from "./pack.js";
 import { Governor } from "./governor.js";
 import { PHASE, telemetry } from "./telemetry.js";
@@ -12891,6 +12891,8 @@ export class Game {
                     me: id === this.me,
                     title: `${player.standing?.title?.() ?? STANDINGS[0].title}${player.realm ? ` of the ${peopleOf(player.realm)}` : ""}`,
                     where: this.#whereWords(actor, me),
+                    // (Near enough to be under Nearby: on the player's map, within PLAYERS_PAGE.near)
+                    near: id !== this.me && Boolean(actor && me && actor.map === me.map && Math.hypot(actor.x - me.x, actor.y - me.y) <= PLAYERS_PAGE.near),
                     party: party ? { yours, leads: party.leader === id, leader: nameOf(party.leader) } : null,
                     asked: asked ? (asked.from === this.me ? "you" : nameOf(asked.from)) : null,
                     away: Boolean(player.away),
