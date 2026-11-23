@@ -75,6 +75,13 @@ export const ACTIVITY_LINES = 300;
 /** A step slower than this (ms, at the 99th percentile) makes a world "slow" (§10 Health). */
 export const SLOW_STEP = 50;
 
+/**
+ * How much notice (seconds) those in a world are given before its server's keeper stops it
+ * (stopSoon: generated/multiplayer_scaling_plan.md 2-7). No one in a world can stop it for
+ * everyone; the keeper can, and says so first.
+ */
+export const STOP_NOTICE = 60;
+
 const gzipped = promisify(gzip);
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
@@ -125,6 +132,9 @@ export class Management {
         /** When it started (ms), and the most memory any world's used here (bytes: for the recommendation). */
         this.started = Date.now();
         this.largest = 0;
+
+        /** The worlds being stopped with notice (stopSoon), by id: { at (ms), timer }. */
+        this.stops = new Map();
 
         /** Archives read, to be restored or brought in from: id → { archive, at }. */
         this.archives = new Map();
@@ -358,6 +368,48 @@ export class Management {
         }
 
         return this.details(id);
+    }
+
+    /**
+     * A world stopped with notice (STOP_NOTICE; the plan's 2-7): everyone in it told now that it's
+     * to be stopped (`seconds` from now: a "stopping", core/netplay.js), and then it's set aside,
+     * saved, as setAside does. Refused if it isn't going. Asked again while it's counting down,
+     * nothing more is done. Returns its details, with `stopping`: the seconds left.
+     */
+    async stopSoon(id, { by = null, seconds = STOP_NOTICE } = {}) {
+        this.#world(id);
+
+        const thread = this.server.registry.entries.get(id)?.thread;
+
+        if (!thread) {
+            throw new Refused(409, "not-going", "The world isn't going: there's no one in it to give notice to.");
+        }
+
+        if (!this.stops.has(id)) {
+            const timer = setTimeout(() => {
+                this.stops.delete(id);
+
+                // (Set aside meanwhile, or gone: nothing left to stop)
+                if (this.#going(id)) {
+                    this.setAside(id, `stopped${by ? ` by ${by}` : ""} after ${seconds} seconds' notice`).catch((error) => this.journal(`World ${id} couldn't be stopped after its notice: ${error.message}`));
+                }
+            }, seconds * 1000);
+
+            timer.unref?.();
+            this.stops.set(id, { at: Date.now() + seconds * 1000, timer });
+            thread.stopping(seconds);
+        }
+
+        return { ...(await this.details(id)), stopping: Math.max(0, Math.ceil((this.stops.get(id).at - Date.now()) / 1000)) };
+    }
+
+    /** Every notice of stopping let go of (the server's closing: world-server.js close). */
+    forgetStops() {
+        for (const { timer } of this.stops.values()) {
+            clearTimeout(timer);
+        }
+
+        this.stops.clear();
     }
 
     /**

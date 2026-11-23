@@ -157,6 +157,11 @@ export class WorldThread {
         this.#post({ type: "meta", changes });
     }
 
+    /** Everyone in the world told it's to be stopped `seconds` from now (manage.js stopSoon). */
+    stopping(seconds) {
+        this.#post({ type: "stopping", seconds });
+    }
+
     /** How many bytes wait unwritten on a player's socket (play.js: as it changes between none and some), for its view feed to hold back by. */
     waiting(peer, bytes) {
         this.#post({ type: "waiting", peer, bytes });

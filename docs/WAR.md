@@ -176,11 +176,13 @@ The engine is built for this from the start. These are its rules:
    - their hero;
    - what the folk remember of them, and what they've learnt;
    - what they've found of the world.
-6. **Pause only when alone, or for everyone.** The menu and the world map stop the world only
-   while there's no one else in it (`host.pausable`). Otherwise the world goes on, and only that
-   player's taps and clicks stop, unless its host stops it for everyone, from the menu (**Pause
-   for everyone**; on a world server, one of its owners), till they resume it, or on a world
-   server till their link drops. Nothing else stops a world anyone else is in.
+6. **Pause only when alone.** The menu and the world map stop the world only while there's no
+   one else in it (`host.pausable`). Otherwise the world goes on, and only that player's taps
+   and clicks stop: no one stops a world for everyone, its host and a server world's owners
+   neither (the scaling plan's 2-7; there was a **Pause for everyone**, taken out on the owner's
+   ruling of 23 November 2026). A browser host's page hidden still holds its world, which can't
+   move on then; a server's keeper can stop a world with a minute's notice (docs/SERVER.md).
+   Nor does a rest pass the world's time with anyone else in it (docs/GAME.md *Passing the time*).
 7. **What's near any player comes to life.** The host decides what's real, looking at every
    player:
    - the buildings got ready to go into (`RELEVANCE`: those within 22 metres of any player, or
@@ -3470,8 +3472,8 @@ A player in the world isn't counted against its room for one taking theirs over 
 **Worlds with no host player** (core/host.js `RULES`; generated/world_server_plan.md §3.2). A
 world keeps its rules with it, so every copy plays by them. A world a browser hosts has today's:
 its host's player passes the time by sleeping, and may call up a field battle (debug). A world a
-world server runs has no `HOST_PLAYER`: its time passes only once everyone in it is resting
-(docs/GAME.md *Passing the time*), and its debug commands are its owners' (a player's `role`, as
+world server runs has no `HOST_PLAYER`: its time passes by its one player's rest, alone in it
+(with anyone else in a world, no rest passes its time: docs/GAME.md *Passing the time*), and its debug commands are its owners' (a player's `role`, as
 they come in: owner, trusted or player), or no one's.
 
 **The soak** (scripts/soak.js, core/bot.js; generated/world_server_plan.md §3.3). Proof that a
@@ -3632,7 +3634,7 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   joined game back says again whether its page is hidden and its player's menu open (`away`,
   `hold`), as what it said meanwhile may have been lost too, so a world server isn't left stopped
   for a page that's shown again (the user, back in a world alone after a crash: "the game still
-  shows paused"). Its pause for everyone isn't asked for again: that ended with its link. It says
+  shows paused"). It says
   again what's its player's own of their hero (`own`, below), for the same reason.
 - **Theirs, kept with them.** What a player's own game keeps of their hero that isn't the world's
   (core/host.js `OWN`: their action wheels and Action Bar, their pin and markers on the world
@@ -3648,8 +3650,7 @@ to its mobile network, or losing its signal a moment, needn't end the game:
 - **Shown.** While it isn't as it should be, the HUD says so, top left (`Game #together`): "Your
   connection dropped. Reconnecting…" (or, for a host, "Your world's link to the others dropped");
   "The host's connection dropped. Waiting for them…"; why the world's stopped (`Hosting.pause`,
-  `PAUSES`): "The host has paused the game." (paused for everyone; on a world server, by one of
-  its owners, by name: "Ada has paused the game."), "The host's game is in the background: the
+  `PAUSES`): "The host's game is in the background: the
   world waits for them." (the host's page hidden: its world, on that phone, can't move on) or
   "The game's paused." (a world server's world stopped for its one player); or, with none of those
   but no step from the host for 2 seconds, "Waiting for the host…".

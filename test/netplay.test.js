@@ -729,7 +729,7 @@ describe("playing together (netplay.js)", () => {
         joining.pace(1000 / 60);
         post.length = 0;
         joining.resync();
-        assert.deepEqual(said().find(({ kind }) => kind === "hold"), { kind: "hold", held: true, everyone: false });
+        assert.deepEqual(said().find(({ kind }) => kind === "hold"), { kind: "hold", held: true });
         deliver();
     });
 
@@ -820,46 +820,71 @@ describe("playing together (netplay.js)", () => {
         assert.deepEqual(bryn.joining.paused, { why: "away", by: null });
     });
 
-    it("hears a joined player's page hidden or shown, and their menu opened or shut (and if it's for everyone), each said as it changes; and, back on their link, how they are said again, but for a pause for everyone, which ended with it", () => {
+    it("hears a joined player's page hidden or shown, and their menu opened or shut, each said as it changes; and, back on their link, how they are said again. No one says, nor is heard to say, that it's for everyone", () => {
         const { hosting, join, post, deliver } = opened();
         const bryn = join(guest("Bryn"));
         const heard = [];
 
         hosting.onAway = (peer, hidden) => heard.push(["away", peer, hidden]);
-        hosting.onHold = (peer, held, everyone) => heard.push(["hold", peer, held, everyone]);
+        hosting.onHold = (...told) => heard.push(["hold", ...told]);
 
         bryn.joining.away(true);
         bryn.joining.hold(true);
         bryn.joining.hold(true);
+        // (Asked for everyone, as an older game's menu could: it's a hold and no more)
         bryn.joining.hold(true, { everyone: true });
         deliver();
         assert.deepEqual(heard, [
             ["away", bryn.peer, true],
-            ["hold", bryn.peer, true, false],
-            ["hold", bryn.peer, true, true],
+            ["hold", bryn.peer, true],
         ]);
 
-        // (Everyone, only while it's held; and only from one who's joined)
+        // (Said for everyone by a game that still says so: heard as its menu, and no more; and
+        // only from one who's joined)
         heard.length = 0;
         hosting.hear(bryn.peer, encode({ kind: "hold", held: false, everyone: true }));
+        hosting.hear(bryn.peer, encode({ kind: "hold", held: true, everyone: true }));
         hosting.hear("nobody", encode({ kind: "hold", held: true, everyone: true }));
-        assert.deepEqual(heard, [["hold", bryn.peer, false, false]]);
+        assert.deepEqual(heard, [
+            ["hold", bryn.peer, false],
+            ["hold", bryn.peer, true],
+        ]);
 
-        // Back on its link (what it said meanwhile maybe lost): its page and its menu said again;
-        // its pause for everyone not asked for again
+        // Back on its link (what it said meanwhile maybe lost): its page and its menu said again
         heard.length = 0;
-        bryn.joining.hold(true, { everyone: true });
+        bryn.joining.hold(true);
+        bryn.joining.away(false);
         deliver();
         heard.length = 0;
-        bryn.joining.away(false);
         post.length = 0;
         bryn.joining.resync();
         deliver();
         assert.deepEqual(heard, [
             ["away", bryn.peer, false],
-            ["hold", bryn.peer, true, false],
+            ["hold", bryn.peer, true],
         ]);
-        assert.equal(bryn.joining.everyone, false);
+        assert.equal(Object.hasOwn(bryn.joining, "everyone"), false);
+    });
+
+    it("tells everyone in the world, whichever way they play it, that its server's keeper is stopping it and how long they have (a \"stopping\")", () => {
+        const { hosting, join, deliver } = opened();
+        const bryn = join(guest("Bryn"));
+        const cy = join(guest("Cy"));
+        const told = [];
+
+        bryn.joining.onStopping = (seconds) => told.push(["bryn", seconds]);
+        cy.joining.onStopping = (seconds) => told.push(["cy", seconds]);
+        hosting.session.stopping(60);
+        deliver();
+        assert.deepEqual(told.sort(), [
+            ["bryn", 60],
+            ["cy", 60],
+        ]);
+
+        // (Said amiss: no seconds to it)
+        told.length = 0;
+        bryn.joining.hear(encode({ kind: "stopping", seconds: "soon" }));
+        assert.deepEqual(told, [["bryn", 0]]);
     });
 
     it("keeps what a joined player's own game keeps of their hero (OWN: wheels and Action Bar, pin, markers, messages, what they've been told once, settings) with them as they say it's changed, as it's shaped; tells it them again with the world, and no one else", () => {

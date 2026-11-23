@@ -1276,7 +1276,7 @@ function riftCry(crier, rift) {
 // at its fullest
 const RIFT_SKY = 0.6;
 
-export const HOST_EVENTS = new Set(["open", "close", "peopled", "vacated", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "duel", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order", "horse", "horseFell", "whistle", "hellRift", "brimstone", "strongroom", "junkSold", "crafted", "brokenDown"]);
+export const HOST_EVENTS = new Set(["open", "close", "peopled", "vacated", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "duel", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order", "horse", "horseFell", "whistle", "hellRift", "brimstone", "strongroom", "junkSold", "crafted", "brokenDown"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -11653,7 +11653,8 @@ export class Game {
         const mine = id === this.me;
         const together = this.worldview.rules?.rest === "everyone";
 
-        // (Everyone woken together, where everyone rests: each told of their own sleep alone)
+        // (Another's rest that passed no time, or one in a world with no host player: each told of
+        // their own sleep alone)
         if (!mine && (!passed || together)) {
             return;
         }
@@ -11675,7 +11676,10 @@ export class Game {
         const hours = until?.hours;
         const long = hours ? ` for ${hours} hour${hours === 1 ? "" : "s"}` : ` till ${until === "sundown" ? "sundown" : until === "morning" || morning ? "the sun's up" : "evening"}`;
 
-        this.hud.message(passed ? `${who}${how}${long}, ${Math.round(passed / 60000)} minutes gone.` : together ? `You rest${how}.` : `You rest${how}: the time's the host's to pass.`, 3.5);
+        // (Others in the world: mended, and no time passed, core/host.js REST)
+        const others = this.worldview.players.size > 1;
+
+        this.hud.message(passed ? `${who}${how}${long}, ${Math.round(passed / 60000)} minutes gone.` : others ? `You rest${how}, and you're mended. Time doesn't pass while others are in the world.` : `You rest${how}.`, others ? 5 : 3.5);
         this.onWar?.(this.worldview.war, this.worldview.legends);
     }
 
@@ -17502,13 +17506,6 @@ export class Game {
             case "slept":
                 this.#slept(event);
                 break;
-            case "resting":
-                // (Resting in a world where everyone rests at once: core/host.js RULES rest)
-                if (event.ids.includes(this.me)) {
-                    this.hud.message(`You rest. Time passes once everyone's resting: ${event.waiting} still up.`, 3.5);
-                }
-
-                break;
             case "rose":
                 if (event.id === this.me) {
                     this.hud.message("You're up, and no longer resting.", 2);
@@ -20698,6 +20695,18 @@ export class Game {
             this.sound?.play("denied");
 
             return { ok: false, reason: why };
+        }
+
+        // (Others in the world: no time's passed by it, so there's no how long to choose)
+        if (this.worldview.players.size > 1) {
+            this.#command({ type: "camp" }, (result) => {
+                if (!result.ok) {
+                    this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
+                    this.sound?.play("denied");
+                }
+            });
+
+            return { ok: true };
         }
 
         const elapsed = elapsedOf(this.worldview.war);

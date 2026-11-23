@@ -2269,12 +2269,14 @@ a look of its own (`LOOKS`), which the world takes on round the player:
   played as they would have been. Their hired adventurers wake mended too: every wound gone, one
   knocked down up again, all whole (host.js `#restMends`; told for each that had a wound, "Tam is
   rested, their wounds mended.": docs/WAR.md *Mercenaries that grow*). The camp's fire burns on three minutes after, lighting the dark round it as a war
-  camp's does (seen as by day within 14 m). In a world shared with others only the host passes
-  the time, everyone woken with them; anyone else who sleeps just rests. A world with no host
-  player (a world server's: core/host.js `RULES` rest "everyone") passes it only once everyone in
-  it is resting, by the shortest of their rests, each woken and told; one resting before the rest
-  is told how many are still up ("You rest. Time passes once everyone's resting: 1 still up."),
-  and getting up (going anywhere, fighting, casting, trading) ends their rest. Docs/WAR.md M11.
+  camp's does (seen as by day within 14 m). **Only a player alone in the world passes its time**
+  (the owner's ruling of 23 November 2026; the scaling plan's 2-5 and 2-6): with anyone else in
+  it, in a browser's world or a server's, a rest passes none, its host's neither. The rester and
+  their hired adventurers are mended at once, the camp's made or the room paid for, and they're
+  told "You rest by the fire, and you're mended. Time doesn't pass while others are in the
+  world."; making camp then asks no how long. No one waits on anyone else to rest. Alone, the
+  time is passed as above (in a browser's world by its host's player; in a server's by its one
+  player: core/host.js `REST`, `#sleep`). Docs/WAR.md M11.
 - **Not by time:** the pack's paperdoll is lit as on a fair day whatever the hour. With no world
   (the labs) the sun stands where it always did.
 
@@ -7882,9 +7884,8 @@ the Bindings page till one's chosen.
   9 gold, healing draught."; the user: "Make the gold loot message from soldiers and the town orc
   rise up over the character as well").
 5. **The menu** (the menu button, or Escape) pauses the game (unless others are playing in the
-   world too: then it says "Others are playing: the world goes on.", and its host, or on a world
-   server one of its owners, has **Pause for everyone**, the world stopped for all till they
-   resume, each told who paused it; docs/WAR.md rule 6): Resume, Invite others (the world opened
+   world too: then it says "Others are playing: the world goes on.", and no one can stop it for
+   everyone, its host and a server world's owners neither; docs/WAR.md rule 6): Resume, Invite others (the world opened
    to others: a code, and who's come), Game options, or back to the title. Joined to a world on
    a server and alone in it, the menu stops it too (its `hold`), and so does the page hidden; with
    anyone else in, neither does (the user: "if there are more than one player in the game in a

@@ -864,6 +864,7 @@ export class WorldServer {
 
     /** Stopped: everyone told, every world saved and set aside, the ports closed. */
     async close() {
+        this.manage.forgetStops();
         clearInterval(this.looking);
         clearInterval(this.keeping);
         this.metrics.stop();

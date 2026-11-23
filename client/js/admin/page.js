@@ -896,6 +896,7 @@ function worldCard(world) {
             button("Play", () => play(world), "primary"),
             button("Invite players", () => invitePlayers(world), "primary"),
             world.offline ? null : going ? button("Set aside", () => lifeOf(world, "aside")) : button("Start", () => lifeOf(world, "start")),
+            world.offline || !going ? null : button("Stop with notice", () => lifeOf(world, "stop")),
             world.offline ? button("Bring online", () => lifeOf(world, "online"), "primary") : button("Take offline", () => takeOffline(world)),
             going ? button("Save now", () => lifeOf(world, "save")) : null,
             button("Keys", () => openWorld(world.id, "keys")),
@@ -973,6 +974,7 @@ async function lifeOf(world, what) {
         start: [`Opening ${world.name}…`, `${world.name} is open.`],
         aside: [`Saving ${world.name}, then setting it aside…`, `${world.name} is set aside: saved, and using nothing.`],
         save: [`Saving ${world.name}…`, `${world.name} is saved.`],
+        stop: [`Giving ${world.name}'s players notice…`, `Everyone in ${world.name} has been told: it'll be saved and set aside in a minute.`],
         offline: [`Taking ${world.name} offline…`, `${world.name} is offline: nobody may come in till it's brought back online. What it does with its players' characters can be changed in its Settings now.`],
         online: [`Bringing ${world.name} back online…`, `${world.name} is back online: its players can come in again.`],
     };

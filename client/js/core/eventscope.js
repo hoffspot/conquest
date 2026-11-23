@@ -164,7 +164,6 @@ export const SCOPES = Object.freeze({
     resisted: "near may",
     respawn: "near must",
     rest: "near may",
-    resting: "place must",
     ring: "one must",
     rose: "near must",
     roused: "place must",

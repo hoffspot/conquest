@@ -92,7 +92,7 @@ describe("a world with no host player (core/host.js RULES)", () => {
     it("keeps its rules with it, each copy and each restored one playing by them; anything unknown as RULES has it", () => {
         const { host } = served();
 
-        assert.deepEqual(RULES, { rest: "host", debug: "host", invasions: true, mortal: false, pvp: "war", pause: "owner", loot: "near", scaling: "side", director: "player", instances: "site", rares: "world", stock: "shared" }, "(a world a browser hosts, to begin with; the last eight a shared world's to change: test/rules.test.js)");
+        assert.deepEqual(RULES, { rest: "host", debug: "host", invasions: true, mortal: false, pvp: "war", loot: "near", scaling: "side", director: "player", instances: "site", rares: "world", stock: "shared" }, "(a world a browser hosts, to begin with; the last seven a shared world's to change: test/rules.test.js)");
         assert.deepEqual(host.rules, SERVED);
         assert.deepEqual(host.snapshot().rules, SERVED);
         assert.deepEqual(Host.restore(buildWorld({ seed: 2 }), host.snapshot()).rules, SERVED);
@@ -121,48 +121,53 @@ describe("a world with no host player (core/host.js RULES)", () => {
         assert.deepEqual(host.rules, SERVED);
     });
 
-    it("passes its time only once everyone's resting, by the shortest of their rests, each woken and told; one resting alone waits", () => {
+    it("passes no time by a rest while anyone else is in it: the rester's mended and told so at once, no one waits on anyone", () => {
         const { host } = served();
         const before = elapsedOf(host.war);
+        const one = host.battle.actor("p1");
 
+        one.hp = Math.round(one.maxHp / 2);
         assert.deepEqual(host.command("p1", { type: "camp", until: { hours: 6 } }), { ok: true });
-        assert.equal(elapsedOf(host.war), before, "(no time passed: the other's up)");
-        assert.deepEqual(host.players.get("p1").resting, { where: "camp", until: { hours: 6 } });
-        assert.ok(host.events.some(({ type, ids, waiting }) => type === "resting" && ids.join() === "p1" && waiting === 1));
-        assert.ok(!host.events.some(({ type }) => type === "slept"));
+        assert.equal(elapsedOf(host.war), before, "(no time passed: another's in the world)");
+        assert.equal(host.players.get("p1").resting, null, "(nor do they lie waiting)");
+        assert.equal(one.hp, one.maxHp, "(mended)");
+        assert.deepEqual(host.events.filter(({ type }) => type === "slept").map(({ id, where, passed, until }) => ({ id, where, passed, until })), [{ id: "p1", where: "camp", passed: 0, until: { hours: 6 } }]);
+        assert.ok(!host.events.some(({ type }) => type === "resting"));
 
+        // (The other too: both rested, the world's clock where it was)
         host.events = [];
         assert.deepEqual(host.command("p2", { type: "camp", until: { hours: 3 } }), { ok: true });
-        assert.equal(elapsedOf(host.war) - before, 3 * HOUR, "the shortest rest");
-
-        const slept = host.events.filter(({ type }) => type === "slept");
-
-        assert.deepEqual(slept.map(({ id }) => id).sort(), ["p1", "p2"]);
-        assert.ok(slept.every(({ passed, until }) => passed === 3 * HOUR && until.hours === 3));
+        assert.equal(elapsedOf(host.war), before);
+        assert.deepEqual(host.events.filter(({ type }) => type === "slept").map(({ id, passed }) => [id, passed]), [["p2", 0]]);
         assert.ok([...host.players.values()].every(({ resting }) => resting === null));
     });
 
-    it("has one who gets up stop resting (and the time not pass for the rest), and one leaving with everyone else resting pass it", () => {
+    it("passes its time by its one player's rest, alone in it; and has no one still resting from a world kept before pass it as another leaves", () => {
         const { host } = served();
         const before = elapsedOf(host.war);
-        const [x, y] = host.battle.actor("p1").square;
 
-        host.command("p1", { type: "camp", until: { hours: 2 } });
+        host.leave("p2");
         host.events = [];
-        host.command("p1", { type: "move", to: [x, y - 4] });
+        assert.deepEqual(host.command("p1", { type: "camp", until: { hours: 2 } }), { ok: true });
+        assert.equal(elapsedOf(host.war) - before, 2 * HOUR, "alone: the time's theirs to pass");
+        assert.ok(host.events.some(({ type, id, passed }) => type === "slept" && id === "p1" && passed === 2 * HOUR));
         assert.equal(host.players.get("p1").resting, null);
-        assert.ok(host.events.some(({ type, id }) => type === "rose" && id === "p1"));
 
-        // (Talking, standing still: still resting)
-        host.command("p2", { type: "camp", until: { hours: 2 } });
-        host.command("p2", { type: "talk", with: null });
-        assert.equal(elapsedOf(host.war), before);
-        assert.ok(host.players.get("p2").resting);
+        // (A world kept with two lying resting, as one could be before: the third leaving passes
+        // no time; they're up and mended)
+        const kept = served().host;
 
-        host.events = [];
-        host.leave("p1");
-        assert.equal(elapsedOf(host.war) - before, 2 * HOUR);
-        assert.ok(host.events.some(({ type, id, passed }) => type === "slept" && id === "p2" && passed === 2 * HOUR));
+        kept.join({ id: "p3", hero: { ...HERO, name: "Cy" } });
+
+        const then = elapsedOf(kept.war);
+
+        kept.players.get("p1").resting = { where: "camp", until: { hours: 2 } };
+        kept.players.get("p2").resting = { where: "room", until: null };
+        kept.events = [];
+        kept.leave("p3");
+        assert.equal(elapsedOf(kept.war), then);
+        assert.deepEqual(kept.events.filter(({ type }) => type === "slept").map(({ id, where, passed }) => [id, where, passed]), [["p1", "camp", 0], ["p2", "room", 0]]);
+        assert.ok([...kept.players.values()].every(({ resting }) => resting === null));
     });
 
     it("lets its owners alone call up a field battle, if its rules allow anyone to; a browser's world, its host's player", () => {

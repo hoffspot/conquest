@@ -179,7 +179,7 @@ describe("passing the time (core/daytime.js, core/host.js)", () => {
         assert.deepEqual(host.command(HOST_PLAYER, { type: "camp" }), { ok: true });
     });
 
-    it("leaves the time alone when someone who's joined sleeps: they rest", () => {
+    it("leaves the time alone when anyone sleeps with others in the world, its host too: they rest, mended; alone again, the host's sleep passes it", () => {
         const { host, me, outside } = hosted();
 
         host.join({ id: "guest-1", hero: { ...HERO, name: "Bryn", race: "human" } });
@@ -198,12 +198,22 @@ describe("passing the time (core/daytime.js, core/host.js)", () => {
         assert.equal(guest.hp, guest.maxHp, "but they rest");
         assert.equal(host.campfires.length, 1);
 
-        assert.deepEqual(host.command(HOST_PLAYER, { type: "camp" }), { ok: true });
-        assert.equal(timeOfDay(elapsedOf(host.war)), DAY.sets, "the host's: woken at sunset");
+        // (The host's too, with a guest in the world: no time passed, and they're told so)
+        hurt(me);
+        host.events = [];
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "camp", until: { hours: 4 } }), { ok: true });
+        assert.equal(elapsedOf(host.war), elapsed, "nor the host's, while anyone else is in it");
+        assert.equal(me.hp, me.maxHp, "but they rest");
         assert.equal(host.campfires.length, 2);
+        assert.deepEqual(host.events.filter(({ type }) => type === "slept").map(({ id, where, passed, until }) => ({ id, where, passed, until })), [{ id: HOST_PLAYER, where: "camp", passed: 0, until: { hours: 4 } }]);
+
+        // (The guest gone: alone, the host's sleep passes the time as ever)
+        host.leave("guest-1");
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "camp" }), { ok: true });
+        assert.equal(timeOfDay(elapsedOf(host.war)), DAY.sets, "alone: woken at sunset");
     });
 
-    it("has every copy of a world opened to others pass the time alike when its host sleeps", () => {
+    it("has every copy of a world opened to others leave the time alike when its host sleeps: none passed, the camp made in each", () => {
         const { host, me, outside } = hosted();
         const sent = [];
         const hosting = new Hosting(host, { send: (peer, text) => sent.push({ to: peer, text }) });
@@ -227,6 +237,8 @@ describe("passing the time (core/daytime.js, core/host.js)", () => {
         joining.hello({ hero: { ...HERO, name: "Bryn", race: "human" }, progress: { gold: 50 } });
         deliver();
 
+        const before = elapsedOf(host.war);
+
         assert.deepEqual(host.command(HOST_PLAYER, { type: "camp" }), { ok: true });
 
         for (let k = 0; k < 20; k++) {
@@ -240,8 +252,9 @@ describe("passing the time (core/daytime.js, core/host.js)", () => {
             deliver();
         }
 
-        assert.equal(timeOfDay(elapsedOf(host.war)) >= DAY.sets, true);
+        assert.ok(elapsedOf(host.war) - before < MINUTE, "no time passed by it: another's in the world");
         assert.equal(elapsedOf(joining.host.war), elapsedOf(host.war), "the same hour in both");
+        assert.equal(host.campfires.length, 1);
         assert.deepEqual(joining.host.campfires, host.campfires);
         assert.equal(joining.host.checksum(), host.checksum());
     });
