@@ -91,6 +91,7 @@ export const SCOPES = Object.freeze({
     draw: "near may",
     drop: "near must",
     dropped: "near must",
+    duel: "one must",
     dungeon: "world must",
     eat: "near may",
     effect: "near may",

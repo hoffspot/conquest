@@ -27,7 +27,7 @@ export const SUMMARY = Object.freeze({ every: 20, frame: 6000, near: 512, news: 
 
 /** The parts that are every player's alike (worldParts), and those that are one player's (ownParts). */
 export const WORLD_PARTS = Object.freeze(["rules", "clock", "realms", "towns", "works", "forces", "forts", "relations", "parties", "roster", "invasions", "burnt", "rifts", "done", "dungeons", "camps", "depots", "places", "news", "battles"]);
-export const OWN_PARTS = Object.freeze(["own", "invites", "props", "fellows", "trades", "lore"]);
+export const OWN_PARTS = Object.freeze(["own", "invites", "props", "fellows", "trades", "lore", "duels"]);
 
 /** The director's props a player's told of when near: each a table of the host's, by its name there. */
 export const PROPS = Object.freeze(["ground", "campfires", "caches", "finds", "strangers", "obstacles", "treasures", "ambushes"]);
@@ -228,6 +228,9 @@ export function ownParts(host, me) {
         // (The world's rare encounters, as much of them as is this player's to know: loreOf. A
         // field an entry, so a second's telling is of their clocks and no more)
         lore: byKey(Object.entries(loreOf(host.legends.toJSON(), me))),
+        // (The duel they're in, both its sides, core/host.js DUEL: whom they're an enemy of by
+        // it, which a game that holds no copy of the world can't work out)
+        duels: byKey([...(host.duels?.entries() ?? [])].filter(([id, duel]) => id === me || duel?.with === me)),
     };
 }
 

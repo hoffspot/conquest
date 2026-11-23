@@ -865,8 +865,9 @@ players of peoples at war are enemies (`pvp`), who may pause (`pause`), whose a 
 a dungeon for each party (`instances`), a unique met by each character (`rares`), and a shop's
 stock for each (`stock`). Each is a rule kept with the world (`RULES`, `RULE_CHOICES` in
 `client/js/core/host.js`), and each is as it is today until the slice of the plan that builds its
-other way turns it on. None is built yet, so a `shared` world plays exactly as a `company` one
-does; `company` is what every world is unless it says otherwise. The preset changes only while
+other way turns it on. One is built: `pvp`, so on a `shared` world players and their companies
+are never each other's enemies, whatever their peoples' war, unless they're in a duel
+(docs/GAME.md, *Duels*); the rest play as a `company` world's do. `company` is what every world is unless it says otherwise. The preset changes only while
 nobody's in the world (offline, or set aside), and a kept world takes its preset's rules as it's
 next opened. A world hosted in a browser never sets them.
 

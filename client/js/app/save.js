@@ -121,6 +121,9 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     resistSummons: false,
     // (Asked to another player's party: let go unanswered, not asked)
     refuseInvites: false,
+    // (Accepting duels, core/host.js DUEL: on to start with; off, whoever asks is told so, and
+    // the player's shown nothing)
+    acceptDuels: true,
     // (The war's messengers sent to the player with missions, as the war comes near them:
     // core/missions.js; off, none comes)
     messengers: true,
@@ -217,7 +220,7 @@ export const SETTINGS_DEFAULTS = Object.freeze({
  * camera's turned by hand and follows, which go by whether it's touched or pointed at with a
  * mouse.
  */
-export const PLAY_SETTINGS = Object.freeze(["autoSnag", "snagGrades", "snagKinds", "autoLock", "resistSummons", "refuseInvites", "messengers", "refusePartyDms", "refuseWorldDms", "battleCam", "openWay", "invertTilt", "shake"]);
+export const PLAY_SETTINGS = Object.freeze(["autoSnag", "snagGrades", "snagKinds", "autoLock", "resistSummons", "refuseInvites", "acceptDuels", "messengers", "refusePartyDms", "refuseWorldDms", "battleCam", "openWay", "invertTilt", "shake"]);
 
 /** How many blocked players are kept (in every world together), and the longest word of one kept (blocksOf). */
 export const BLOCKS = Object.freeze({ most: 200, length: 120 });

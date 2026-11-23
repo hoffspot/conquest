@@ -165,6 +165,9 @@ export const STANDS = Object.freeze(new Set(["stakes", "tear", "altar"]));
  */
 export const DOWNED = Object.freeze({ ms: 20000, near: 5000, hp: 0.3 });
 
+/** How long one felled in a duel is down (ms), before it's up where it fell (as DOWNED: `hp` of its health). */
+export const DUEL_DOWN_MS = 3000;
+
 /**
  * How a follower (or a companion by magic) keeps with its leader (docs/WAR.md M9): how near
  * (squares) it keeps while they stand (`near`), and while they're on the move (`close`); how far
@@ -1038,8 +1041,13 @@ export class Battle {
      *     someone, set on them wherever it sees them, whatever its temper (the host's: the Order of
      *     the Bell, against whoever brought its Prior down).
      */
-    constructor(world, { seed = 1, relations = null, allied = null, haven = null, nerve = null, sworn = null } = {}) {
+    constructor(world, { seed = 1, relations = null, allied = null, haven = null, nerve = null, sworn = null, dueling = null, truce = null } = {}) {
         this.world = world;
+        // (Two in a duel, or one's and the other's: enemies whatever else they are; and two the
+        // world's rules keep from each other, players and theirs where they fight only by a
+        // duel: never enemies. The host's, core/host.js DUEL)
+        this.dueling = dueling;
+        this.truce = truce;
         this.relations = relations;
         this.allied = allied;
         this.haven = haven;
@@ -2024,8 +2032,15 @@ export class Battle {
             return false;
         }
 
-        // (In one party, the host says: never, whatever their peoples)
-        if (this.allied?.(a, b)) {
+        // (In a duel with each other, the host says: enemies, in one party or of one people though
+        // they be)
+        if (this.dueling?.(a, b)) {
+            return true;
+        }
+
+        // (In one party, the host says: never, whatever their peoples; nor players and theirs
+        // where the world's rules have them fight only by a duel)
+        if (this.allied?.(a, b) || this.truce?.(a, b)) {
             return false;
         }
 
@@ -2145,7 +2160,7 @@ export class Battle {
             breaths: [],
             formations: {},
         };
-        const forked = Battle.restore(this.world, part, { relations: this.relations, allied: this.allied, haven: this.haven, nerve: this.nerve, sworn: this.sworn });
+        const forked = Battle.restore(this.world, part, { relations: this.relations, allied: this.allied, haven: this.haven, nerve: this.nerve, sworn: this.sworn, dueling: this.dueling, truce: this.truce });
 
         forked.bakedOnly = true;
 
@@ -2153,8 +2168,8 @@ export class Battle {
     }
 
     /** A battle on `world` carrying on from a snapshot (snapshot()), its teams standing as `relations` has them. */
-    static restore(world, snapshot, { relations = null, allied = null, haven = null, nerve = null, sworn = null } = {}) {
-        const battle = new Battle(world, { seed: snapshot.seed, relations, allied, haven, nerve, sworn });
+    static restore(world, snapshot, { relations = null, allied = null, haven = null, nerve = null, sworn = null, dueling = null, truce = null } = {}) {
+        const battle = new Battle(world, { seed: snapshot.seed, relations, allied, haven, nerve, sworn, dueling, truce });
 
         Object.assign(battle, { time: snapshot.time, lag: snapshot.lag, nextProjectile: snapshot.nextProjectile, projectiles: structuredClone(snapshot.projectiles), hazards: structuredClone(snapshot.hazards ?? []), nextHazard: snapshot.nextHazard ?? 1, bombs: structuredClone(snapshot.bombs ?? []), nextBomb: snapshot.nextBomb ?? 1, falls: structuredClone(snapshot.falls ?? []), nextFall: snapshot.nextFall ?? 1, baits: structuredClone(snapshot.baits ?? []), nextBait: snapshot.nextBait ?? 1, breaths: structuredClone(snapshot.breaths ?? []), formations: structuredClone(snapshot.formations ?? {}) });
         battle.random.state = snapshot.random;
@@ -3677,7 +3692,7 @@ export class Battle {
                 const leader = actor.leader ? this.actor(actor.leader) : null;
 
                 if (leader && !leader.dead && leader.map === actor.map && distanceBetween(leader.square, actor.square) <= FOLLOW.near) {
-                    actor.respawnAt = Math.min(actor.respawnAt, this.time + Math.round(DOWNED.near * actor.rises));
+                    actor.respawnAt = Math.min(actor.respawnAt, this.time + Math.round(DOWNED.near * (actor.rises || 1)));
                 }
 
                 if (this.time >= actor.respawnAt) {
@@ -10321,7 +10336,8 @@ export class Battle {
             this.unmask(attacker);
         }
 
-        if (attacker.team !== target.team) {
+        // (A blow in a duel makes no enemy of the other's people: it's between the two, and theirs)
+        if (attacker.team !== target.team && !this.dueling?.(attacker, target)) {
             const until = this.time + FOE_MS;
             // (One that picks its own fights, `lone` (an invasion's raider), makes no enemy of one
             // it leaves be by striking another of their own: a player in their first invasion, and
@@ -10385,8 +10401,11 @@ export class Battle {
         // (On horseback, or with one coming: it goes back into the ground)
         this.#unhorse(actor);
         // (Only knocked down, up again where it fell a while after: #rise)
-        actor.downed = Boolean(actor.rises);
-        actor.respawnAt = this.time + (actor.downed ? Math.round(DOWNED.ms * actor.rises) : actor.respawnMs);
+        // (Felled in a duel by the one it's with, or theirs: no death, only down a moment)
+        const duel = Boolean(killer && this.dueling?.(actor, killer));
+
+        actor.downed = duel || Boolean(actor.rises);
+        actor.respawnAt = this.time + (duel ? DUEL_DOWN_MS : actor.downed ? Math.round(DOWNED.ms * actor.rises) : actor.respawnMs);
         // (Up in the air: falling)
         actor.aloft = null;
         actor.afflictions = [];
@@ -10419,7 +10438,7 @@ export class Battle {
             }
         }
 
-        this.#emit("death", { id: actor.id, by: killer?.id ?? null, respawnAt: actor.respawnAt, ...(actor.downed ? { downed: true } : {}) });
+        this.#emit("death", { id: actor.id, by: killer?.id ?? null, respawnAt: actor.respawnAt, ...(actor.downed ? { downed: true } : {}), ...(duel ? { duel: true } : {}) });
 
         // (One of a wary pack: the rest's nerve gone, once its leader's down or half of it)
         if (actor.wild?.reacts) {
@@ -10429,6 +10448,49 @@ export class Battle {
         // (One that bursts as it dies: what it leaves where it fell, BOMBS, as strong as its blows)
         if (actor.wild?.burst) {
             this.#throwBomb(actor, [actor.x, actor.y], actor.wild.burst.kind, actor.wild.burst.damage, actor.power?.melee ?? 1);
+        }
+    }
+
+    /**
+     * Two sides at peace again (ids of each: a duel's over, core/host.js): what each held against
+     * the other let go, their grudges, their enmity, their aim and their orders at each other.
+     */
+    reconcile(one, other) {
+        for (const [mine, theirs] of [
+            [one, other],
+            [other, one],
+        ]) {
+            const against = new Set(theirs);
+
+            for (const id of mine) {
+                const actor = this.actor(id);
+
+                if (!actor) {
+                    continue;
+                }
+
+                for (const foe of theirs) {
+                    if (actor.foes) {
+                        delete actor.foes[foe];
+                    }
+
+                    if (actor.enmity) {
+                        delete actor.enmity[foe];
+                    }
+                }
+
+                if (against.has(actor.target)) {
+                    actor.target = null;
+                }
+
+                if (against.has(actor.order?.target)) {
+                    actor.order = null;
+                }
+
+                if (against.has(actor.attack?.target) && !actor.attack.struck) {
+                    actor.attack = null;
+                }
+            }
         }
     }
 

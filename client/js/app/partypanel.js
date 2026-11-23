@@ -243,6 +243,7 @@ export class PartyPanel {
         this.onOrder = () => {};
         this.onChoose = () => {};
         this.onParty = () => {};
+        this.onDuel = () => {};
         this.onClose = () => {};
 
         /**
@@ -567,6 +568,16 @@ export class PartyPanel {
 
                     dismiss.classList.add("party-remove");
                     actions.append(dismiss);
+                }
+
+                // (A duel asked of them, or yielded to them: core/host.js DUEL)
+                if (player.duel) {
+                    const duel = element("button", "journal-button party-duel", { ask: "Duel", asked: "Challenged", yield: "Yield" }[player.duel]);
+
+                    duel.type = "button";
+                    duel.disabled = player.duel === "asked";
+                    duel.addEventListener("click", () => this.onDuel(player.duel === "yield" ? "yield" : "ask", id));
+                    actions.append(duel);
                 }
 
                 // (Messaged, unless blocked; blocked, asked twice, or unblocked)

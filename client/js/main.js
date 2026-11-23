@@ -980,6 +980,7 @@ $("#debugswitch").addEventListener("change", (event) => applySetting("debug", ev
 function showPlaySettings() {
     $("#resistswitch").checked = settings.resistSummons;
     $("#refuseswitch").checked = settings.refuseInvites;
+    $("#duelswitch").checked = settings.acceptDuels;
     $("#messengerswitch").checked = settings.messengers;
     $("#partydmswitch").checked = settings.refusePartyDms;
     $("#worlddmswitch").checked = settings.refuseWorldDms;
@@ -1403,6 +1404,7 @@ async function playing(save, { world, place, war }) {
     game.cursor = pointer;
     game.resistSummons = settings.resistSummons;
     game.refuseInvites = settings.refuseInvites;
+    game.acceptDuels = settings.acceptDuels;
     applyChat(game);
     game.autoSnag = settings.autoSnag;
     game.messengers = settings.messengers;
@@ -3307,6 +3309,7 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
 
     game.resistSummons = settings.resistSummons;
     game.refuseInvites = settings.refuseInvites;
+    game.acceptDuels = settings.acceptDuels;
     applyChat(game);
     game.autoSnag = settings.autoSnag;
     game.messengers = settings.messengers;
@@ -5837,6 +5840,7 @@ $("#largepointerswitch").addEventListener("change", (event) => applySetting("lar
 $("#crashswitch").addEventListener("change", (event) => applySetting("sendCrashes", event.target.checked));
 $("#resistswitch").addEventListener("change", (event) => applySetting("resistSummons", event.target.checked));
 $("#refuseswitch").addEventListener("change", (event) => applySetting("refuseInvites", event.target.checked));
+$("#duelswitch").addEventListener("change", (event) => applySetting("acceptDuels", event.target.checked));
 $("#messengerswitch").addEventListener("change", (event) => applySetting("messengers", event.target.checked));
 $("#partydmswitch").addEventListener("change", (event) => applySetting("refusePartyDms", event.target.checked));
 $("#worlddmswitch").addEventListener("change", (event) => applySetting("refuseWorldDms", event.target.checked));
@@ -6625,7 +6629,7 @@ function applySetting(key, value) {
             tellPlaySettings();
             showBlocked();
         }
-    } else if (key === "messengers" || key === "resistSummons" || key === "refuseInvites" || key === "autoSnag" || key === "autoLock" || key === "quickAlways" || key === "chatter" || key === "showEnmity") {
+    } else if (key === "messengers" || key === "resistSummons" || key === "refuseInvites" || key === "acceptDuels" || key === "autoSnag" || key === "autoLock" || key === "quickAlways" || key === "chatter" || key === "showEnmity") {
         if (state.game) {
             state.game[key] = value;
         }

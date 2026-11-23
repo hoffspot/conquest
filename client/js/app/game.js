@@ -1276,7 +1276,7 @@ function riftCry(crier, rift) {
 // at its fullest
 const RIFT_SKY = 0.6;
 
-export const HOST_EVENTS = new Set(["open", "close", "peopled", "vacated", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order", "horse", "horseFell", "whistle", "hellRift", "brimstone", "strongroom", "junkSold", "crafted", "brokenDown"]);
+export const HOST_EVENTS = new Set(["open", "close", "peopled", "vacated", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "duel", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order", "horse", "horseFell", "whistle", "hellRift", "brimstone", "strongroom", "junkSold", "crafted", "brokenDown"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -1778,6 +1778,15 @@ export class Game {
 
         /** Whether another player asking this one to their party is let go unanswered, not asked (Game options). */
         this.refuseInvites = false;
+
+        /**
+         * Whether the player's accepting duels (Game options: on to start with; core/host.js
+         * DUEL). The host is told when they aren't (#tellDuels: `duelsTold`, what it was last
+         * told), so whoever asks is told so and the player's shown nothing.
+         */
+        this.accepting = true;
+        this.duelsTold = true;
+        this.duelPrompt = null;
 
         /**
          * Whether the player's spoils of a fight are picked up as they come within reach of them,
@@ -2854,6 +2863,7 @@ export class Game {
         this.partyPanel.onRename = (id, name) => this.#mercCommand({ type: "rename", follower: id, name });
         this.partyPanel.onChoose = (id) => this.#chooseAlly(this.allyTarget === id ? null : id);
         this.partyPanel.onParty = (what, who) => (what === "readyCheck" ? this.readyCheck() : this.#partyOrder(what, who));
+        this.partyPanel.onDuel = (what, who) => this.#duelOrder(what, who);
         this.partyPanel.onSay = (text) => this.#sayToParty(text);
         this.partyPanel.onTab = () => this.#showParty();
         this.partyPanel.onClose = () => this.closeParty();
@@ -3522,6 +3532,8 @@ export class Game {
             this.stopOnStart = false;
             this.#command({ type: "stop" });
         }
+
+        this.#tellDuels();
 
         // (Joined: the world held for no one now)
         this.remote?.hold(false);
@@ -12831,6 +12843,7 @@ export class Game {
         const nameOf = (id) => this.worldview.players.get(id)?.hero.name ?? "";
         const full = (mine?.members.length ?? 1) >= PARTY.most;
         const order = (id) => (id === this.me ? -1 : mine?.members.includes(id) ? mine.members.indexOf(id) : PARTY.most);
+        const duel = this.worldview.duelOf(this.me);
 
         return [...this.worldview.players.values()]
             .sort((a, b) => order(a.id) - order(b.id) || a.hero.name.localeCompare(b.hero.name) || (a.id < b.id ? -1 : 1))
@@ -12856,6 +12869,8 @@ export class Game {
                     hostile: id !== this.me && Boolean(this.worldview.war?.hostile(this.self.realm, player.realm)),
                     blocked: id !== this.me && this.isBlocked(id),
                     can,
+                    // (A duel: asked of them, or yielded to them if that's whom the player's in one with)
+                    duel: id === this.me ? null : duel ? (duel.with === id ? "yield" : null) : this.worldview.challenge(id)?.from === this.me ? "asked" : "ask",
                 };
             });
     }
@@ -12898,6 +12913,116 @@ export class Game {
         const way = bearing(this.#outside(me), this.#outside(actor));
 
         return way === "here" ? (actor.map === me.map ? `${place} · Near you` : place) : `${place} · ${way}`;
+    }
+
+    /** Whether the player's accepting duels (Game options): the host told when it changes. */
+    get acceptDuels() {
+        return this.accepting;
+    }
+
+    set acceptDuels(on) {
+        this.accepting = Boolean(on);
+
+        if (this.running) {
+            this.#tellDuels();
+        }
+    }
+
+    // The host told whether the player's accepting duels, if that's not what it was last told
+    #tellDuels() {
+        if (this.accepting === this.duelsTold || !this.battle?.actor(this.me)) {
+            return;
+        }
+
+        const on = this.accepting;
+
+        this.duelsTold = on;
+        this.#command({ type: "duel", do: "accepting", on }, (result) => {
+            if (!result.ok) {
+                this.duelsTold = !on;
+            }
+        });
+    }
+
+    // What the player does about a duel, from the Players tab or when asked (a "duel" command:
+    // core/host.js DUEL); said why not, if not
+    #duelOrder(what, who) {
+        this.#command({ type: "duel", do: what, who }, (result) => {
+            if (!result.ok) {
+                this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 2.4);
+                this.sound?.play("denied");
+            } else {
+                this.sound?.play("tap");
+            }
+        });
+    }
+
+    // A duel's news for the player (the host's "duel" events): asked, a choice to make; the rest
+    // said
+    #duelEvent(event) {
+        if (event.id !== this.me) {
+            return;
+        }
+
+        const { hud } = this;
+
+        switch (event.change) {
+            case "asked":
+                // (Asked by someone the player's blocked: let go unanswered)
+                if (!this.isBlocked(event.from)) {
+                    this.sound?.play("wake");
+                    this.duelPrompt = hud.choose(
+                        `${event.name} challenges you to a duel.`,
+                        [
+                            { label: "Accept", value: "accept" },
+                            { label: "Decline", value: "decline" },
+                        ],
+                        (answer) => {
+                            this.duelPrompt = null;
+
+                            if (answer) {
+                                this.#duelOrder(answer);
+                            }
+                        },
+                        { cancel: "Ignore", seconds: Math.max(1, (event.until - this.battle.time) / 1000) },
+                    );
+                }
+
+                break;
+            case "lapsed":
+                this.duelPrompt?.withdraw();
+                this.duelPrompt = null;
+                break;
+            case "sent":
+                hud.message(`You challenge ${event.name} to a duel.`, 2.4);
+                break;
+            case "declined":
+                hud.message(`${event.name} declines your duel.`, 3);
+                break;
+            case "unanswered":
+                hud.message(`${event.name} didn't answer your challenge.`, 3);
+                break;
+            case "begun":
+                hud.message(`Your duel with ${event.name} begins. Yield from the Players tab.`, 4);
+                break;
+            case "over":
+                hud.message(
+                    {
+                        yielded: event.winner === this.me ? `${event.name} yields: the duel is yours.` : `You yield the duel to ${event.name}.`,
+                        fell: event.winner === this.me ? `${event.name} is down: the duel is yours.` : `You're down: the duel is ${event.name}'s.`,
+                        apart: `Your duel with ${event.name} is over: you're too far apart.`,
+                        left: `Your duel with ${event.name} is over: they've left.`,
+                    }[event.why] ?? `Your duel with ${event.name} is over.`,
+                    4,
+                );
+                break;
+            default:
+                break;
+        }
+
+        if (this.partyPanel?.open) {
+            this.#showParty();
+        }
     }
 
     // What the player does about their party of players, from the party menu (a "party" command:
@@ -16881,7 +17006,8 @@ export class Game {
                     }
 
                     if (event.id === this.me) {
-                        hud.message("You have fallen. You'll wake in the market square…", (event.respawnAt - battle.time) / 1000);
+                        // (Down in a duel: up again where they fell, no death of it)
+                        hud.message(event.downed ? "You're down. You'll be up in a moment…" : "You have fallen. You'll wake in the market square…", (event.respawnAt - battle.time) / 1000);
                         this.sound?.play("fallen");
                     } else if (this.#ours(event)) {
                         this.#slain(event.id, avatar);
@@ -17573,6 +17699,9 @@ export class Game {
                 break;
             case "party":
                 this.#partyEvent(event);
+                break;
+            case "duel":
+                this.#duelEvent(event);
                 break;
             case "treasure":
                 this.#treasureEvent(event);
