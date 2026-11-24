@@ -598,6 +598,23 @@ export const delveKey = (site, generation = 0) => `${site}@${generation}`;
 /** The site a dungeon's run is of, from its key (delveKey). */
 export const delveSite = (key) => key.slice(0, key.lastIndexOf("@"));
 
+/**
+ * A dungeon's runs where each party has its own (RULES `instances` "party"; the scaling plan's
+ * 2-21): how long one stands with no one in it and none of its party near its way in before it's
+ * taken out of the world (`linger`, ms: ten minutes; one never gone into, or no one's any more,
+ * goes at once).
+ */
+export const RUNS = Object.freeze({ linger: 600000 });
+
+/**
+ * A party's run of a dungeon, as a site of its own to everything that keeps a dungeon by its
+ * site: `${the dungeon's site}~${the run's number}`, a number no run of the world's had before
+ * (so its levels are maps nothing's kept before). runBase gives the dungeon's site back, of a
+ * run's or of a site's own id.
+ */
+export const runSite = (site, run) => `${site}~${run}`;
+export const runBase = (id) => (id.includes("~") ? id.slice(0, id.indexOf("~")) : id);
+
 /** A world's presets: `company`, a company of friends' (RULES as they are), or `shared`, a world shared by strangers'. */
 export const PRESETS = Object.freeze(["company", "shared"]);
 
@@ -1299,6 +1316,7 @@ export const REFUSALS = Object.freeze({
     depot: "A depot can be built only in another people's lands, if we can pay for it, two at most.",
     orders: "Those orders can't be carried out.",
     unsummoned: "No one's calling you.",
+    otherRun: "That dungeon is another party's: you can't be called into it.",
     duelist: "No one there to duel.",
     duelFar: "Too far away to ask them to a duel.",
     dueling: "One of you is in a duel already.",
@@ -1941,6 +1959,16 @@ export class Host {
         this.invites = new Map();
         this.nextParty = 1;
         /**
+         * The dungeons' runs where each party has its own (RULES `instances` "party"; RUNS), by
+         * the run's id (runSite): { id, site (the dungeon's), owner (whose it is: a party's id,
+         * `solo:${a player's}` in no party, or null once it's no one's), dropped (who left the
+         * world while it was theirs: let back into it), entered (whether anyone's been in it),
+         * emptySince (the battle's ms since no one's been in it or near, or null) }.
+         */
+        this.runs = new Map();
+        this.nextRun = 1;
+        this.runSites = new Map();
+        /**
          * Duels (DUEL): who's been asked to one, by the one asked ({ from, until }); who's in one,
          * by each of the two ({ with, at: when it begins }); and who isn't accepting them.
          */
@@ -2316,7 +2344,7 @@ export class Host {
         }
 
         // (Out of their party, and their asking, or being asked, forgotten)
-        this.#quit(id, "left");
+        this.#quit(id, "left", true);
 
         for (const [asked, invite] of [...this.invites]) {
             if (asked === id || invite.from === id) {
@@ -3344,14 +3372,17 @@ export class Host {
                     this.#openBuilding(building.key, true);
                 }
 
-                if (building && this.players.get(event.id).explored.enter(building.key)) {
-                    this.#event("explored", { id: event.id, building: building.key });
+                // (A party's run of a dungeon, RUNS: the dungeon found, not the run)
+                const found = building?.base ? `site:${building.base}` : building?.key;
+
+                if (building && this.players.get(event.id).explored.enter(found)) {
+                    this.#event("explored", { id: event.id, building: found });
                 }
 
                 // (And on their party's: found by them too, for good)
                 for (const id of building ? this.fellows(event.id) : []) {
-                    if (this.players.get(id)?.explored.enter(building.key)) {
-                        this.#event("explored", { id, building: building.key, by: event.id });
+                    if (this.players.get(id)?.explored.enter(found)) {
+                        this.#event("explored", { id, building: found, by: event.id });
                     }
                 }
 
@@ -3823,6 +3854,7 @@ export class Host {
     #wire() {
         this.battle.onPath = (id, way, waits) => this.recorder?.(waits ? ["v", this.battle.time, id, way, 1] : ["v", this.battle.time, id, way]);
         this.battle.replay = this.replay;
+        this.battle.doorFor = (actor, link) => this.#doorFor(actor, link);
     }
 
     static #readable(snapshot) {
@@ -11946,10 +11978,10 @@ export class Host {
 
     // The side of the players on some maps (`maps`: ids), and those near a place out in the world
     // (`at`, within `within` metres), weighed as one group's (#side), or null for none
-    #sideOn(maps, at = null, within = 0) {
+    #sideOn(maps, at = null, within = 0, site = null) {
         const actors = [...this.players.keys()]
             .map((id) => this.battle.actor(id))
-            .filter((actor) => actor && !actor.dead && (maps.includes(actor.map) || (at && actor.map === "town" && hypot(actor.x - at[0], actor.y - at[1]) <= within)));
+            .filter((actor) => actor && !actor.dead && (maps.includes(actor.map) || (at && actor.map === "town" && hypot(actor.x - at[0], actor.y - at[1]) <= within && (!site || this.#goesTo(actor.id, site)))));
 
         return actors.length ? this.#side({ actors }) : null;
     }
@@ -12440,6 +12472,17 @@ export class Host {
     // One of the plan's sites, or a scene's keep (#keeps), by its id (or undefined): from a table
     // made once, as #placeOf's (the plan's first, then the keeps')
     #siteOf(id) {
+        // (A party's run of a dungeon, runSite: its site as that dungeon's is, by the run's id)
+        if (this.runs.has(id)) {
+            if (!this.runSites.has(id)) {
+                const of = this.#siteOf(this.runs.get(id).site);
+
+                this.runSites.set(id, of ? { ...of, id, base: of.id } : undefined);
+            }
+
+            return this.runSites.get(id);
+        }
+
         if (!this.sitesById) {
             this.sitesById = new Map();
 
@@ -14032,7 +14075,8 @@ export class Host {
             const site = def?.kind === "lock" && LOCKS[def.lock] ? lockSite(this.world.plan, LOCKS[def.lock], this.world.seed ?? 1) : def?.kind === "enter" && thread.site ? { id: thread.site } : null;
             const inward = event.from === "town" || (def?.kind === "enter" && !this.world.maps[event.from]?.dungeon);
 
-            if (site && event.link === siteDoor(site) && inward && !this.legends.gaveUp(id, event.id)) {
+            // (Gone in by a dungeon's front door to a party's run of it, RUNS: by that door)
+            if (site && event.link.replace(/~\d+(?=\/door$)/, "") === siteDoor(site) && inward && !this.legends.gaveUp(id, event.id)) {
                 this.#threadDone(id, [event.id], thread.place);
             }
         }
@@ -15702,51 +15746,244 @@ export class Host {
             }
         }
 
+        // (Each party's run of each, tended for its own: #runsTended)
+        if (this.rules.instances === "party") {
+            this.#runsTended(on);
+
+            return;
+        }
+
         for (const site of this.#dungeonSites()) {
-            const within = (reach) => this.#byWayIn(site, places, reach);
-            const near = within(DELVES.near);
-            const levels = on.get(site.id) ?? new Set();
-            let delve = this.delveOf(site.id);
+            this.#delveTended(site, on.get(site.id) ?? new Set(), (reach) => this.#byWayIn(site, places, reach), () => this.#byWayIn(site, outside, DELVES.near));
+        }
+    }
 
-            if (!delve && !near && !levels.size) {
-                continue;
-            }
+    // One dungeon's run tended (#dungeons): begun and made as those it's for come within reach of
+    // its way in (`within`, a reach in metres) or are on its levels (`levels`: which); each level
+    // woken for those on it, on the one above, or coming to its way in (`coming`), and let sleep
+    // without them; cleared and everyone gone, made again (or, a party's run, `run`: retired)
+    #delveTended(site, levels, within, coming, run = null) {
+        const interiors = this.world.interiors;
+        const near = within(DELVES.near);
+        let delve = this.delveOf(site.id);
 
-            const key = `site:${site.id}`;
-            const building = this.#building(key);
+        if (!delve && !near && !levels.size) {
+            return;
+        }
 
-            if (!building) {
-                continue;
-            }
+        const key = `site:${site.id}`;
+        const building = this.#building(key);
 
-            if (!delve) {
-                delve = this.#delveBegun(site.id, building.generation ?? 0);
-            }
+        if (!building) {
+            return;
+        }
 
-            // (Cleared, and everyone gone: made again)
-            if (delve.cleared && !levels.size && !within(DELVES.far)) {
+        if (!delve) {
+            delve = this.#delveBegun(site.id, building.generation ?? 0);
+        }
+
+        // (Cleared, and everyone gone: made again)
+        if (delve.cleared && !levels.size && !within(DELVES.far)) {
+            if (run) {
+                this.#runRetired(run, "cleared");
+            } else {
                 this.#remakeDungeon(site, building, delve);
+            }
+
+            return;
+        }
+
+        if (!building.made && (near || levels.size)) {
+            this.#findersTier(building);
+            interiors.make(key);
+        }
+
+        const arriving = coming();
+
+        building.maps.forEach((map, k) => {
+            const wanted = levels.has(k) || levels.has(k - 1) || (k === 0 && arriving);
+
+            if (wanted && !delve.awake[k]) {
+                this.#wakeLevel(site, building, delve, k);
+            } else if (!wanted && delve.awake[k]) {
+                this.#sleepLevel(building, delve, k);
+            }
+        });
+
+        this.#arenaWatch(site, building, delve);
+    }
+
+    // --- A dungeon's run for each party (RULES `instances` "party"; RUNS; the plan's 2-21) ---
+
+    /**
+     * The run of a dungeon (`site`: its id) a player would go into by its front door, where each
+     * party has its own: their party's; in no party, the one they left the world from while it
+     * was theirs, if it's still someone's, or their own. A party with none there takes up its
+     * leader's own, or failing that the first of its members' in the order they joined (the
+     * others' are no one's then, and go once they're empty). None standing, one's begun for them
+     * if `make` is set; else null.
+     */
+    runFor(playerId, site, { make = false } = {}) {
+        const party = this.partyFor(playerId);
+        const at = [...this.runs.values()].filter((run) => run.site === site);
+        const owner = party?.id ?? `solo:${playerId}`;
+        let run = at.find((one) => one.owner === owner) ?? null;
+
+        if (!run && party) {
+            const from = [party.leader, ...party.members].map((id) => at.find((one) => one.owner === `solo:${id}`)).find(Boolean);
+
+            if (from) {
+                from.owner = owner;
+                run = from;
+            }
+        }
+
+        if (!run && !party) {
+            run = at.find((one) => one.owner !== null && one.dropped.includes(playerId)) ?? null;
+        }
+
+        if (!run && make && this.#siteOf(site)?.kind === "dungeon") {
+            run = { id: runSite(site, this.nextRun++), site, owner, dropped: [], entered: false, emptySince: null };
+            this.runs.set(run.id, run);
+        }
+
+        // (A party's: any other there that was one of its members' own is no one's now)
+        for (const one of party && run ? at : []) {
+            if (one !== run && party.members.some((id) => one.owner === `solo:${id}`)) {
+                one.owner = null;
+            }
+        }
+
+        return run;
+    }
+
+    // Whether a player's one of those a dungeon's site is for: anyone, of a site's own; of a
+    // party's run (#siteOf: its `base`), those who'd go into it by its front door (runFor)
+    #goesTo(playerId, site) {
+        return !site.base || this.runFor(playerId, site.base)?.id === site.id;
+    }
+
+    // The way in an actor going in by a dungeon's front door is sent through instead (the
+    // battle's `doorFor`), where each party has a run of its own: their run's door (a follower's
+    // or a creature's at a player's side, their leader's), the run begun and set down if it
+    // isn't; or null, to go in as the door leads
+    #doorFor(actor, link) {
+        if (this.rules.instances !== "party" || link.kind !== "door") {
+            return null;
+        }
+
+        const front = this.world.interiors?.buildings.get(link.building);
+        const who = this.players.has(actor.id) ? actor.id : (this.followers.get(actor.id)?.leader ?? this.companions.get(actor.id)?.leader ?? null);
+
+        if (front?.kind !== "dungeon" || front.base || who === null || !this.players.has(who)) {
+            return null;
+        }
+
+        const run = this.runFor(who, front.site, { make: true });
+        const building = run ? this.#building(`site:${run.id}`) : null;
+
+        // (Made as strong as its finders, if it isn't made yet: #findersTier)
+        this.#findersTier(building);
+
+        if (building && who === actor.id) {
+            run.entered = true;
+        }
+
+        return building?.door ?? null;
+    }
+
+    // Whether a player (their actor) stands within `reach` of a dungeon's way in, out by it
+    #nearWayIn(actor, of, reach) {
+        // (A party's run's way in is its dungeon's own: #siteOf, its `base`)
+        const site = of.base ? this.#siteOf(of.base) : of;
+
+        return Boolean(actor && !actor.dead) && (site.parent ? this.#byKeepDoors(actor, site, reach) : actor.map === "town" && hypot(actor.x - site.at[0], actor.y - site.at[1]) < reach);
+    }
+
+    // The dungeons' runs tended, each party's its own (#dungeons; `on`: which levels of which
+    // have players on them, by the run's id): one begun for whoever comes near a dungeon's way in
+    // with none; each tended for those it's for (#delveTended); and one with no one in it and none
+    // of its own near taken out of the world: at once if it's no one's any more or was never gone
+    // into, else after RUNS.linger
+    #runsTended(on) {
+        const actors = [...this.players.keys()].map((id) => this.battle.actor(id)).filter((actor) => actor && !actor.dead && !this.world.maps[actor.map]?.dungeon);
+
+        for (const site of this.#dungeonSites()) {
+            for (const actor of actors) {
+                if (this.#nearWayIn(actor, site, DELVES.near)) {
+                    this.runFor(actor.id, site.id, { make: true });
+                }
+            }
+        }
+
+        // (Which have a player in them, fallen or not: none of those is empty)
+        const held = new Set([...this.players.keys()].map((id) => this.world.interiors.of(this.battle.actor(id)?.map)).filter((building) => building?.base).map(({ site }) => site));
+
+        for (const run of [...this.runs.values()]) {
+            const site = this.#siteOf(run.id);
+            const levels = on.get(run.id) ?? new Set();
+            const theirs = actors.filter((actor) => this.#goesTo(actor.id, site));
+            const coming = (reach) => theirs.some((actor) => this.#nearWayIn(actor, site, reach));
+            const within = (reach) => held.has(run.id) || coming(reach);
+
+            run.entered ||= held.has(run.id);
+            this.#delveTended(site, levels, within, () => coming(DELVES.near), run);
+
+            if (!this.runs.has(run.id)) {
                 continue;
             }
 
-            if (!building.made && (near || levels.size)) {
-                this.#findersTier(building);
-                interiors.make(key);
+            if (levels.size || within(DELVES.far)) {
+                run.emptySince = null;
+            } else {
+                run.emptySince ??= this.battle.time;
+
+                if (run.owner === null || !run.entered || this.battle.time - run.emptySince >= RUNS.linger) {
+                    this.#runRetired(run, "empty");
+                }
+            }
+        }
+    }
+
+    // A party's run of a dungeon taken out of the world (`why`: "cleared", or "empty"): its foes
+    // and what's left in it gone as a dungeon's made again are (#delveEmptied), its levels, its
+    // door and its building with it (Interiors.dropRun), and what was kept of it forgotten
+    #runRetired(run, why) {
+        const key = `site:${run.id}`;
+        const building = this.world.interiors.buildings.get(key);
+
+        if (building) {
+            this.#delveEmptied(run.id, building);
+            this.world.interiors.dropRun(run.id);
+        }
+
+        this.open.delete(key);
+        this.dungeons.delete(delveKey(run.id, 0));
+        this.#delving.of = null;
+        this.runs.delete(run.id);
+        this.runSites.delete(run.id);
+        this.#event("dungeon", { site: run.id, change: "retired", name: building?.name ?? "", why });
+    }
+
+    // A player out of their party, or the world (`leaving` it): the runs that were their party's.
+    // One leaving the world is let back into each (`dropped`); and a party that's no more (`last`:
+    // the one left of it, if any) leaves each of its runs to that one, unless they've their own
+    // there, or to no one
+    #runsQuit(party, playerId, { leaving = false, last = undefined } = {}) {
+        for (const run of this.runs.values()) {
+            if (run.owner !== party.id) {
+                continue;
             }
 
-            const coming = this.#byWayIn(site, outside, DELVES.near);
+            if (leaving && !run.dropped.includes(playerId)) {
+                run.dropped.push(playerId);
+            }
 
-            building.maps.forEach((map, k) => {
-                const wanted = levels.has(k) || levels.has(k - 1) || (k === 0 && coming);
+            if (last !== undefined) {
+                const own = last === null ? null : `solo:${last}`;
 
-                if (wanted && !delve.awake[k]) {
-                    this.#wakeLevel(site, building, delve, k);
-                } else if (!wanted && delve.awake[k]) {
-                    this.#sleepLevel(building, delve, k);
-                }
-            });
-
-            this.#arenaWatch(site, building, delve);
+                run.owner = own !== null && ![...this.runs.values()].some((one) => one.site === run.site && one.owner === own) ? own : null;
+            }
         }
     }
 
@@ -15910,7 +16147,7 @@ export class Host {
         const finders = [...this.players.values()].filter((player) => {
             const actor = this.battle.actor(player.id);
 
-            return actor && !actor.dead && (building.maps.includes(actor.map) || (site.parent ? this.#byKeepDoors(actor, site, DELVES.near) : actor.map === "town" && hypot(actor.x - site.at[0], actor.y - site.at[1]) < DELVES.near));
+            return actor && !actor.dead && (building.maps.includes(actor.map) || (this.#goesTo(player.id, site) && (site.parent ? this.#byKeepDoors(actor, site, DELVES.near) : actor.map === "town" && hypot(actor.x - site.at[0], actor.y - site.at[1]) < DELVES.near)));
         });
 
         delve.tier = cacheTier(dungeonTier(this.world.plan, site), Math.max(0, ...finders.map((player) => mightTier(this.mightFor(player.id)))));
@@ -15927,7 +16164,7 @@ export class Host {
         // (Against the side of the players on it or the level above, or by its way in, its boss and
         // mini-bosses tougher, more of each pack and each of them tougher too: strength.js; the
         // more of a pack beside those its plan has, by them)
-        const side = this.#sideOn([map, building.maps[k - 1]].filter(Boolean), k === 0 && !site.parent ? site.at : null, DELVES.near);
+        const side = this.#sideOn([map, building.maps[k - 1]].filter(Boolean), k === 0 && !site.parent ? site.at : null, DELVES.near, site);
         const scale = side ? scalingFor(side.strength, this.rules.scaling) : null;
 
         for (const pack of level.packs) {
@@ -16032,7 +16269,7 @@ export class Host {
             }
 
             this.#event("dungeon", { site: beast.dungeon, change: "boss", name: this.#siteOf(beast.dungeon)?.name ?? null, boss: this.battle.actor(id)?.name ?? null });
-            this.#threadSlain(beast.dungeon);
+            this.#threadSlain(runBase(beast.dungeon));
 
             delve.masterFell = true;
 
@@ -16115,8 +16352,27 @@ export class Host {
     #remakeDungeon(site, building, delve) {
         const tolls = (building.dungeon?.theme ?? building.theme) === "keep" && Boolean(delve.masterFell);
 
+        this.#delveEmptied(site.id, building);
+        this.world.interiors.retire(building.key);
+        this.world.interiors.setGeneration(building.key, building.generation + 1);
+        // (Its run, of its new making: kept under that making's key from now)
+        this.dungeons.delete(delveKey(site.id, delve.generation ?? 0));
+        Object.assign(delve, { generation: building.generation, awake: [], dead: [], opened: [], cleared: false, masterFell: false });
+        this.dungeons.set(delveKey(site.id, delve.generation ?? 0), delve);
+        this.#delving.of = null;
+        this.#event("dungeon", { site: site.id, change: "remade", name: building.name });
+
+        if (tolls) {
+            this.#event("order", { change: "tolls", site: site.id, words: SCENERY.bellhaven.court.tolls });
+        }
+    }
+
+    // A dungeon's levels emptied before they're taken out of the world (`site`: its id, or a
+    // party's run's): its foes let go wherever they are, players' followers and creatures brought
+    // out to their leaders, and what's left on its floors gone
+    #delveEmptied(site, building) {
         for (const [id, one] of [...this.wild]) {
-            if (one.dungeon === site.id) {
+            if (one.dungeon === site) {
                 if (this.battle.actor(id)) {
                     this.battle.remove(id);
                 }
@@ -16139,19 +16395,6 @@ export class Host {
             if (building.maps.includes(dropped.map)) {
                 this.ground.delete(id);
             }
-        }
-
-        this.world.interiors.retire(building.key);
-        this.world.interiors.setGeneration(building.key, building.generation + 1);
-        // (Its run, of its new making: kept under that making's key from now)
-        this.dungeons.delete(delveKey(site.id, delve.generation ?? 0));
-        Object.assign(delve, { generation: building.generation, awake: [], dead: [], opened: [], cleared: false, masterFell: false });
-        this.dungeons.set(delveKey(site.id, delve.generation ?? 0), delve);
-        this.#delving.of = null;
-        this.#event("dungeon", { site: site.id, change: "remade", name: building.name });
-
-        if (tolls) {
-            this.#event("order", { change: "tolls", site: site.id, words: SCENERY.bellhaven.court.tolls });
         }
     }
 
@@ -17709,7 +17952,7 @@ export class Host {
 
     // A player out of their party (`why`: "left", or "removed" by its leader), all of it told: led
     // by the longest in it after them if they led it; and no party left with one in it
-    #quit(playerId, why) {
+    #quit(playerId, why, leaving = false) {
         const party = this.partyFor(playerId);
 
         if (!party) {
@@ -17719,6 +17962,9 @@ export class Host {
         this.#tellParty(party, { change: why, who: playerId, name: this.players.get(playerId)?.hero.name ?? "" });
         party.members = party.members.filter((id) => id !== playerId);
         this.partyIds.delete(playerId);
+        // (Its dungeon runs, RUNS: one leaving the world let back into them; a party that's no
+        // more leaving them to the one left of it)
+        this.#runsQuit(party, playerId, { leaving: leaving === true, ...(party.members.length < 2 ? { last: party.members[0] ?? null } : {}) });
 
         if (party.members.length < 2) {
             for (const id of party.members) {
@@ -18751,6 +18997,16 @@ export class Host {
         this.summonings.delete(player.id);
 
         const caller = this.battle.actor(asked.by);
+        // (Into a party's run of a dungeon that isn't theirs to go into, RUNS: no one's called)
+        const run = come && caller ? this.runs.get(this.world.interiors?.of(caller.map)?.site) : null;
+
+        if (run && this.runFor(player.id, run.site)?.id !== run.id) {
+            this.#event("summons", { id: asked.by, target: player.id, change: "resisted" });
+            this.#event("summons", { id: player.id, by: asked.by, change: "resisted" });
+
+            return refuse("otherRun");
+        }
+
         const square = come && caller && !caller.dead ? this.#behind(caller) : null;
         const came = Boolean(square) && this.#carry(player, caller.map, square, "summoned", caller.facing);
 
@@ -20896,6 +21152,11 @@ export class Host {
             return null;
         }
 
+        // (A party's run of a dungeon, runSite: beside its site's own, Interiors.addRun)
+        if (key.startsWith("site:") && this.runs.has(key.slice(5))) {
+            return interiors.buildings.get(key) ?? (this.#building(`site:${this.runs.get(key.slice(5)).site}`) ? interiors.addRun(`site:${this.runs.get(key.slice(5)).site}`, key.slice(5)) : null);
+        }
+
         if (!interiors.buildings.has(key)) {
             // (A place worth finding gone into, `site:` its id: set down, its way in with it;
             // else a settlement's building, the settlement laid out)
@@ -20921,6 +21182,11 @@ export class Host {
         const building = this.#building(key);
 
         if (!building?.entrance) {
+            return;
+        }
+
+        // (A dungeon's own, where each party has a run of it, RUNS: never made; no one goes in)
+        if (building.kind === "dungeon" && !building.base && this.rules.instances === "party") {
             return;
         }
 

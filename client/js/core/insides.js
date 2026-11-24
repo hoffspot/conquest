@@ -1966,7 +1966,8 @@ export class Interiors {
     // the id `id`, drawn at its dungeon's column of DUNGEON_ORIGINS (a hell's of HELL_ORIGINS, a
     // keep's of KEEP_ORIGINS). Nothing of the world changes for its making
     #levelMap(building, id, floor, k, count) {
-        const number = Number(/(\d+)$/.exec(building.site ?? "")?.[1] ?? 1);
+        // (A party's run of it, addRun: its site's column, in a lane of its own)
+        const number = Number(/(\d+)$/.exec(building.base ?? building.site ?? "")?.[1] ?? 1);
         const keep = Boolean(building.scene);
         const column = keep ? 0 : Math.max(0, number - 1);
         const block = keep ? KEEP_ORIGINS : THEMES[building.theme]?.wild === false ? HELL_ORIGINS : DUNGEON_ORIGINS;
@@ -2177,6 +2178,99 @@ export class Interiors {
         this.version++;
 
         return building;
+    }
+
+    /**
+     * A run of a dungeon of its own beside it (the scaling plan's 2-21, a run for each party:
+     * host.js RULES `instances` "party"): a dungeon's building as its site's is (the same seed and
+     * theme, so the same dungeon at whatever tier its finders make it), kept by `site:${id}` (`id`
+     * the run's own, host.js runSite: nothing else's), with its own levels, stairs and seals, drawn
+     * in a lane of its own (DUNGEON_ORIGINS `lane`: the first no run of its site standing here is
+     * in, past the site's own), and a door of its own that only leads out, to where the site's
+     * does: who goes in by the site's front door is sent through to their run's (battle.js
+     * `doorFor`). The run's building (as it is, if it's here already); or null if the site's isn't
+     * a dungeon here.
+     */
+    addRun(key, id) {
+        const base = this.buildings.get(key);
+        const own = `site:${id}`;
+
+        if (base?.kind !== "dungeon" || base.base) {
+            return null;
+        }
+
+        if (this.buildings.has(own)) {
+            return this.buildings.get(own);
+        }
+
+        const lanes = new Set([...this.buildings.values()].filter((each) => each.base === base.site).map(({ lane }) => lane));
+        let lane = 1;
+
+        while (lanes.has(lane)) {
+            lane++;
+        }
+
+        const inside = dungeonLevel(own, 0, 0);
+        const [outside] = base.door.ends;
+        const building = {
+            ...base,
+            key: own,
+            piece: { id, name: "dungeon" },
+            site: id,
+            base: base.site,
+            lane,
+            made: false,
+            maps: [],
+            folk: [],
+            tier: this.tiers.get(own) ?? base.tier,
+            generation: 0,
+            flights: [],
+            dungeon: null,
+            given: null,
+            runs: null,
+            vaults: undefined,
+        };
+
+        building.door = {
+            id: `${own}/door`,
+            kind: "door",
+            building: own,
+            ends: [
+                { map: outside.map, squares: [], arrive: [...outside.arrive], facing: outside.facing },
+                { map: inside, squares: [], arrive: null, facing: FACING.n, pending: true },
+            ],
+        };
+        this.buildings.set(own, building);
+        this.byMap.set(inside, building);
+        this.world.links.push(building.door);
+        this.version++;
+
+        return building;
+    }
+
+    /** A run of a dungeon (addRun) taken out of the world: its levels, its stairs, its door and its building. Whether it was here. */
+    dropRun(id) {
+        const own = `site:${id}`;
+        const building = this.buildings.get(own);
+
+        if (!building?.base) {
+            return false;
+        }
+
+        this.retire(own);
+        this.byMap.delete(building.door.ends[1].map);
+        this.tiers.delete(own);
+
+        const at = this.world.links.indexOf(building.door);
+
+        if (at >= 0) {
+            this.world.links.splice(at, 1);
+        }
+
+        this.buildings.delete(own);
+        this.version++;
+
+        return true;
     }
 
     /**

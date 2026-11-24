@@ -1124,6 +1124,9 @@ export class Battle {
         // Told each way found, (id, way), if anyone's listening (a host's netplay); and, replaying
         // a host's game, the ways it found to take instead ([time, id, way], in order), or null
         this.onPath = null;
+        // (Which way in an actor going through one is sent through instead, or none: its host's,
+        // #cross)
+        this.doorFor = null;
         this.replay = null;
 
         // (A forecast's battle, fork: its ways found over the navigation tiles made already, none
@@ -2174,6 +2177,7 @@ export class Battle {
         const forked = Battle.restore(this.world, part, { relations: this.relations, allied: this.allied, haven: this.haven, nerve: this.nerve, sworn: this.sworn, dueling: this.dueling, truce: this.truce });
 
         forked.bakedOnly = true;
+        forked.doorFor = this.doorFor;
 
         return forked;
     }
@@ -7769,7 +7773,15 @@ export class Battle {
     // Come out at a link's other end: on its map, on the square it arrives at (or the nearest
     // free one), facing into the room
     #cross(actor, link, here) {
-        const there = link.ends.find((end) => end !== here);
+        // (A way in that leads each who takes it to a place of their own: a dungeon's front door,
+        // to their party's run of it, core/host.js `doorFor`; they come out as if by that one's
+        // door, which leads back out to where this one stands)
+        const own = here === link.ends[0] ? (this.doorFor?.(actor, link) ?? null) : null;
+        const there = own ? own.ends[1] : link.ends.find((end) => end !== here);
+
+        if (own) {
+            link = own;
+        }
 
         // (A building's floors are made the first time anyone goes in: world.interiors)
         if (there.pending && !this.world.interiors?.ensure(there.map)) {

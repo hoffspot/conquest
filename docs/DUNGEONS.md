@@ -1240,6 +1240,31 @@ levels are awake, the slain, the chests opened, and whether it's cleared. It goe
 (`SNAPSHOT_VERSION` 8; its tier from 26) and saves, and a game taken up again makes each dungeon's levels as many
 times over as they had been, so a player saved deep in a dungeon is back where they were.
 
+### A run for each party (`host.js` `RUNS`, `runFor`; `insides.js` `addRun`)
+
+Not on in any world yet: the rule `instances` is `site` everywhere, and its other way, `party`,
+isn't built till a snapshot keeps the runs and a game is told of them (the scaling plan's 2-21).
+What the host does under it:
+
+- A dungeon keeps its one front door. Whoever goes in by it is sent through to **their party's
+  run** of the dungeon; one in no party gets a run of their own. Nobody's refused at the door.
+- A run is the same dungeon (its site's seed and theme) with its own levels, foes, slain, chests,
+  seals, tier and hoard. It's a building of its own beside the site's, `site:<site>~<n>`, its
+  levels drawn in a lane of their own (`DUNGEON_ORIGINS.lane`), its door leading only out, to
+  before the front door. The site's own dungeon is never made while the rule's on.
+- A party with no run at a dungeon takes its leader's own, if they have one, then a member's; the
+  others' are no one's and go once they're empty.
+- One who leaves their party inside stays where they are till they walk out. Their next way in is
+  to their own run. A party that ends leaves its runs to the one member left.
+- One who leaves the world while a run is their party's is let back into it when they come back,
+  whether or not they're asked back into the party.
+- Summon doesn't bring anyone into a run that isn't theirs to go into.
+- A run is begun as one of its own comes within `DELVES.near` of the way in, and it's woken, made
+  as strong and scaled for its own only. It's taken out of the world at once when it's cleared and
+  its own are away, when it's no one's and empty, or when no one ever went in; otherwise after ten
+  minutes with no one in it or near (`RUNS.linger`).
+- The wild dungeons, the hells and Bellhaven's keep all work this way.
+
 ## Always the same, and stable as it grows (`seeds.js`)
 
 - One seed for a dungeon, and from it a stream of its own for each stage of each level and attempt
@@ -1344,6 +1369,9 @@ code is here.
 
 ## Tests
 
+- **`test/runs.test.js`**, a run for each party: the interiors' runs, two at one site with
+  separate maps, a kill in one and not the other, a summons refused, a party's leader's run, one
+  who quits inside, one who left the world, a run's going, and the keep's.
 - **`test/delves.test.js`**, dungeons in play:
   - about one way in to a square kilometre of dry land, apart from each other, the roads and the
     other places, each named and themed; every theme in a world;
