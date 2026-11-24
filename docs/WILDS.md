@@ -2085,7 +2085,7 @@ It's kept with the world (a character's `tags`, where it has any) and it's the h
 no game's shown it. (`test/tags.test.js`.)
 
 Who a ledger credits, and how well, is worked out apart from the world (core/credit.js; the
-plan's `2-12`; `test/credit.test.js`); the medals are read by no rule yet:
+plan's `2-12`; `test/credit.test.js`):
 
 - `eligible`: everyone with some weight in the ledger who isn't marked away.
 - An ordinary foe pays each of them in full.
@@ -2116,6 +2116,12 @@ By tags:
   there;
 - a rare encounter's taken part in (`#rareLook`, `#rareFell`) by those with a tag on one of its
   foes, or whom one's on.
+
+By tags, a **leader** (a pack's, or a lair's or den's master) pays by medal (the plan's `2-14`;
+`#spoils`): each credited has their medal's share of its gold (gold 100%, silver 85%, bronze
+75%), and its prize with that chance. They're told with their spoils ("A silver medal for
+bringing down the wolf: most of its spoils for you.", core/credit.js `medalWords`; the "A quest
+done" cue). An ordinary foe pays everyone credited in full, with no medal.
 
 And in any world: one fallen near a foe with a tag on it is paid with those standing, and one
 with a tag who's of another party, or too far off, has it count for their requests.
