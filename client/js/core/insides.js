@@ -2191,7 +2191,7 @@ export class Interiors {
      * `doorFor`). The run's building (as it is, if it's here already); or null if the site's isn't
      * a dungeon here.
      */
-    addRun(key, id) {
+    addRun(key, id, at = null) {
         const base = this.buildings.get(key);
         const own = `site:${id}`;
 
@@ -2204,9 +2204,10 @@ export class Interiors {
         }
 
         const lanes = new Set([...this.buildings.values()].filter((each) => each.base === base.site).map(({ lane }) => lane));
-        let lane = 1;
+        // (In the lane said, `at`: a run set down again where it was drawn before)
+        let lane = at ?? 1;
 
-        while (lanes.has(lane)) {
+        while (at === null && lanes.has(lane)) {
             lane++;
         }
 

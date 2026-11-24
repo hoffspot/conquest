@@ -598,14 +598,15 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      moves only when the frame's bytes do, and never with `NET_VERSION`: a change to lockstep's
      messages or to what both netcodes share bumps `NET_VERSION` alone, a change to the frame
      bumps `VIEW_VERSION` alone, and a game says which views it reads in `speaks`. It's
-     7, and never 0 (a message of bytes whose first is 0 is the tests' echo: `server/play.js`
+     8, and never 0 (a message of bytes whose first is 0 is the tests' echo: `server/play.js`
      `BINARY`). A bump is followed by `npm run record:view` (section 2), so the session
      `test/recording.test.js` plays again is of the new frames. A replicated world's games play from frames (3-21), so from here a change to
      a frame's bytes bumps it: a new part of the summary does (3-24's `fellows`, 3-25's
      `camps`, `depots`, `places`, `news` and `battles`, 3-26's `trades`, 2-3's `duels`), as a new section or
      field would (3-29's `lore`, the legends as one player may know them, in place of the world's
      `legends`; 3-28's `hot`, a fight's events as bytes: `client/js/core/hotevents.js`, whose
-     table of kinds and fields is part of the frame's bytes too). 3-26's `viewed`, the answer to `again` for a game sent views, is a message
+     table of kinds and fields is part of the frame's bytes too; 2-21's `run`, on a party's run
+     of a dungeon in the summary's `dungeons`: whose dungeon it's a run of, and its lane). 3-26's `viewed`, the answer to `again` for a game sent views, is a message
      only such a game is sent: additive and opted into, so no `NET_VERSION` bump. The same
      goes for 3-27's `seen`, which only such a game says; a world that hears none holds
      nothing back for it.

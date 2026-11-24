@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { Host } from "../client/js/core/host.js";
+import { Host, ruled, RUNS } from "../client/js/core/host.js";
 import { RESET } from "../client/js/core/mirror.js";
 import { Hosting, Joining, NET_VERSION, NETCODES } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -417,6 +417,65 @@ describe("a replicated world's link (core/viewing.js)", () => {
 
         assert.ok(near.length > 0, "there are foes near her on it");
         assert.deepEqual(near.filter((id) => !kept.battle.actor(id)), [], "each of them in her game");
+    });
+
+    it("goes into its own run of a dungeon, where each party has one, on floors made here as the world has them in the lane it has them; and lets them go as the run's retired (the plan's 2-21)", () => {
+        const { host, come, play } = replicated();
+
+        host.rules = ruled({ instances: "party" });
+
+        const ann = come("a", character("Ann"));
+
+        play(20);
+
+        const a = ann.welcome.id;
+        const { link } = ann;
+        const kept = link.host;
+        const mine = () => kept.battle.actor(a);
+        const until = (map) => {
+            for (let k = 0; k < 600 && !(host.battle.actor(a).map === map && mine()?.map === map); k++) {
+                play();
+            }
+
+            assert.equal(mine()?.map, map, `her hero's on ${map} in her game (in the world: ${host.battle.actor(a).map})`);
+        };
+        const site = host.world.plan.sites.find(({ id }) => id === "dungeon-28");
+        const home = [...host.battle.actor(a).square];
+
+        host.battle.place(a, "town", [Math.floor(site.at[0]) + 3, Math.floor(site.at[1]) + 3]);
+        play(40);
+
+        const run = host.runFor(a, site.id);
+        const key = `site:${run.id}`;
+        const made = host.world.interiors.buildings.get(key);
+
+        assert.ok(made.made && Number.isInteger(run.lane), "the world's begun her run and made it");
+        assert.deepEqual(kept.delveOf(run.id)?.run, { site: site.id, lane: run.lane }, "her game's told whose dungeon it's a run of, and its lane");
+        assert.deepEqual([kept.runs.get(run.id).site, kept.runs.get(run.id).lane], [site.id, run.lane]);
+        assert.equal(kept.delveOf(site.id), null, "nothing of the dungeon's own, never made");
+        link.command({ type: "enter", link: `site:${site.id}/door`, run: true });
+        until(made.maps[0]);
+        play(40);
+
+        const theirs = kept.world.interiors.buildings.get(key);
+
+        assert.deepEqual([theirs.base, theirs.lane, theirs.tier, theirs.maps], [site.id, made.lane, made.tier, made.maps]);
+        assert.deepEqual(kept.world.maps[made.maps[0]].origin, host.world.maps[made.maps[0]].origin);
+        assert.deepEqual(kept.world.maps[made.maps[0]].plan, host.world.maps[made.maps[0]].plan);
+        assert.ok(kept.battle.actors.some((actor) => actor.id !== a && actor.map === made.maps[0]), "its foes in her game");
+
+        // (Out and away, and its time gone by: retired in the world, and let go of in her game)
+        link.command({ type: "enter", link: made.door.id, run: true });
+        until("town");
+        host.battle.place(a, "town", home);
+        play(40);
+        host.runs.get(run.id).emptySince = host.battle.time - RUNS.linger;
+        play(60);
+        assert.equal(host.runs.has(run.id), false);
+        assert.equal(kept.world.interiors.buildings.has(key), false);
+        assert.equal(kept.world.maps[made.maps[0]], undefined);
+        assert.equal(kept.delveOf(run.id), null);
+        assert.equal(kept.runs.has(run.id), false);
     });
 
     it("has the parties, everyone in the world, who's asked whom, where its party is and the war as its summary says, and asks its server what a shop needs", async () => {

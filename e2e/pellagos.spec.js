@@ -14667,6 +14667,93 @@ test("a dungeon's way in out in the wilds is gone into: its first level drawn an
     expect(delved).toMatchObject({ out: "town", by: true, sees: 160 });
 });
 
+test("where each party has its own run of a dungeon (the plan's 2-21), its front door takes the player to theirs: drawn and lit in its lane, its foes woken, the dungeon's own never made; and out again before the door", async ({ page }) => {
+    test.setTimeout(300000);
+    await playing(page, "/?play&seed=1");
+
+    const ran = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+        // (The rule as a shared world has it)
+        game.host.rules = Object.freeze({ ...game.host.rules, instances: "party" });
+
+        const site = game.world.plan.sites.filter(({ kind, theme }) => kind === "dungeon" && theme !== "hell").sort((a, b) => Math.hypot(a.at[0] - player.x, a.at[1] - player.y) - Math.hypot(b.at[0] - player.x, b.at[1] - player.y))[0];
+        const settle = async (steps) => {
+            for (let k = 0; k < steps; k++) {
+                game.advance(0.25, { render: false });
+
+                while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+        };
+        const until = async (done, steps = 120) => {
+            for (let k = 0; k < steps && !done(); k++) {
+                player.hp = player.maxHp;
+                game.advance(0.1);
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        };
+        const through = async (link) => {
+            const end = link.ends.find(({ map }) => map === player.map);
+            const from = player.map;
+
+            Object.assign(player, { x: end.arrive[0] + 0.5, y: end.arrive[1] + 0.5, path: [], order: null, progress: null });
+            game.host.command("player", { type: "enter", link: link.id });
+            await until(() => player.map !== from, 300);
+            await until(() => game.interiors.get(player.map)?.object.visible || player.map === "town", 300);
+        };
+
+        Object.assign(player, { x: site.at[0] + 25, y: site.at[1], path: [], order: null, progress: null });
+        await settle(8);
+
+        const front = game.world.interiors.buildings.get(`site:${site.id}`);
+        const [ox, oy] = front.entrance.outside;
+
+        Object.assign(player, { x: ox + 0.5, y: oy + 0.5, path: [], order: null, progress: null });
+        await through(front.door);
+
+        const run = game.host.runFor("player", site.id);
+        const building = game.world.interiors.buildings.get(`site:${run.id}`);
+        const map = game.world.maps[player.map];
+
+        await until(() => (session.view.room?.lights.length ?? 0) > 0, 100);
+
+        const inside = {
+            site: site.id,
+            run: run.id,
+            map: player.map,
+            first: building.maps[0],
+            lane: building.lane,
+            origin: map.origin,
+            drawn: Boolean(game.interiors.get(player.map)?.object.visible),
+            lit: session.view.room?.lights.length ?? 0,
+            foes: game.host.delveOf(run.id).awake[0]?.length ?? 0,
+            frontMade: front.made,
+            name: map.name,
+        };
+
+        await through(building.door);
+
+        return { ...inside, out: player.map, at: [Math.floor(player.x), Math.floor(player.y)], door: [ox, oy] };
+    });
+
+    expect(ran.run).toBe(`${ran.site}~1`);
+    expect(ran.map).toBe(ran.first);
+    expect(ran.map).toContain("~1/level-1");
+    expect(ran.lane).toBe(1);
+    expect(ran.drawn).toBe(true);
+    expect(ran.lit).toBeGreaterThan(0);
+    expect(ran.foes).toBeGreaterThan(0);
+    expect(ran.frontMade).toBe(false);
+    expect(ran.out).toBe("town");
+    expect(Math.hypot(ran.at[0] - ran.door[0], ran.at[1] - ran.door[1])).toBeLessThan(4);
+});
+
 test("coming up to a city, the ground its soldiers and townsfolk are stood on is made a piece a frame before the steps that bring them out, which make none; and a dungeon's levels are worked out before the player's at its door, and it's made of them", async ({ page }) => {
     test.setTimeout(300000);
     await playing(page, "/?play&seed=2");
