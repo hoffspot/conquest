@@ -2079,13 +2079,13 @@ players who've had a hand in its fight (core/battle.js `TAGS`, its `tags`; the s
 
 Harm is what came off the hit points, never more than there were. A tag is let go once its
 player's been more than 60 m off, or on another map, for a minute (`TAGS.far`, `TAGS.lapse`;
-looked at each second), and a player who leaves the world leaves every ledger. It's recorded
-and read by no rule yet: who's paid for a kill is still who's near (the plan's `2-13` reads it).
+looked at each second), and a player who leaves the world leaves every ledger. A world's rule,
+`loot`, has who's paid read from it (*Who's paid: by nearness, or by tags*, below).
 It's kept with the world (a character's `tags`, where it has any) and it's the host's alone:
 no game's shown it. (`test/tags.test.js`.)
 
 Who a ledger credits, and how well, is worked out apart from the world (core/credit.js; the
-plan's `2-12`; `test/credit.test.js`), and likewise read by no rule yet:
+plan's `2-12`; `test/credit.test.js`); the medals are read by no rule yet:
 
 - `eligible`: everyone with some weight in the ledger who isn't marked away.
 - An ordinary foe pays each of them in full.
@@ -2093,6 +2093,32 @@ plan's `2-12`; `test/credit.test.js`), and likewise read by no rule yet:
   half a fair share of them (its hit points split evenly among those credited) if that's less;
   **silver** for half of gold's line; **bronze** for any tag. They pay 100, 85 and 75% of
   gold's coin and chance of gear.
+
+### Who's paid: by nearness, or by tags
+
+A world's rule, `loot` (core/host.js `RULES`, `RULE_CHOICES`; the plan's `2-13`;
+`test/loot.test.js`), says who's paid for what's brought down:
+
+- **`near`**, as ever and unless a world says: everyone standing within reach, a hand in it or
+  not, and the feller's party near.
+- **`tagged`**, a world shared by strangers' (the `shared` preset): everyone the ledger credits
+  (`eligible`: some weight in it, not marked away), wherever they stand and standing or fallen;
+  no one who only stood by.
+
+By tags:
+
+- a foe's spoils (`#spoils`) are a bundle for each with a tag on it;
+- what's on it, its count for requests, and the strength of felling it (`#credit`) are each of
+  theirs, of the feller's party or not;
+- those with a tag on a guard as it falls have fought for what it guarded (`#tagsKept`: a
+  cache's, a held place's, a lair's and a rift's `fought`), and its chest, its hoard, a
+  treasure's, a rift's brimstone and its chests are theirs alone, not for one who only stood
+  there;
+- a rare encounter's taken part in (`#rareLook`, `#rareFell`) by those with a tag on one of its
+  foes, or whom one's on.
+
+And in any world: one fallen near a foe with a tag on it is paid with those standing, and one
+with a tag who's of another party, or too far off, has it count for their requests.
 
 ## Wary beasts
 

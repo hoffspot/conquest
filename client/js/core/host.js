@@ -69,6 +69,7 @@ import { CRAFT_REFUSALS, craftItem, inCapital, junkSalvage, previewOf, salvageOf
 import { ON_BLOW } from "./materials.js";
 import { atWarTable, mayRead, warTableOn } from "./wartable.js";
 import { rollSpoils, SPOILS } from "./spoils.js";
+import { eligible } from "./credit.js";
 import { campTier, CHUNK, CHUNKS, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, handInAt, HUNTING, meritIn, meritOf, MOST_CARRIED, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, REQUESTS, soldiersAbout, Standing, TITHE_RATE } from "./standing.js";
 import { hadChance, untilOf } from "./hurry.js";
@@ -568,7 +569,7 @@ export const RULES = Object.freeze({ rest: "host", debug: "host", invasions: tru
  */
 export const RULE_CHOICES = Object.freeze({
     pvp: Object.freeze({ of: Object.freeze(["war", "optin"]), shared: "optin", slice: "2-2", built: true }),
-    loot: Object.freeze({ of: Object.freeze(["near", "tagged"]), shared: "tagged", slice: "2-13", built: false }),
+    loot: Object.freeze({ of: Object.freeze(["near", "tagged"]), shared: "tagged", slice: "2-13", built: true }),
     scaling: Object.freeze({ of: Object.freeze(["side", "crowd"]), shared: "crowd", slice: "2-16", built: false }),
     director: Object.freeze({ of: Object.freeze(["player", "area"]), shared: "area", slice: "2-18", built: false }),
     instances: Object.freeze({ of: Object.freeze(["site", "party"]), shared: "party", slice: "2-21", built: false }),
@@ -3025,6 +3026,12 @@ export class Host {
                 this.#riftFought(event.id, event.by);
             }
 
+            // (Loot by tags: those with a tag on one fallen that guards a cache, a place, a lair
+            // or a rift have fought for it, healers and those who took its blows with the rest)
+            if (event.type === "death" && this.rules.loot === "tagged") {
+                this.#tagsKept(event.id);
+            }
+
             // (A hell rift's tear sealed, or its altar smashed: #tearSealed, #altarSmashed)
             if (event.type === "death" && this.battle.actor(event.id)?.kind === "tear") {
                 this.#tearSealed(event.id, event.by);
@@ -3077,7 +3084,7 @@ export class Host {
                         const { hoard = "hoard", relic = false, master } = LAIRS[this.#siteOf(beast.lair).kind];
 
                         // (Its gold as its own; a treasure map in it as well made as its master's tier)
-                        this.#opened(beast.lair, hoard, { at: heart, maps: lair.maps, map: lair.hoard.map, square: lair.hoard.square, people: "human", maker: this.#landMakerAt(heart), tier: 1, mapTier: master[1], relic });
+                        this.#opened(beast.lair, hoard, { at: heart, maps: lair.maps, map: lair.hoard.map, square: lair.hoard.square, people: "human", maker: this.#landMakerAt(heart), tier: 1, mapTier: master[1], relic, ...(this.rules.loot === "tagged" ? { fought: lair.fought ?? [], among: [] } : {}) });
                     }
                 }
 
@@ -4276,18 +4283,62 @@ export class Host {
             this.#bannerFelled(player, fallen);
         }
 
-        for (const id of this.fellows(player.id)) {
+        // (By the world's rule, `loot`: the same for each of their party near it; or, by tags,
+        // for everyone else with a tag on it, of their party or not, wherever they stand)
+        const tagged = this.#tagged(fallen.id).filter((id) => id !== player.id);
+        const byTags = this.rules.loot === "tagged";
+        const credited = new Set([player.id]);
+
+        for (const id of byTags ? tagged : this.fellows(player.id)) {
             const fellow = this.players.get(id);
             const actor = this.battle.actor(id);
 
-            if (!fellow || !actor || actor.dead || actor.map !== fallen.map || hypot(actor.x - fallen.x, actor.y - fallen.y) > PARTY.reach) {
+            if (!fellow || !actor || (!byTags && (actor.dead || actor.map !== fallen.map || hypot(actor.x - fallen.x, actor.y - fallen.y) > PARTY.reach))) {
                 continue;
             }
 
+            credited.add(id);
             this.#loot(fellow, fallen);
             this.#felled(fellow, fallen);
             this.#slew(fellow, fallen);
             this.#gain(fellow, WEAPONS[actor.weapon]?.attacks.some(({ kind }) => kind === "ranged") ? "marksman" : "blade", fallen.maxHp ?? 0);
+        }
+
+        // (In any world: one with a tag on it who had none of that, of another party or too far
+        // off, has it count for their requests)
+        for (const id of tagged) {
+            if (!credited.has(id)) {
+                this.#felled(this.players.get(id), fallen);
+            }
+        }
+    }
+
+    // The players a fallen one's tag ledger credits (core/battle.js TAGS, core/credit.js
+    // eligible): those in the world with some weight in it, not marked away, as each first tagged it
+    #tagged(id) {
+        return eligible(this.battle.tagsOf(id), { away: (player) => this.players.get(player)?.away === true })
+            .map(({ player }) => player)
+            .filter((player) => this.players.has(player));
+    }
+
+    // Loot by tags (the world's rule, `loot`): those with a tag on one just fallen kept as having
+    // fought for what it guarded, a share theirs once it's opened: its cache, the place its band
+    // held, its lair, or the rift it came through
+    #tagsKept(id) {
+        const beast = this.wild.get(id);
+        const tagged = beast ? this.#tagged(id) : [];
+        const open = this.hellRifts.open;
+        const kept = [
+            beast?.cache ? this.caches.get(beast.cache) : null,
+            beast?.place ? this.held.get(beast.place) : null,
+            beast?.lair ? this.lairs.get(beast.lair) : null,
+            open && beast?.hellRift === open.id ? open : null,
+        ];
+
+        for (const each of kept) {
+            if (each && tagged.length) {
+                each.fought = [...new Set([...(each.fought ?? []), ...tagged])];
+            }
         }
     }
 
@@ -4739,11 +4790,13 @@ export class Host {
 
         const much = beast.riftGuard === RIFT_GUARDS.warden ? BRIMSTONE.warden : beast.riftGuard ? BRIMSTONE.guard : BRIMSTONE.each;
         const owner = this.#ownerOf(this.battle.actor(by) ?? {});
+        const tagged = this.#tagged(fell.id);
 
         for (const player of this.players.values()) {
             const actor = this.battle.actor(player.id);
 
-            if (actor && !actor.dead && actor.map === fell.map && (player.id === owner || hypot(actor.x - fell.x, actor.y - fell.y) <= BRIMSTONE.reach)) {
+            // (By tags, the world's rule `loot`: those with a tag on it, wherever they stand)
+            if (this.rules.loot === "tagged" ? actor && !player.away && tagged.includes(player.id) : actor && !actor.dead && actor.map === fell.map && (player.id === owner || hypot(actor.x - fell.x, actor.y - fell.y) <= BRIMSTONE.reach)) {
                 open.brimstone[player.id] = (open.brimstone[player.id] ?? 0) + much;
 
                 if (!open.fought.includes(player.id)) {
@@ -4801,7 +4854,7 @@ export class Host {
         Object.assign(tear, { sealed: true, id: null, hp: 0 });
         this.battle.remove(id);
         this.#event("hellRift", { change: "sealed", id: open.id, tear: k, at: [...tear.at], by: fought[0] ?? null });
-        this.#opened(id, "cache", { at: tear.at, maps: [], map: "town", square, people: "human", maker: this.#landMakerAt(tear.at), tier, fought });
+        this.#opened(id, "cache", { at: tear.at, maps: [], map: "town", square, people: "human", maker: this.#landMakerAt(tear.at), tier, fought, among: this.rules.loot === "tagged" ? open.fought : null });
     }
 
     // A rift's altar smashed (`by` struck it the last time): the rift closed, and for each hero who
@@ -4826,7 +4879,10 @@ export class Host {
         const heroes = [...this.players.values()].filter((player) => {
             const actor = this.battle.actor(player.id);
 
-            return actor && !actor.dead && actor.map === "town" && (hypot(actor.x - open.at[0], actor.y - open.at[1]) <= BRIMSTONE.reach || (open.fought.includes(player.id) && inRift(open, [actor.x, actor.y])));
+            // (By tags, the world's rule `loot`: only those who fought there, at its heart or in its land)
+            const near = hypot((actor?.x ?? 0) - open.at[0], (actor?.y ?? 0) - open.at[1]) <= BRIMSTONE.reach;
+
+            return actor && !actor.dead && actor.map === "town" && (this.rules.loot === "tagged" ? open.fought.includes(player.id) && (near || inRift(open, [actor.x, actor.y])) : near || (open.fought.includes(player.id) && inRift(open, [actor.x, actor.y])));
         });
 
         this.#riftChests(open, heroes, square);
@@ -6240,12 +6296,18 @@ export class Host {
 
         const least = CREATURES[beast.creature]?.tiers[0] ?? beast.tier;
         const elite = beast.elite === "lead";
+        // (Who has a tag on it, core/battle.js TAGS: by the world's rule, `loot`, they're who's
+        // paid, wherever they stand and standing or fallen, and no one who only stood by; in any
+        // world, one of them fallen near it is paid with those standing)
+        const tagged = this.#tagged(id);
+        const byTags = this.rules.loot === "tagged";
 
         for (const player of this.players.values()) {
             const actor = this.battle.actor(player.id);
+            const has = tagged.includes(player.id);
 
             // (Nor one marked away, standing by: AFK)
-            if (!actor || actor.dead || player.away || actor.map !== fallen.map || hypot(actor.x - fallen.x, actor.y - fallen.y) > SPOILS_REACH) {
+            if (!actor || player.away || (byTags ? !has : (actor.dead && !has) || actor.map !== fallen.map || hypot(actor.x - fallen.x, actor.y - fallen.y) > SPOILS_REACH)) {
                 continue;
             }
 
@@ -12543,7 +12605,7 @@ export class Host {
         held.cleared = true;
         this.war?.clearPlace(id);
         this.#clearedBy(id, held.at, held.maps);
-        this.#opened(id, "chest", { at: held.at, maps: held.maps, map: held.map ?? "town", square: held.chest, people: held.race ?? "human", tier: held.tier, relic: held.relic });
+        this.#opened(id, "chest", { at: held.at, maps: held.maps, map: held.map ?? "town", square: held.chest, people: held.race ?? "human", tier: held.tier, relic: held.relic, ...(this.rules.loot === "tagged" ? { fought: held.fought ?? [], among: [] } : {}) });
         this.#event("cleared", { place: id, holder: held.holder });
     }
 
@@ -12554,14 +12616,16 @@ export class Host {
     // more dangerous its land, CHEST_GOLD; and what the dead guarded, one of their old relics
     // each, `relic`; a cache's, core/caches.js rollCache, as rich as its band was strong), theirs
     // alone to take, where it stood (`map`, `square`)
-    #opened(id, kind, { at, maps, map, square, people, maker = people, tier, mapTier = tier, relic = false, fought = [] }) {
+    #opened(id, kind, { at, maps, map, square, people, maker = people, tier, mapTier = tier, relic = false, fought = [], among = null }) {
         this.ground.delete(`chest-${id}`);
 
         for (const player of this.players.values()) {
             const actor = this.battle.actor(player.id);
             const there = Boolean(actor) && this.#atPlace(actor, at, maps);
 
-            if (!actor || actor.dead || (!there && !fought.includes(player.id))) {
+            // (`among`, loot by tags, the world's rule `loot`: of those there, only they have a
+            // share, no one who only stood by)
+            if (!actor || actor.dead || player.away || (!(there && (!among || among.includes(player.id))) && !fought.includes(player.id))) {
                 continue;
             }
 
@@ -13089,7 +13153,10 @@ export class Host {
             this.#event("rare", { change: "seen", id, n: active.n, card: active.card, at: where, map: active.map });
         }
 
-        const taking = standing.filter((actor) => far(actor) <= RARE.reach || foes.some((foe) => foe.target === actor.id));
+        // (By tags, the world's rule `loot`: those with a tag on one of its foes, or whom one's on;
+        // not one who only stands near)
+        const tagged = this.rules.loot === "tagged" ? new Set(foes.flatMap((foe) => this.#tagged(foe.id))) : null;
+        const taking = standing.filter((actor) => (tagged ? tagged.has(actor.id) : far(actor) <= RARE.reach) || foes.some((foe) => foe.target === actor.id));
 
         for (const id of this.legends.takes(taking.map(({ id }) => id))) {
             this.#event("rare", { change: "taken", id, n: active.n, card: active.card });
@@ -13132,7 +13199,7 @@ export class Host {
             return actor && !actor.dead && fell && actor.map === fell.map && hypot(actor.x - fell.x, actor.y - fell.y) <= RARE.reach;
         });
 
-        this.legends.takes([...new Set([...near, ...(this.players.has(event.by) ? [event.by] : [])])]);
+        this.legends.takes([...new Set([...(this.rules.loot === "tagged" ? this.#tagged(event.id) : near), ...(this.players.has(event.by) ? [event.by] : [])])]);
 
         if (active.ids.every((id) => !this.battle.actor(id) || this.battle.actor(id).dead)) {
             this.#rareEnd("done");
@@ -15250,7 +15317,7 @@ export class Host {
             return;
         }
 
-        this.#opened(id, "cache", { at: cache.at, maps: [], map: "town", square: cache.chest, people: "human", maker: this.#landMakerAt(cache.at), tier: cache.tier, fought: cache.fought ?? [] });
+        this.#opened(id, "cache", { at: cache.at, maps: [], map: "town", square: cache.chest, people: "human", maker: this.#landMakerAt(cache.at), tier: cache.tier, fought: cache.fought ?? [], among: this.rules.loot === "tagged" ? [] : null });
         this.#event("cache", { cache: id, change: "opened" });
     }
 
@@ -15413,7 +15480,7 @@ export class Host {
             const actor = this.battle.actor(player.id);
             const there = Boolean(actor) && this.#atPlace(actor, cache.at, []);
 
-            if (!hunters.has(player.id) || !actor || actor.dead || (!there && !(cache.fought ?? []).includes(player.id))) {
+            if (!hunters.has(player.id) || !actor || actor.dead || (!(there && this.rules.loot !== "tagged") && !(cache.fought ?? []).includes(player.id))) {
                 continue;
             }
 
