@@ -968,7 +968,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
                       to: door.kind === "dungeon" ? door.outside : (building ? street(building).arrive : null),
                       at: eventAt + party * LOAD.stagger,
                       came: -1,
-                      wasMade: door.kind === "dungeon" ? host.dungeons.has(door.site) : Boolean(building?.made),
+                      wasMade: door.kind === "dungeon" ? Boolean(host.delveOf(door.site)) : Boolean(building?.made),
                       madeAt: -1,
                       // (The longest step of its coming: { step, pass, ms })
                       longest: null,

@@ -14606,7 +14606,7 @@ test("a dungeon's way in out in the wilds is gone into: its first level drawn an
         Object.assign(player, { x: ox + 0.5, y: oy + 0.5, path: [], order: null, progress: null });
         await through(building.door);
 
-        const first = { map: player.map, drawn: Boolean(game.interiors.get(player.map)?.object.visible), lit: session.view.room?.lights.length ?? 0, foes: game.host.dungeons.get(site.id).awake[0]?.length ?? 0, sees: session.view.camera.far, fog: session.view.scene.fog.far };
+        const first = { map: player.map, drawn: Boolean(game.interiors.get(player.map)?.object.visible), lit: session.view.room?.lights.length ?? 0, foes: game.host.delveOf(site.id).awake[0]?.length ?? 0, sees: session.view.camera.far, fog: session.view.scene.fog.far };
 
         // (Its rock's pictures and its things' come and read: KTX2, kept compressed, with their
         // mipmaps)
@@ -14642,7 +14642,7 @@ test("a dungeon's way in out in the wilds is gone into: its first level drawn an
 
         await through(building.flights[0]);
 
-        const second = { map: player.map, drawn: Boolean(game.interiors.get(player.map)?.object.visible), woken: game.host.dungeons.get(site.id).awake[1]?.length ?? 0 };
+        const second = { map: player.map, drawn: Boolean(game.interiors.get(player.map)?.object.visible), woken: game.host.delveOf(site.id).awake[1]?.length ?? 0 };
 
         await through(building.flights[0]);
         await through(building.door);

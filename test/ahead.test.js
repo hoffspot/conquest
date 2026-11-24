@@ -454,7 +454,7 @@ describe("made ahead on the world server (server/ahead.js, server/workers.js)", 
 
         assert.ok(building().made);
         building().maps.forEach((id, k) => assert.equal(world.maps[id], ready.maps[k], id));
-        assert.ok(host.dungeons.get(site.id).awake[0].length > 0, "(its first level woken)");
+        assert.ok(host.delveOf(site.id).awake[0].length > 0, "(its first level woken)");
         assert.ok(navigatorOf(world.maps[building().maps[0]]).tiles.size > 0, "(and its mesh asked of, the tiles baked ahead taken)");
         building().maps.forEach((id) => assert.equal(navigatorOf(world.maps[id]).baked, 0, `no tile of ${id} baked in those steps`));
         ahead.dispose();

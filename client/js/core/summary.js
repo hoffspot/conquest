@@ -91,7 +91,8 @@ export function worldParts(host) {
         burnt: byId(host.burnt),
         rifts: one(host.hellRifts),
         done: one(host.done),
-        dungeons: byKey(host.dungeons),
+        // (Each site's run in use, by the site: core/host.js delves)
+        dungeons: byKey(host.delves()),
         // (The rest of the war a game shows, the plan's 3-25: the camps and depots on its maps,
         // the places cleared, its latest news, and the battles on that aren't an invasion's)
         camps: byId(war?.camps),

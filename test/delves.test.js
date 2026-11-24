@@ -15,7 +15,8 @@ import { buildDungeon } from "../client/js/core/dungeons/build.js";
 import { CHAMPIONS, COFFER, DELVES, foeKey, HOARD, hoardTier, rollCoffer, rollHoard } from "../client/js/core/dungeons/play.js";
 import { THEMES, themeFor } from "../client/js/core/dungeons/themes.js";
 import { hypot } from "../client/js/core/exact.js";
-import { HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { worldParts } from "../client/js/core/summary.js";
+import { delveKey, delveSite, HOST_PLAYER, Host, SNAPSHOT_STEPS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
 import { DUNGEON_ORIGINS, dungeonLevel, dungeonTier } from "../client/js/core/insides.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { CHEST_GOLD } from "../client/js/core/places.js";
@@ -239,12 +240,12 @@ describe("a dungeon in play (host.js #dungeons)", () => {
     });
 
     it("is made as a player comes near its way in, its first level woken and its small chests set out", () => {
-        assert.equal(host.dungeons.has(site.id), false);
+        assert.equal(Boolean(host.delveOf(site.id)), false);
         put(me, outside);
 
         const events = run(host, 1500, me);
 
-        delve = host.dungeons.get(site.id);
+        delve = host.delveOf(site.id);
         building = world.interiors.buildings.get(`site:${site.id}`);
 
         assert.ok(building.made);
@@ -492,9 +493,41 @@ describe("a dungeon in play (host.js #dungeons)", () => {
         assert.ok(events.some(({ type, change }) => type === "dungeon" && change === "cleared"));
     });
 
+    it("keeps its run by its site and its making, reached by its site (delveOf); told to a game by its site still; one kept by its site alone brought forward (SNAPSHOT_STEPS 55)", () => {
+        assert.equal(delveKey("dungeon-3", 2), "dungeon-3@2");
+        assert.equal(delveKey("dungeon-3"), "dungeon-3@0");
+        assert.equal(delveSite("dungeon-3@12"), "dungeon-3");
+
+        // (The run in use, and the one of its making; none of another, nor at another site)
+        assert.deepEqual([...host.dungeons.keys()], [delveKey(site.id, delve.generation)]);
+        assert.equal(host.delveOf(site.id), delve);
+        assert.equal(host.delveOf(site.id, delve.generation), delve);
+        assert.equal(host.delveOf(site.id, delve.generation + 1), null);
+        assert.equal(host.delveOf("no-such-site"), null);
+        assert.equal(host.delveOf(null), null);
+        assert.deepEqual([...host.delves()], [[site.id, delve]]);
+        assert.deepEqual([...worldParts(host).dungeons.keys()], [site.id], "(a game's told of it by its site, as ever)");
+
+        // A world kept before: its dungeons by their sites alone
+        const now = decode(encode(host.snapshot()));
+        const before = { ...now, version: 55, dungeons: now.dungeons.map(([key, kept]) => [delveSite(key), kept]) };
+        const forward = SNAPSHOT_STEPS[55](before);
+
+        assert.ok(SNAPSHOT_VERSION >= 56);
+        assert.equal(forward.version, 56);
+        assert.deepEqual(forward.dungeons, now.dungeons);
+        assert.deepEqual(before.dungeons[0][0], site.id, "(the one kept left as it was)");
+        assert.deepEqual(SNAPSHOT_STEPS[55]({ version: 55 }).dungeons, [], "(one with no dungeons kept)");
+
+        const again = Host.restore(buildWorld({ seed: 1 }), before);
+
+        assert.deepEqual(again.delveOf(site.id), delve);
+        assert.deepEqual([...again.dungeons.keys()], [delveKey(site.id, delve.generation)]);
+    });
+
     it("is kept in a snapshot, and taken up again as it was, the player still in it", () => {
         const again = Host.restore(buildWorld({ seed: 1 }), decode(encode(host.snapshot())));
-        const theirs = again.dungeons.get(site.id);
+        const theirs = again.delveOf(site.id);
 
         assert.deepEqual(theirs, delve);
         assert.ok(again.world.maps[me.map], "the level the player's on made again");
@@ -566,7 +599,7 @@ describe("a dungeon against a stronger side (host.js #dungeons, #wakeLevel; stre
         put(guest, [outside[0] + 1, outside[1]]);
         run(host, 1500, me);
 
-        const delve = host.dungeons.get(site.id);
+        const delve = host.delveOf(site.id);
         const building = world.interiors.buildings.get(`site:${site.id}`);
         const tier = cacheTier(dungeonTier(world.plan, site), 6);
 
@@ -611,7 +644,7 @@ describe("a dungeon against a stronger side (host.js #dungeons, #wakeLevel; stre
         // (Kept in a snapshot: made again as strong)
         const again = Host.restore(buildWorld({ seed: 1 }), decode(encode(host.snapshot())));
 
-        assert.equal(again.dungeons.get(site.id).tier, tier);
+        assert.equal(again.delveOf(site.id).tier, tier);
         assert.equal(again.world.interiors.buildings.get(`site:${site.id}`).tier, tier);
         assert.deepEqual(again.world.maps[building.maps[0]].plan, world.maps[building.maps[0]].plan);
     });

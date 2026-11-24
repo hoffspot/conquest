@@ -588,6 +588,16 @@ export const RULE_CHOICES = Object.freeze({
     stock: Object.freeze({ of: Object.freeze(["shared", "personal"]), shared: "personal", slice: "2-33", built: false }),
 });
 
+/**
+ * The key a dungeon's run is kept by (the host's `dungeons`): its site, and which making of it
+ * the run is of (its generation: 0, then one more each time it's made again). One run to a site
+ * at a time today; a run for each party is the scaling plan's 2-21.
+ */
+export const delveKey = (site, generation = 0) => `${site}@${generation}`;
+
+/** The site a dungeon's run is of, from its key (delveKey). */
+export const delveSite = (key) => key.slice(0, key.lastIndexOf("@"));
+
 /** A world's presets: `company`, a company of friends' (RULES as they are), or `shared`, a world shared by strangers'. */
 export const PRESETS = Object.freeze(["company", "shared"]);
 
@@ -866,7 +876,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 55;
+export const SNAPSHOT_VERSION = 56;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -1075,6 +1085,9 @@ export const SNAPSHOT_STEPS = Object.freeze({
     // 55: the rules a world shared by strangers changes (RULE_CHOICES), each as it was played:
     // today's way
     54: (snapshot) => ({ ...snapshot, version: 55, rules: { ...snapshot.rules, ...presetRules("company") } }),
+    // (A dungeon's run kept by its site and its making, delveKey, where it was kept by its site
+    // alone: the scaling plan's 2-19. One run to a site still: the one it had, under its making's key)
+    55: (snapshot) => ({ ...snapshot, version: 56, dungeons: (snapshot.dungeons ?? []).map(([site, delve]) => [delveKey(site, delve?.generation ?? 0), delve]) }),
 });
 
 // A band's invasion kept from before battles were fought in bodies (SNAPSHOT_STEPS 40): its two
@@ -1403,6 +1416,9 @@ function cardOf(standing, { knowledge = [] } = {}) {
 }
 
 export class Host {
+    // Which run each site has in use, by the runs kept (delveOf): made from them, never kept
+    #delving = { of: null, size: -1, keys: new Map() };
+
     /**
      * Whether what's near the players is looked for by cell (near.js), as it always is, or by
      * going through everyone and everything, as it was: only for the tests that check the world
@@ -1868,6 +1884,7 @@ export class Host {
          * again once everyone's left), arena (its boss's arena's way in: { on, since }, shut while
          * its fight goes on, #arenaWatch) }.
          */
+        // (Each dungeon's run, by its site and its making: delveKey. Reached through delveOf alone)
         this.dungeons = new Map();
 
 
@@ -2545,7 +2562,7 @@ export class Host {
                 }
 
                 // (A boss's arena's way in, shut either way while its fight goes on: #arenaWatch)
-                if (link.arena && this.dungeons.get(this.world.interiors?.buildings.get(link.building)?.site)?.arena?.on) {
+                if (link.arena && this.delveOf(this.world.interiors?.buildings.get(link.building)?.site)?.arena?.on) {
                     return refuse("arenaShut");
                 }
 
@@ -3854,7 +3871,9 @@ export class Host {
         const world = this.world;
 
         // (The dungeons as many times made as they were, and as strong, before any's made again)
-        for (const [id, { generation, tier = null }] of snapshot.dungeons ?? []) {
+        for (const [key, { generation, tier = null }] of snapshot.dungeons ?? []) {
+            const id = delveSite(key);
+
             world.interiors?.setGeneration(`site:${id}`, generation);
 
             if (tier !== null) {
@@ -11732,7 +11751,7 @@ export class Host {
         const away = from === actor ? 0 : atan2(y - from.y, x - from.x);
         const at = [x + cos(away) * FLOCK.from, y + sin(away) * FLOCK.from];
         const { count } = withinBudget(Math.max(0, Math.min(this.random.int(least, most), cap - about)), 0, BODIES.most - this.#bodiesNear(at, map));
-        const delve = caller.dungeon ? this.dungeons.get(caller.dungeon) : null;
+        const delve = caller.dungeon ? this.delveOf(caller.dungeon) : null;
         const level = delve ? delve.awake.findIndex((ids) => ids?.includes(id)) : -1;
         const free = this.#spots(map);
         const ids = [];
@@ -11783,7 +11802,7 @@ export class Host {
             return;
         }
 
-        const delve = boss.dungeon ? this.dungeons.get(boss.dungeon) : null;
+        const delve = boss.dungeon ? this.delveOf(boss.dungeon) : null;
         const level = delve ? delve.awake.findIndex((ids) => ids?.includes(id)) : -1;
         const building = delve ? this.world.interiors?.buildings.get(`site:${boss.dungeon}`) : null;
         const spots = building?.dungeon?.levels[level]?.arena?.spots ?? [];
@@ -12215,7 +12234,7 @@ export class Host {
             }
         }
 
-        const delve = one.dungeon ? this.dungeons.get(one.dungeon) : null;
+        const delve = one.dungeon ? this.delveOf(one.dungeon) : null;
 
         if (delve) {
             delve.awake = delve.awake.map((ids) => ids?.filter((each) => each !== id) ?? null);
@@ -12516,7 +12535,7 @@ export class Host {
         }
 
         const building = this.world.interiors?.buildings.get(link.building);
-        const delve = building ? this.dungeons.get(building.site) : null;
+        const delve = building ? this.delveOf(building.site) : null;
 
         return !delve?.dead.includes(foeKey(seal.level, seal.pack, 0));
     }
@@ -15687,7 +15706,7 @@ export class Host {
             const within = (reach) => this.#byWayIn(site, places, reach);
             const near = within(DELVES.near);
             const levels = on.get(site.id) ?? new Set();
-            let delve = this.dungeons.get(site.id);
+            let delve = this.delveOf(site.id);
 
             if (!delve && !near && !levels.size) {
                 continue;
@@ -15701,8 +15720,7 @@ export class Host {
             }
 
             if (!delve) {
-                delve = { generation: building.generation ?? 0, awake: [], dead: [], opened: [], cleared: false };
-                this.dungeons.set(site.id, delve);
+                delve = this.#delveBegun(site.id, building.generation ?? 0);
             }
 
             // (Cleared, and everyone gone: made again)
@@ -15828,6 +15846,56 @@ export class Host {
         player.arenaHome = null;
     }
 
+    /**
+     * A dungeon's run (the scaling plan's 2-19): the one in use at a site, or the one of a making
+     * of it (`generation`); null for none. A site has one run at a time today, so the one in use
+     * is the only one kept for it (the latest making's, were there ever more).
+     */
+    delveOf(site, generation = null) {
+        if (site === null || site === undefined) {
+            return null;
+        }
+
+        if (generation !== null) {
+            return this.dungeons.get(delveKey(site, generation)) ?? null;
+        }
+
+        // (Which run each site has in use, by its key: made again whenever the runs kept are
+        // another Map, as a copy restored or mirrored has it, or as many as they weren't)
+        const index = this.#delving;
+
+        if (index.of !== this.dungeons || index.size !== this.dungeons.size) {
+            index.of = this.dungeons;
+            index.size = this.dungeons.size;
+            index.keys = new Map();
+
+            for (const [key, delve] of this.dungeons) {
+                const [at, was] = [delveSite(key), index.keys.get(delveSite(key))];
+
+                if (was === undefined || (this.dungeons.get(was)?.generation ?? 0) <= (delve?.generation ?? 0)) {
+                    index.keys.set(at, key);
+                }
+            }
+        }
+
+        return this.dungeons.get(index.keys.get(site)) ?? null;
+    }
+
+    /** Each site's run in use, by the site (delveOf): what a game's told of the dungeons (core/summary.js). */
+    delves() {
+        return new Map([...this.dungeons].map(([key]) => delveSite(key)).map((site) => [site, this.delveOf(site)]));
+    }
+
+    // A site's run begun, of a making of it: kept by its key (delveKey), and what it is
+    #delveBegun(site, generation) {
+        const delve = { generation, awake: [], dead: [], opened: [], cleared: false };
+
+        this.dungeons.set(delveKey(site, generation), delve);
+        this.#delving.of = null;
+
+        return delve;
+    }
+
     // A dungeon about to be made, made as strong as its land, or as the mightiest of those finding
     // it (in it, or by its way in) is, whichever's the more, as a cache is (caches.js cacheTier);
     // kept with it (this.dungeons), and so made again as strong from a snapshot
@@ -15837,12 +15905,7 @@ export class Host {
         }
 
         const site = this.#siteOf(building.site);
-        let delve = this.dungeons.get(site.id);
-
-        if (!delve) {
-            delve = { generation: building.generation ?? 0, awake: [], dead: [], opened: [], cleared: false };
-            this.dungeons.set(site.id, delve);
-        }
+        const delve = this.delveOf(site.id) ?? this.#delveBegun(site.id, building.generation ?? 0);
 
         const finders = [...this.players.values()].filter((player) => {
             const actor = this.battle.actor(player.id);
@@ -15948,7 +16011,7 @@ export class Host {
     // made again); the boss: its hoard unlocked (and a hell's portal out unsealed); a hell's
     // level's own boss: its portal down unsealed
     #delveFell(beast, id, by = null) {
-        const delve = this.dungeons.get(beast.dungeon);
+        const delve = this.delveOf(beast.dungeon);
 
         if (!delve || beast.foe === null || delve.dead.includes(beast.foe)) {
             return;
@@ -15997,7 +16060,7 @@ export class Host {
     // rollHoard at each one's own power), theirs alone to take, where it stood; the hoard opened,
     // the dungeon cleared, to be made again once everyone's left
     #openDungeonChest(dropped) {
-        const delve = this.dungeons.get(dropped.dungeon);
+        const delve = this.delveOf(dropped.dungeon);
         const building = this.world.interiors?.buildings.get(`site:${dropped.dungeon}`);
         const k = building?.maps.indexOf(dropped.map) ?? -1;
         const level = k >= 0 ? building.dungeon?.levels[k] : null;
@@ -16079,7 +16142,11 @@ export class Host {
         }
 
         this.world.interiors.remake(building.key);
+        // (Its run, of its new making: kept under that making's key from now)
+        this.dungeons.delete(delveKey(site.id, delve.generation ?? 0));
         Object.assign(delve, { generation: building.generation, awake: [], dead: [], opened: [], cleared: false, masterFell: false });
+        this.dungeons.set(delveKey(site.id, delve.generation ?? 0), delve);
+        this.#delving.of = null;
         this.#event("dungeon", { site: site.id, change: "remade", name: building.name });
 
         if (tolls) {
@@ -20801,7 +20868,7 @@ export class Host {
         const interiors = this.world.interiors;
 
         if (building.kind === "dungeon") {
-            const said = this.dungeons.get(building.site);
+            const said = this.delveOf(building.site);
 
             if (!said || !Number.isFinite(said.tier)) {
                 return false;
