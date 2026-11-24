@@ -874,9 +874,12 @@ players of peoples at war are enemies (`pvp`), whose a foe's spoils are
 a dungeon for each party (`instances`), a unique met by each character (`rares`), and a shop's
 stock for each (`stock`). Each is a rule kept with the world (`RULES`, `RULE_CHOICES` in
 `client/js/core/host.js`), and each is as it is today until the slice of the plan that builds its
-other way turns it on. One is built: `pvp`, so on a `shared` world players and their companies
+other way turns it on. Two are built. `pvp`: on a `shared` world players and their companies
 are never each other's enemies, whatever their peoples' war, unless they're in a duel
-(docs/GAME.md, *Duels*); the rest play as a `company` world's do. `company` is what every world is unless it says otherwise. The preset changes only while
+(docs/GAME.md, *Duels*). `loot`: on a `shared` world a foe's spoils, its count for requests, and
+the chests its guards kept go to those who had a hand in the fight (who struck it, took its
+blows or mended those it was on), not to whoever stood near (docs/WILDS.md, *Who's paid: by
+nearness, or by tags*). The rest play as a `company` world's do. `company` is what every world is unless it says otherwise. The preset changes only while
 nobody's in the world (offline, or set aside), and a kept world takes its preset's rules as it's
 next opened. A world hosted in a browser never sets them.
 

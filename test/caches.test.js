@@ -41,9 +41,9 @@ const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5
 const caching = (host, id) => host.travel.set(id, { at: [host.battle.actor(id).x, host.battle.actor(id).y], walked: 0, next: null, heading: null, deck: ["cache", "cache", "cache"] });
 
 // A world (seed 2) with its player in it, hard to kill, the orc gone
-function hosted() {
+function hosted(rules = undefined) {
     const world = buildWorld({ seed: 2 });
-    const host = new Host(world, { populate: false });
+    const host = new Host(world, { populate: false, ...(rules ? { rules } : {}) });
 
     host.join({ id: HOST_PLAYER, hero: HERO });
     host.populate();
@@ -291,6 +291,48 @@ describe("the adventurers' caches in play (host.js #caches)", () => {
 
         put(me, [...share.square]);
         assert.equal(host.command(HOST_PLAYER, { type: "pickUp", ground: share.id }).ok, true);
+    });
+
+    it("with loot by tags (the world's rule): opened, a share for each with a tag on one of its guards, none for one who only stood by it", () => {
+        const context = hosted({ loot: "tagged" });
+        const { host, me } = context;
+
+        host.join({ id: "helper", hero: { ...HERO, name: "Bryn" } });
+        host.join({ id: "bystander", hero: { ...HERO, name: "Cass" } });
+        walk(context);
+
+        const [cache] = host.caches.values();
+        const at = [Math.floor(cache.at[0] + 4), Math.floor(cache.at[1])];
+
+        for (const id of [HOST_PLAYER, "helper", "bystander"]) {
+            Object.assign(host.battle.actor(id), { hp: 1e6, maxHp: 1e6, map: me.map });
+            put(host.battle.actor(id), at);
+        }
+
+        // (The bystander by it still, as #opened has "there", but out of its guards' way)
+        put(host.battle.actor("bystander"), [at[0] + 24, at[1]]);
+
+        // (The helper mended those the first of its guards was on, and struck nothing; the
+        // player's poison brings every guard down)
+        host.battle.actor(cache.ids[0]).tags = { helper: [0, 0, 20, host.battle.time] };
+
+        // (And any who come to their aid as they fall)
+        const events = [];
+
+        for (let round = 0; round < 6 && !cache.opened; round++) {
+            for (const id of cache.ids.filter((each) => host.battle.actor(each) && !host.battle.actor(each).dead)) {
+                host.battle.afflict(id, "poison", { by: HOST_PLAYER, damage: 1e7 });
+            }
+
+            events.push(...run(host, 3000));
+        }
+
+        const shares = events.filter((event) => event.type === "spoils" && event.cache).map(({ id }) => id).sort();
+
+        assert.ok(cache.opened, "opened");
+        assert.deepEqual([...cache.fought].sort(), ["helper", HOST_PLAYER].sort());
+        assert.deepEqual(shares, ["helper", HOST_PLAYER].sort(), "the bystander, there with them: nothing");
+        assert.ok(hypot(host.battle.actor("bystander").x - cache.at[0], host.battle.actor("bystander").y - cache.at[1]) < 30, "(near enough for a share by nearness)");
     });
 
     it("its guards drawn off and put down far from it: opened all the same, a share for each who fought them waiting at it, told so", () => {
