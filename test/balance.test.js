@@ -25,7 +25,10 @@ describe("the balance runner (scripts/balance.js)", () => {
     });
 
     it("has each side's aim: a share of what one alone loses, less the stronger the side", () => {
-        assert.deepEqual(Object.keys(SIDES), ["solo", "pair", "four", "hirelings", "company", "summoner"]);
+        assert.deepEqual(Object.keys(SIDES), ["solo", "pair", "four", "hirelings", "company", "summoner", "eight", "sixteen", "twentyfive"]);
+        // (The crowds: 8, 16 and 25 alike, answered as a shared world answers a crowd, run only when asked for)
+        assert.deepEqual(Object.entries(SIDES).filter(([, side]) => side.crowd).map(([name, { players, rules }]) => [name, players, rules.scaling]), [["eight", 8, "crowd"], ["sixteen", 16, "crowd"], ["twentyfive", 25, "crowd"]]);
+        assert.ok(SIDES.twentyfive.aim < SIDES.sixteen.aim && SIDES.sixteen.aim < SIDES.eight.aim && SIDES.eight.aim < SIDES.four.aim);
         assert.deepEqual(SIDES.company.hired, ["warrior", "cleric", "mage", "ranger"]);
         assert.equal(SIDES.solo.aim, 1);
         assert.ok(SIDES.four.aim < SIDES.pair.aim && SIDES.pair.aim < SIDES.solo.aim);

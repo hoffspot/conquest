@@ -84,7 +84,7 @@ import { dropTiles, MARGIN as WAY_MARGIN, navigatorOf } from "./navigation.js";
 import { Culling, Near } from "./near.js";
 import { FORTS, footprintOf, fortSize } from "./war/forts.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
-import { BODIES, fightingValue, groupsOf, opposition, scalingOf, sideStrength, STRENGTH, wholeOf, withinBudget } from "./strength.js";
+import { BODIES, fightingValue, groupsOf, opposition, scalingFor, sideStrength, STRENGTH, wholeOf, withinBudget } from "./strength.js";
 import { signOf, TRAILS, trailCreature, trailsOf } from "./tracks.js";
 import { gradeOfMap, huntersOf, nearTreasure, placeTreasure, rollTreasure, TREASURE, treasureBand, treasureCount, TREASURES, treasureTier, withMap } from "./treasure.js";
 
@@ -570,7 +570,7 @@ export const RULES = Object.freeze({ rest: "host", debug: "host", invasions: tru
 export const RULE_CHOICES = Object.freeze({
     pvp: Object.freeze({ of: Object.freeze(["war", "optin"]), shared: "optin", slice: "2-2", built: true }),
     loot: Object.freeze({ of: Object.freeze(["near", "tagged"]), shared: "tagged", slice: "2-13", built: true }),
-    scaling: Object.freeze({ of: Object.freeze(["side", "crowd"]), shared: "crowd", slice: "2-16", built: false }),
+    scaling: Object.freeze({ of: Object.freeze(["side", "crowd"]), shared: "crowd", slice: "2-16", built: true }),
     director: Object.freeze({ of: Object.freeze(["player", "area"]), shared: "area", slice: "2-18", built: false }),
     instances: Object.freeze({ of: Object.freeze(["site", "party"]), shared: "party", slice: "2-21", built: false }),
     rares: Object.freeze({ of: Object.freeze(["world", "character"]), shared: "character", slice: "2-25", built: false }),
@@ -11356,7 +11356,7 @@ export class Host {
         // (Against the side of the players near it, its leader tougher and more holding it, each
         // tougher too: strength.js; each of them as much of the war's band as ever, between them)
         const side = this.#sideNear(set.heart, "town", PLACE_BANDS.near);
-        const scale = side ? scalingOf(side.opposition) : null;
+        const scale = side ? scalingFor(side.strength, this.rules.scaling) : null;
         const least = Math.min(WORKS_OUT.most, Math.max(1, Math.round(works.band))) - 1;
         const folk = this.#scaled(least, scale, set.heart);
         const keeps = { works: works.id, temper: "territorial", guard: PLACE_BANDS.guard };
@@ -11546,7 +11546,7 @@ export class Host {
             }
 
             const side = this.#side(group);
-            const scale = scalingOf(side.opposition);
+            const scale = scalingFor(side.strength, this.rules.scaling);
 
             const nearAny = (x, y) => group.actors.some((each) => hypot(x - each.x, y - each.y) < WILDS.about);
             const about = [...this.wild].filter(([id, one]) => {
@@ -11609,11 +11609,19 @@ export class Host {
 
             const side = !lead ? null : this.rules.loot === "tagged" ? this.#sideTagging(members) : this.#sideNear([lead.x, lead.y], "town", STRENGTH.reach);
 
+            // (A crowd's answer, the world's rule `scaling`: the side halved or more, those of
+            // the pack still standing are no tougher than they'd be against it now; never tougher)
+            if (side && this.rules.scaling === "crowd" && side.strength <= pack.strength / 2) {
+                this.#eased(members, pack, side.strength);
+
+                continue;
+            }
+
             if (!side || side.strength < pack.strength + REINFORCE.grown) {
                 continue;
             }
 
-            const [was, now] = [scalingOf(opposition(pack.strength)), scalingOf(side.opposition)];
+            const [was, now] = [scalingFor(pack.strength, this.rules.scaling), scalingFor(side.strength, this.rules.scaling)];
             const wanted = wholeOf(pack.least * (now.count - was.count), this.random);
             const from = this.battle.actor(lead.target) ?? lead;
             const away = atan2(lead.y - from.y, lead.x - from.x);
@@ -11642,6 +11650,27 @@ export class Host {
                 this.#event("reinforced", { pack: id, ids });
             }
         }
+    }
+
+    // A pack's living members made as tough as they'd be against a side of `strength`, less than
+    // the one it was put out against (or last weighed against): each one's hit points, whole and
+    // left, by what the lesser side has of them over what the greater had (CROWD: an ordinary
+    // one's, a leader's), never more; and the pack weighed against that side from now
+    #eased(members, pack, strength) {
+        const [was, now] = [scalingFor(pack.strength, "crowd"), scalingFor(strength, "crowd")];
+
+        for (const actor of members) {
+            const wild = this.wild.get(actor.id);
+            const leads = Boolean(wild?.master || wild?.elite === "lead");
+            const by = leads ? now.leader / was.leader : now.health / was.health;
+
+            if (by < 1) {
+                actor.maxHp = Math.max(1, Math.round(actor.maxHp * by));
+                actor.hp = Math.max(1, Math.min(actor.maxHp, Math.round(actor.hp * by)));
+            }
+        }
+
+        pack.strength = strength;
     }
 
     // The wild's creatures by the pack each is of (pack -> their ids, in the wild's order: what
@@ -12212,7 +12241,7 @@ export class Host {
             const at = this.world.maps?.town?.campAt?.(camp) ?? camp.at;
             // (Against the side of the players near it, more of them and each tougher: strength.js)
             const side = this.#sideNear(camp.at, "town", camp.roam + WILDS.camp);
-            const scale = side ? scalingOf(side.opposition) : null;
+            const scale = side ? scalingFor(side.strength, this.rules.scaling) : null;
             const least = Math.min(5, 1 + Math.floor(tier / 2));
             const folk = this.#scaled(least, scale, at);
             const ids = this.#pack({ creature, tier, count: folk.count }, at, { camp: camp.id, roam: 4, temper: "territorial", health: folk.health, least });
@@ -12266,7 +12295,7 @@ export class Host {
             const nearest = homes.reduce((best, each) => (hypot(each.at[0] - den.at[0], each.at[1] - den.at[1]) < hypot(best.at[0] - den.at[0], best.at[1] - den.at[1]) ? each : best));
             const tier = denTier(den, nearest.home);
             const side = this.#sideNear(den.at, "town", DEN.near);
-            const scale = side ? scalingOf(side.opposition) : null;
+            const scale = side ? scalingFor(side.strength, this.rules.scaling) : null;
             const ids = [];
             const due = (this.slain[den.id] ?? -Infinity) <= this.battle.time;
 
@@ -12341,7 +12370,7 @@ export class Host {
             // (Against the side of the players near it or within it, its master tougher and more of
             // its guards, each tougher too: strength.js)
             const side = this.#sideOn(inside?.maps ?? [], site.at, lair.near);
-            const scale = side ? scalingOf(side.opposition) : null;
+            const scale = side ? scalingFor(side.strength, this.rules.scaling) : null;
 
             if ((lair.night || (this.slain[site.id] ?? -Infinity) <= this.battle.time) && !cleared) {
                 ids.push(...this.#pack({ creature: master, tier, count: 1 }, keeps?.square ?? at, { lair: site.id, master: true, roam: 3, map: keeps?.map ?? "town", health: scale?.leader ?? 1 }));
@@ -12577,7 +12606,7 @@ export class Host {
             // (Against the side of the players near it or within it, its leader tougher and more of
             // its band, each tougher too: strength.js)
             const side = this.#sideOn(inside?.maps ?? [], at, PLACE_BANDS.near);
-            const scale = side ? scalingOf(side.opposition) : null;
+            const scale = side ? scalingFor(side.strength, this.rules.scaling) : null;
             const least = PLACE_BANDS.count[place.size] + Math.floor(tier / PLACE_BANDS.per);
             const { count, health } = this.#scaled(least, scale, at);
             const ring = PLACE_BANDS.ring[place.size];
@@ -15041,7 +15070,7 @@ export class Host {
         const style = ambushStyle(land.biome, land.race, this.random, { dark });
         const members = ambushBand(style, land.biome, land.race, cacheCount(tier, this.random), this.random);
         const side = group ? this.#side(group) : null;
-        const scale = side ? scalingOf(side.opposition) : null;
+        const scale = side ? scalingFor(side.strength, this.rules.scaling) : null;
         const id = `ambush-${this.nextAmbush++}`;
         const ids = [];
         const roles = {};
@@ -15292,7 +15321,7 @@ export class Host {
     // last falls; a treasure's (`treasure`: its id) buried, dug up once they have (#unearth). Its id
     #putBand(heart, chest, { band, tier, count, group = null, elite = false, treasure = null }) {
         const side = group ? this.#side(group) : null;
-        const scale = side ? scalingOf(side.opposition) : null;
+        const scale = side ? scalingFor(side.strength, this.rules.scaling) : null;
         const folk = this.#scaled(count - 1, scale, heart);
         const id = `cache-${this.nextCache++}`;
         const keeps = { cache: id, pack: id, temper: "territorial", guard: CACHES.guard };
@@ -15744,7 +15773,7 @@ export class Host {
         // mini-bosses tougher, more of each pack and each of them tougher too: strength.js; the
         // more of a pack beside those its plan has, by them)
         const side = this.#sideOn([map, building.maps[k - 1]].filter(Boolean), k === 0 && !site.parent ? site.at : null, DELVES.near);
-        const scale = side ? scalingOf(side.opposition) : null;
+        const scale = side ? scalingFor(side.strength, this.rules.scaling) : null;
 
         for (const pack of level.packs) {
             const group = `pack-${this.nextWild}`;
