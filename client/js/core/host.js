@@ -11585,7 +11585,9 @@ export class Host {
     // More of a pack come from just past the fight, when the side it's fighting has grown by
     // REINFORCE.grown or more since it was put out (or more came last): as many more as the
     // opposition grown has them, each as tough as it has them, held to the body budget; those
-    // already there as they were. A pack gone is forgotten
+    // already there as they were. A pack gone is forgotten. The side it's fighting: the players
+    // near it; or, loot by tags (the world's rule `loot`), those with a tag on one of it
+    // (core/battle.js TAGS), so one who only walks past brings no more
     #reinforce() {
         // (Each pack's creatures from the wild's gone through once for them all, #packMates: made
         // at the first pack and again once any more are put out; or all the wild for each pack)
@@ -11605,7 +11607,7 @@ export class Host {
                 this.packs.delete(id);
             }
 
-            const side = lead ? this.#sideNear([lead.x, lead.y], "town", STRENGTH.reach) : null;
+            const side = !lead ? null : this.rules.loot === "tagged" ? this.#sideTagging(members) : this.#sideNear([lead.x, lead.y], "town", STRENGTH.reach);
 
             if (!side || side.strength < pack.strength + REINFORCE.grown) {
                 continue;
@@ -11862,6 +11864,14 @@ export class Host {
         const { count, health } = withinBudget(wanted, least, BODIES.most - this.#bodiesNear(at, map));
 
         return { count, health: health * scale.health };
+    }
+
+    // The side of the players with a tag on any of some of the wild (`members`, their actors:
+    // core/battle.js TAGS, #tagged), those standing, weighed as one group's (#side), or null for none
+    #sideTagging(members) {
+        const actors = [...new Set(members.flatMap(({ id }) => this.#tagged(id)))].map((id) => this.battle.actor(id)).filter((actor) => actor && !actor.dead);
+
+        return actors.length ? this.#side({ actors }) : null;
     }
 
     // The side of the players near a place (standing, on `map`, within `within` metres of `at`),
