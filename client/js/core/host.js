@@ -16109,7 +16109,7 @@ export class Host {
 
     // A dungeon cleared and everyone gone from it, made again: its foes let go (wherever they
     // are), what's left in it gone (the fallen, what's on the ground), its levels made anew the
-    // next time a player comes (Interiors.remake: the next generation). The Order of the Bell's
+    // next time a player comes (Interiors.retire, and its next generation in use: setGeneration). The Order of the Bell's
     // keep, its Prior felled in it: the Great Bell heard tolling far and wide, and its Prior
     // walking again at the top of it (SCENERY `court.tolls`)
     #remakeDungeon(site, building, delve) {
@@ -16141,7 +16141,8 @@ export class Host {
             }
         }
 
-        this.world.interiors.remake(building.key);
+        this.world.interiors.retire(building.key);
+        this.world.interiors.setGeneration(building.key, building.generation + 1);
         // (Its run, of its new making: kept under that making's key from now)
         this.dungeons.delete(delveKey(site.id, delve.generation ?? 0));
         Object.assign(delve, { generation: building.generation, awake: [], dead: [], opened: [], cleared: false, masterFell: false });
@@ -20875,7 +20876,7 @@ export class Host {
             }
 
             if (building.made && (building.generation !== said.generation || building.tier !== said.tier)) {
-                interiors.remake(building.key);
+                interiors.retire(building.key);
             }
 
             interiors.setGeneration(building.key, said.generation ?? 0);

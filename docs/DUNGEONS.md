@@ -1018,7 +1018,7 @@ through, its squares one pool) and `@` the heart its Halls of Bone beat to. The 
   once (kept with the chests opened).
 - **Opening the hoard clears the dungeon.** Its icon goes grey. Once every player's left it and is
   `DELVES.far` (120 m) from its way in, it's made again: its foes and what's left on its floors
-  gone, its levels thrown away and made anew from the next generation (`Interiors.remake`), with
+  gone, its levels thrown away and made anew from the next generation (`Interiors.retire`, then `setGeneration`: the scaling plan's `2-20`, the interiors holding several makings of a site at once, each with its own maps and drawn in a lane of its own, `DUNGEON_ORIGINS.lane`, one in use at a time), with
   other rooms, other foes and other chests.
 
 ### Drawn (`world/interiors3d.js` `dungeon`, `world/caverns.js`, `world/dungeons3d.js`, `world/view.js`)
