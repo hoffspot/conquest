@@ -25,7 +25,15 @@ import { NewerDataError } from "./storage/versions.js";
  * as its preset has them (its `preset` setting: core/host.js PRESETS); and its away marks (afkFor).
  */
 export function rulesFor(meta) {
-    return { rest: "everyone", debug: meta.settings?.debugCommands ? "owner" : "none", invasions: true, afk: afkFor(meta), ...presetRules(meta.settings?.preset) };
+    return { rest: "everyone", debug: meta.settings?.debugCommands ? "owner" : "none", invasions: true, afk: afkFor(meta), ...presetRules(meta.settings?.preset), ...relaxedFor(meta) };
+}
+
+/**
+ * The rules of its preset a world's settings relax (storage/worlds.js): `freeFollowers`, every
+ * follower a player can lead, in a crowd and in a town's buildings, whatever its preset has.
+ */
+export function relaxedFor(meta) {
+    return meta.settings?.freeFollowers === true ? { followers: "free" } : {};
 }
 
 /**
@@ -82,7 +90,7 @@ export async function openWorld(stored, { build = buildWorld } = {}) {
 
     // (Its preset may have been changed since it was kept, which it is only while nobody's in it;
     // and its away marks, which it takes as it's opened)
-    host.preset(stored.meta.settings?.preset, { afk: afkFor(stored.meta) });
+    host.preset(stored.meta.settings?.preset, { afk: afkFor(stored.meta), rules: relaxedFor(stored.meta) });
 
     const forwarded = snapshot.version === SNAPSHOT_VERSION ? null : snapshot.version;
 

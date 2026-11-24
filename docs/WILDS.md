@@ -413,6 +413,25 @@ The balance runner has sides of 8, 16 and 25 alike answered so (`npm run balance
 eight,sixteen,twentyfive`); their aims are N^-0.2 still, not tuned against runs.
 (`test/strength.test.js`, `test/creatures.test.js`.)
 
+### A crowd's followers
+
+A world's rule, `followers` (core/host.js `RULES`, `CROWDING`; the scaling plan's `2-17`;
+`test/crowding.test.js`): `free`, as ever and unless a world says; `limited`, a world shared by
+strangers' (the `shared` preset), unless its own setting relaxes it (**freeFollowers**:
+docs/SERVER.md). By `limited`:
+
+- **In a crowd**, more than six players on one map within 80 m of a player, that player takes
+  on no hired adventurer past one (hiring, or sending for one mended: "Too many are gathered
+  here...") and calls, raises or tames no creature past one (told so; nothing comes). Those
+  already with them stay and fight: only new ones are held back (the owner's ruling, 24
+  November 2026).
+- **No one's followers come into a town's buildings** (a shop, a tavern, a guild: `#townInside`),
+  crowd or not. They wait outside **out of sight** (`#bring`: hidden as one lying in wait is,
+  core/battle.js `hidden`, so not drawn, not moving and no one's enemy; the owner: "We don't want
+  a mass of followers standing outside a shop"), the player told ("Those with you wait
+  outside."), and are in sight again as their leader comes out, or rises again elsewhere. One
+  hired inside a guild is with them there till they leave it.
+
 ### Where it applies
 
 Wherever foes are put out near the players, against the side there when they are:
