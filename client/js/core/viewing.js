@@ -37,7 +37,7 @@
 // Not yet: a dungeon's sealed rooms. Pure: no DOM, no network of its own.
 
 import { STEP_MS } from "./battle.js";
-import { Host } from "./host.js";
+import { delveKey, Host } from "./host.js";
 import { Mirror } from "./mirror.js";
 import { Joining, NET_VERSION, PACE } from "./netplay.js";
 import { Legends } from "./rare.js";
@@ -223,7 +223,8 @@ export class Viewing extends Joining {
         const dungeons = parts.get("dungeons");
 
         if (dungeons) {
-            host.dungeons = new Map(structuredClone([...dungeons]));
+            // (Told by the site; kept by the site and its making, as the host keeps them: delveKey)
+            host.dungeons = new Map(structuredClone([...dungeons]).map(([site, delve]) => [delveKey(site, delve?.generation ?? 0), delve]));
         }
 
         this.#parties(parts.get("parties"));
@@ -694,7 +695,7 @@ export class Viewing extends Joining {
             } else if (event.type === "fizzle") {
                 host.battle.projectiles = host.battle.projectiles.filter(({ id }) => id !== event.projectile);
             } else if (event.type === "dungeon" && event.change === "remade") {
-                const said = host.dungeons.get(event.site);
+                const said = host.delveOf(event.site);
                 const building = host.world.interiors?.buildings.get(`site:${event.site}`);
 
                 // (Unless its summary's word came with this very frame, and is of the new making)

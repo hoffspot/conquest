@@ -439,7 +439,7 @@ describe("Bellhaven's court, held by the Order of the Bell (host.js, core/scener
             run(host, 250, [ada]);
         }
 
-        const delve = host.dungeons.get(keep.site);
+        const delve = host.delveOf(keep.site);
         const generation = keep.generation ?? 0;
 
         assert.ok(delve, "(its keep gone into)");

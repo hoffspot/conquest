@@ -257,7 +257,7 @@ describe("a dungeon wanted soon (core/host.js soon, core/insides.js give)", () =
         play(game, 12, { ahead: true });
         assert.ok(building.made, "(made)");
         assert.deepEqual(dungeonFrom(building), { seed: soon.seed, theme: soon.theme, tier: soon.tier, generation: soon.generation });
-        assert.equal(host.dungeons.get(site.id).tier, soon.tier);
+        assert.equal(host.delveOf(site.id).tier, soon.tier);
         assert.deepEqual(host.soon().dungeons, [], "made: no longer wanted");
     });
 

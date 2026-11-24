@@ -1235,7 +1235,7 @@ through, its squares one pool) and `@` the heart its Halls of Bone beat to. The 
 
 ### Kept
 
-The host keeps each dungeon's state by site (`host.dungeons`): its generation, its tier, which
+The host keeps each dungeon's run by its site and its making (`host.dungeons`, by `delveKey`: "dungeon-3@2"; reached through `delveOf(site)`, the run in use there, alone: the scaling plan's `2-19`, a run for each party being its `2-21`; a site has one run at a time today, and a game's told of it by its site still, `delves`): its generation, its tier, which
 levels are awake, the slain, the chests opened, and whether it's cleared. It goes into snapshots
 (`SNAPSHOT_VERSION` 8; its tier from 26) and saves, and a game taken up again makes each dungeon's levels as many
 times over as they had been, so a player saved deep in a dungeon is back where they were.

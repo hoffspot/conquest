@@ -186,7 +186,7 @@ describe("searching the fallen in an ants' nest (host.js #openDungeonChest)", ()
         assert.equal(left.from, "remains");
         assert.equal(left.for, HOST_PLAYER);
         assert.ok(left.bundle.gold > 0);
-        assert.ok(host.dungeons.get(site.id).opened.includes(one.coffer));
+        assert.ok(host.delveOf(site.id).opened.includes(one.coffer));
 
         // (Searched once: gone, and nothing more to be had of it)
         assert.equal(host.ground.has(one.id), false);

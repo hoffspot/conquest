@@ -151,7 +151,7 @@ describe("a building's people are made as a player goes in, not as they come nea
         unexpired("Host.peopling", EXPIRES);
         assert.equal(Host.peopling, true, "on: the owner's ruling");
         assert.ok(NET_VERSION >= 228, "a copy on the old rules would have them in its battle: it can't join");
-        assert.equal(SNAPSHOT_VERSION, 55, "and nothing new is kept for it: the save is as it was (54 is the stash's, client/js/core/progress.js STRONGROOM; 55 the rules a shared world changes, the plan's 2-1)");
+        assert.equal(SNAPSHOT_VERSION, 56, "(56 is a dungeon's run kept by its site and its making, the scaling plan's 2-19) and nothing new is kept for it: the save is as it was (54 is the stash's, client/js/core/progress.js STRONGROOM; 55 the rules a shared world changes, the plan's 2-1)");
         assert.deepEqual([RELEVANCE.near, RELEVANCE.far, RELEVANCE.away], [22, 90, 40]);
     });
 

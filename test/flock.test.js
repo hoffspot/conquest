@@ -139,7 +139,7 @@ describe("a flock brought (host.js #flock)", () => {
         put(me, world.maps.town.sites.set.get(site.id).entrance.outside);
         run(1500);
         building = world.interiors.buildings.get(`site:${site.id}`);
-        delve = host.dungeons.get(site.id);
+        delve = host.delveOf(site.id);
         assert.ok(cross(building.door));
 
         for (const flight of building.flights) {

@@ -108,7 +108,7 @@ function inADungeon({ followers }) {
     run(host, 1500, me);
 
     const building = world.interiors.buildings.get(`site:${site.id}`);
-    const delve = host.dungeons.get(site.id);
+    const delve = host.delveOf(site.id);
 
     assert.ok(cross(host, me, building.door), "(into the dungeon)");
     run(host, 1000, me);

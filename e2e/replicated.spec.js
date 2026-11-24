@@ -305,7 +305,7 @@ test("a dungeon's way in and its first floor in a replicated world: the floors m
         const place = game.host.world.plan.sites.find((one) => one.id === id);
         const building = game.host.world.interiors.buildings.get(`site:${id}`);
 
-        return { at: [me.x, me.y], map: me.map, to: place.at, far: Math.hypot(place.at[0] - me.x, place.at[1] - me.y), ready: game.host.open.has(`site:${id}`), door: building?.door?.id ?? null, built: Boolean(building?.maps?.[0] && game.interiors.has(building.maps[0])), floors: building?.maps ?? [], tier: game.host.dungeons.get(id)?.tier ?? null };
+        return { at: [me.x, me.y], map: me.map, to: place.at, far: Math.hypot(place.at[0] - me.x, place.at[1] - me.y), ready: game.host.open.has(`site:${id}`), door: building?.door?.id ?? null, built: Boolean(building?.maps?.[0] && game.interiors.has(building.maps[0])), floors: building?.maps ?? [], tier: game.host.delveOf(id)?.tier ?? null };
     }, site);
 
     await expect.poll(async () => {

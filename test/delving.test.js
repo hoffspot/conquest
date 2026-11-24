@@ -124,7 +124,7 @@ function play({ ahead, far = false }) {
     game.snapshot = encode(host.snapshot());
     game.levels = building().maps.map((id) => world.maps[id]);
     game.flights = building().flights;
-    game.awake = host.dungeons.get(site.id)?.awake.map((ids) => ids?.length ?? 0);
+    game.awake = host.delveOf(site.id)?.awake.map((ids) => ids?.length ?? 0);
     maker.dispose();
     Ahead.delving = true;
 
