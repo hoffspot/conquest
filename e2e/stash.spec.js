@@ -212,10 +212,16 @@ test("the stash's Sort and Stow alike; held, a thing's card; Enter sends a thing
     await page.evaluate(() => window.pellagos.game.start());
     await page.keyboard.press("Escape");
     await expect(pack.locator(".pack-about")).toBeHidden();
-    await place(0).focus();
-    await page.keyboard.press("Enter");
-    // (Sent across at the game's next step, which the key doesn't wait for)
-    await expect.poll(() => stashed(page, 0)).toEqual([[1, "meal", 6], [2, "ale", 4]]);
+    // (The pack's drawn again a frame after the card's put away, and a place drawn again isn't
+    // the one that was focused: a key pressed between the two goes to nothing. So the place as
+    // it's drawn now is focused and the key pressed, till it's taken; the thing's sent across at
+    // the game's next step, which the key doesn't wait for. A second press finds the place
+    // empty, and sends nothing)
+    await expect(async () => {
+        await place(0).focus();
+        await page.keyboard.press("Enter");
+        await expect.poll(() => stashed(page, 0), { timeout: 2000 }).toEqual([[1, "meal", 6], [2, "ale", 4]]);
+    }).toPass({ timeout: 20000 });
     expect(await carried(page)).toEqual([[0, "sword", 1], [25, "potion", 5]]);
     await page.keyboard.press("Escape");
     await expect(page.locator(".pack")).toBeHidden();
