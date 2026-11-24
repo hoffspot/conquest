@@ -69,7 +69,7 @@ import { CRAFT_REFUSALS, craftItem, inCapital, junkSalvage, previewOf, salvageOf
 import { ON_BLOW } from "./materials.js";
 import { atWarTable, mayRead, warTableOn } from "./wartable.js";
 import { rollSpoils, SPOILS } from "./spoils.js";
-import { eligible } from "./credit.js";
+import { creditOf, eligible } from "./credit.js";
 import { campTier, CHUNK, CHUNKS, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, handInAt, HUNTING, meritIn, meritOf, MOST_CARRIED, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, REQUESTS, soldiersAbout, Standing, TITHE_RATE } from "./standing.js";
 import { hadChance, untilOf } from "./hurry.js";
@@ -6301,10 +6301,15 @@ export class Host {
         // world, one of them fallen near it is paid with those standing)
         const tagged = this.#tagged(id);
         const byTags = this.rules.loot === "tagged";
+        // (By tags, on a leader, a pack's or a lair's or den's master: each paid by the medal
+        // their hand in it earns, core/credit.js CREDIT: that share of its gold, and of the
+        // chance of its prize)
+        const medals = byTags && (elite || beast.master) ? new Map(creditOf(this.battle.tagsOf(id), { hp: fallen.maxHp, leader: true, away: (one) => this.players.get(one)?.away === true }).map((credit) => [credit.player, credit])) : null;
 
         for (const player of this.players.values()) {
             const actor = this.battle.actor(player.id);
             const has = tagged.includes(player.id);
+            const earned = medals?.get(player.id) ?? null;
 
             // (Nor one marked away, standing by: AFK)
             if (!actor || player.away || (byTags ? !has : (actor.dead && !has) || actor.map !== fallen.map || hypot(actor.x - fallen.x, actor.y - fallen.y) > SPOILS_REACH)) {
@@ -6320,7 +6325,7 @@ export class Host {
                 bundle.items.push({ ...makeUnique(this.random.pick(own), levelOf(this.mightFor(player.id)), this.random), count: 1 });
             }
 
-            if (elite) {
+            if (elite && (!earned || earned.pay >= 1 || this.random.chance(earned.pay))) {
                 bundle.items.push(elitePrize(beast.tier, this.random, { people: (fallen.map === "town" && landAt(this.world.plan, fallen.x, fallen.y).race) || "human", maker: this.#landMaker(fallen), ...this.#making(player, this.#fightPower(player, fallen, beast), beast.creature) }));
             }
 
@@ -6330,6 +6335,10 @@ export class Host {
                 bundle.items.push(elitePrize(beast.tier, this.random, { people: (fallen.map === "town" && landAt(this.world.plan, fallen.x, fallen.y).race) || "human", maker: this.#landMaker(fallen), ...this.#making(player, this.#fightPower(player, fallen, beast), beast.creature) }));
             }
 
+            if (earned) {
+                bundle.gold = Math.round(bundle.gold * earned.pay);
+            }
+
             if (!bundle.gold && !bundle.items.length) {
                 continue;
             }
@@ -6337,7 +6346,7 @@ export class Host {
             const ground = `ground-${this.nextGround++}`;
 
             this.ground.set(ground, { id: ground, bundle, for: player.id, from: beast.creature, map: fallen.map, square: [...fallen.square], until: this.battle.time + GROUND_MS });
-            this.#event("spoils", { id: player.id, ground, from: id, creature: beast.creature });
+            this.#event("spoils", { id: player.id, ground, from: id, creature: beast.creature, ...(earned?.medal ? { medal: earned.medal } : {}) });
         }
     }
 

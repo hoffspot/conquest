@@ -2,7 +2,7 @@
 // plan's 2-12): pure, from its tag ledger (core/battle.js TAGS). Read by no rule yet
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { CREDIT, creditOf, eligible, MEDALS, tierOf } from "../client/js/core/credit.js";
+import { CREDIT, creditOf, eligible, MEDALS, medalWords, tierOf } from "../client/js/core/credit.js";
 
 const tag = (player, weight) => ({ player, done: weight, taken: 0, healed: 0, weight });
 
@@ -66,6 +66,13 @@ describe("credit for a foe brought down (core/credit.js)", () => {
             { player: "passer", medal: "bronze", pay: 0.75 },
         ]);
         assert.deepEqual(creditOf([], { hp: 1000, leader: true }), []);
+    });
+
+    it("tells a player of their medal", () => {
+        assert.equal(medalWords("gold", "wolf"), "A gold medal for bringing down the wolf: its spoils in full for you.");
+        assert.equal(medalWords("silver", "orc"), "A silver medal for bringing down the orc: most of its spoils for you.");
+        assert.equal(medalWords("bronze", "orc"), "A bronze medal for bringing down the orc: a share of its spoils for you.");
+        assert.equal(medalWords(null, "orc"), "");
     });
 
     it("changes nothing it's given", () => {

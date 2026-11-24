@@ -59,3 +59,10 @@ export function creditOf(tags, { hp, leader = false, away = null } = {}) {
         return { player, medal, pay: medal ? CREDIT[medal].pay : 1 };
     });
 }
+
+/** What a player's told of the medal they earned on a leader brought down (`name`: what it was, as in "the wolf"). */
+export function medalWords(medal, name) {
+    const share = { gold: "its spoils in full", silver: "most of its spoils", bronze: "a share of its spoils" }[medal];
+
+    return share ? `A ${medal} medal for bringing down the ${name}: ${share} for you.` : "";
+}

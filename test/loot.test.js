@@ -56,7 +56,29 @@ function served(loot) {
         return events.filter(({ type }) => type === "spoils").map(({ id: whose }) => whose).sort();
     };
 
-    return { host, spoils, one: host.battle.actor("p1"), two: host.battle.actor("p2") };
+    // A leader of `hp` hit points whole by the first player, felled by them (the last one of
+    // its hit points theirs), with `tags` on it: each player's medal ("none": a bundle with no
+    // medal), by id
+    const medals = (hp, tags = {}, { elite = "lead" } = {}) => {
+        const one = host.battle.actor("p1");
+        const id = `test-wolf-${wolves++}`;
+
+        host.wild.set(id, { creature: "wolf", tier: 1, pack: id, camp: null, lair: null, master: false, elite });
+        host.battle.add({ id, kind: "beast", name: "Wolf", weapon: "wolf", team: "wild", square: [one.square[0] + 1, one.square[1]], map: one.map, ai: "wild", hp: 1, wild: { creature: "wolf", tier: 1, temper: "defensive", guard: 0, roam: 0, leash: 40, pack: id, leader: null } });
+        Object.assign(host.battle.actor(id), { maxHp: hp, tags: Object.fromEntries(Object.entries(tags).map(([player, weight]) => [player, [weight, 0, 0, host.battle.time]])) });
+
+        const events = [];
+
+        assert.equal(host.command("p1", { type: "engage", target: id }).ok, true);
+
+        for (let t = 0; t < 20000 && !events.some(({ type, id: whose }) => type === "death" && whose === id); t += STEP_MS) {
+            events.push(...host.advance(STEP_MS));
+        }
+
+        return Object.fromEntries(events.filter(({ type }) => type === "spoils").map(({ id: whose, medal = "none" }) => [whose, medal]));
+    };
+
+    return { host, spoils, medals, one: host.battle.actor("p1"), two: host.battle.actor("p2") };
 }
 
 describe("who's paid for a foe brought down (host.js RULES loot)", () => {
@@ -98,5 +120,29 @@ describe("who's paid for a foe brought down (host.js RULES loot)", () => {
 
         host.players.get("p2").away = true;
         assert.deepEqual(spoils({ p2: [3, 0, 0] }), ["p1"], "marked away: nothing");
+    });
+
+    it("by tags, on a leader: each paid by their medal, told with their spoils; none on an ordinary foe, nor by nearness", () => {
+        const { medals } = served("tagged");
+
+        // (The feller's one hit point of a thousand: bronze; the other's 30, silver; 60, gold)
+        assert.deepEqual(medals(1000, { p2: 30 }), { p1: "bronze", p2: "silver" });
+        assert.deepEqual(medals(1000, { p2: 60 }), { p1: "bronze", p2: "gold" });
+        assert.deepEqual(medals(10, { p2: 5 }), { p1: "gold", p2: "gold" }, "a tenth of it each: gold");
+        assert.ok(Object.values(medals(1000, { p2: 60 }, { elite: null })).every((medal) => medal === "none"), "an ordinary foe: whatever it drops, no medal");
+        assert.deepEqual(served("near").medals(1000, { p2: 60 }), { p1: "none", p2: "none" }, "by nearness: none");
+    });
+
+    it("eight on one leader, by tags: each their medal by how much of a hand they had", () => {
+        const { host, medals } = served("tagged");
+
+        for (let k = 3; k <= 8; k++) {
+            host.join({ id: `p${k}`, hero: { ...HERO, name: `Guest ${k}` } });
+            Object.assign(host.battle.actor(`p${k}`), { map: host.battle.actor("p1").map });
+            put(host.battle.actor(`p${k}`), [host.battle.actor("p1").square[0] + 100 + k, host.battle.actor("p1").square[1]]);
+        }
+
+        // (Of 2,000 hit points among eight: gold at 100, silver at 50; one with no tag, nothing)
+        assert.deepEqual(medals(2000, { p2: 800, p3: 100, p4: 99, p5: 50, p6: 49, p7: 3 }), { p1: "bronze", p2: "gold", p3: "gold", p4: "silver", p5: "silver", p6: "bronze", p7: "bronze" });
     });
 });

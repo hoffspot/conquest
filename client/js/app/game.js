@@ -196,6 +196,7 @@ import { ReaderPanel } from "./reader.js";
 import { Journey } from "./journey.js";
 import { SpellbookPanel } from "./spellbook.js";
 import { PartyPanel, PLAYERS_PAGE, SHOUT_TO } from "./partypanel.js";
+import { medalWords } from "../core/credit.js";
 import { PackPanel } from "./pack.js";
 import { Governor } from "./governor.js";
 import { PHASE, telemetry } from "./telemetry.js";
@@ -12074,9 +12075,17 @@ export class Game {
         } else if (event.type === "spoils") {
             if (this.#once("spoils")) {
                 this.hud.message(`The ${CREATURES[event.creature]?.name.toLowerCase() ?? "creature"} dropped something. ${SPOILS_HINT}`, SPOILS_TOLD);
+            } else if (event.medal) {
+                // (A leader brought down in a world where loot's by tags: the medal the player's
+                // hand in it earned, core/credit.js CREDIT)
+                this.hud.message(medalWords(event.medal, CREATURES[event.creature]?.name.toLowerCase() ?? "creature"), 3.5);
             }
 
             this.sound?.play("drop");
+
+            if (event.medal) {
+                this.sound?.play("questDone", { delay: 0.3 });
+            }
         } else if (event.type === "bought" || event.type === "sold") {
             this.sound?.play("coins");
         } else if (event.type === "junkSold") {
