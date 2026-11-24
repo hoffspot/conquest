@@ -432,6 +432,27 @@ docs/SERVER.md). By `limited`:
   outside."), and are in sight again as their leader comes out, or rises again elsewhere. One
   hired inside a guild is with them there till they leave it.
 
+### An area's director
+
+A world's rule, `director` (core/host.js `RULES`; the scaling plan's `2-18`;
+`test/director.test.js`): `player`, as ever and unless a world says, a card dealt ahead of each
+player (one for those together) as far as they cross the wilds; `area`, a world shared by
+strangers' (the `shared` preset), the same decks, but no more dealt into the land than it holds
+(core/director.js `AREA`, `areaCap`; `#areaFull`):
+
+- The land's in cells of 256 m. A cell and those round it hold no more of the director's things
+  at once than 2 and the square root, rounded down, of the players there: 3 for one, 4 for
+  four, 5 for nine to fifteen, 7 for twenty-five.
+- The things counted: the caches still shut (not a treasure's keepers), the finds, the
+  strangers, what's across the way, and the ambushes not yet sprung. Fresh tracks aren't one.
+- A card that would be one more **waits in its deck**, tried again a moment later, till
+  something's opened, searched, sprung or let go.
+- A card's put no further ahead than the next cell, so every block of three cells by three it
+  could be one more in is counted. No block ever holds more, however many players deal into
+  it from either side: twelve in a column 70 m apart, walked 2.2 km over the same ground, never
+  have more than five about any of them, where dealt to each player they have eleven.
+- A rare encounter's card is dealt whatever the area holds: it's the character's own.
+
 ### Where it applies
 
 Wherever foes are put out near the players, against the side there when they are:

@@ -19,7 +19,7 @@ import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH, TAUNT } from "./battle.js";
 import { count, lap, probing } from "./probe.js";
 import { encode, encodePlain } from "./wire.js";
 import { CACHE_BANDS, cacheBand, cacheClear, cacheCount, CACHES, cacheTier, elitePrize, openAround, rollCache, roundOf, startsOf } from "./caches.js";
-import { banditToll, clearedTurnsUp, clearRate, DIRECTOR, FINDS, foodFor, FRESH, freshTrail, HEALING_DRAUGHTS, noteOf, obstacleBox, OBSTACLES, PACING, peacefulNext, rollRemains, rollSpilled, shuffled, STRANGERS, TRACKLESS, WELL_RESTED } from "./director.js";
+import { AREA, areaCap, banditToll, clearedTurnsUp, clearRate, DIRECTOR, FINDS, foodFor, FRESH, freshTrail, HEALING_DRAUGHTS, noteOf, obstacleBox, OBSTACLES, PACING, peacefulNext, rollRemains, rollSpilled, sameArea, shuffled, STRANGERS, TRACKLESS, WELL_RESTED } from "./director.js";
 import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
 import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollFallen, rollFloorChest, rollHoard } from "./dungeons/play.js";
 import { isEmote } from "./emotes.js";
@@ -582,7 +582,7 @@ export const RULE_CHOICES = Object.freeze({
     loot: Object.freeze({ of: Object.freeze(["near", "tagged"]), shared: "tagged", slice: "2-13", built: true }),
     scaling: Object.freeze({ of: Object.freeze(["side", "crowd"]), shared: "crowd", slice: "2-16", built: true }),
     followers: Object.freeze({ of: Object.freeze(["free", "limited"]), shared: "limited", slice: "2-17", built: true }),
-    director: Object.freeze({ of: Object.freeze(["player", "area"]), shared: "area", slice: "2-18", built: false }),
+    director: Object.freeze({ of: Object.freeze(["player", "area"]), shared: "area", slice: "2-18", built: true }),
     instances: Object.freeze({ of: Object.freeze(["site", "party"]), shared: "party", slice: "2-21", built: false }),
     rares: Object.freeze({ of: Object.freeze(["world", "character"]), shared: "character", slice: "2-25", built: false }),
     stock: Object.freeze({ of: Object.freeze(["shared", "personal"]), shared: "personal", slice: "2-33", built: false }),
@@ -12970,6 +12970,12 @@ export class Host {
             return true;
         }
 
+        // (By the world's rule, `director`: no more dealt into an area than it holds, core/
+        // director.js AREA; the card waits in its deck, tried again a moment later)
+        if (this.rules.director === "area" && this.#areaFull(actor)) {
+            return false;
+        }
+
         was.deck ??= shuffled(this.random);
 
         // (An ambush set aside, to come later in the deck, and the next card dealt in its stead:
@@ -13008,6 +13014,78 @@ export class Host {
         }
 
         return true;
+    }
+
+    // Where the director's things are, those that count against an area (core/director.js AREA):
+    // the caches still shut (not a treasure's keepers), the finds, the strangers, what's across
+    // the way, and the ambushes not yet sprung
+    #directed() {
+        return [
+            ...[...this.caches.values()].filter((cache) => !cache.opened && !cache.treasure).map(({ at }) => at),
+            ...[this.finds, this.strangers, this.obstacles].flatMap((kept) => [...kept.values()].map(({ at }) => at)),
+            ...[...this.ambushes.values()].filter(({ sprung }) => !sprung).map(({ heart }) => heart),
+        ].filter(Boolean);
+    }
+
+    // Whether the land a player's crossing holds as much of what the director deals as it may
+    // (core/director.js AREA, areaCap): against how many players stand in their cell and those
+    // round it. A card's put no further ahead than the next cell, and it's in nine blocks of
+    // three cells by three, so every block it could be one more in is counted: those with their
+    // middle within two cells of the player's. Full, if any of them holds as many as that; so no
+    // block of the land ever holds more, however many players deal into it from either side
+    #areaFull(actor) {
+        const cell = (value) => Math.floor(value / AREA.cell);
+        const [cx, cy] = [cell(actor.x), cell(actor.y)];
+        const held = new Map();
+
+        for (const [x, y] of this.#directed()) {
+            const [dx, dy] = [cell(x) - cx, cell(y) - cy];
+
+            if (Math.abs(dx) <= 3 && Math.abs(dy) <= 3) {
+                held.set(dx * 16 + dy, (held.get(dx * 16 + dy) ?? 0) + 1);
+            }
+        }
+
+        if (!held.size) {
+            return false;
+        }
+
+        let players = 0;
+
+        for (const id of this.players.keys()) {
+            const one = this.battle.actor(id);
+
+            players += one && one.map === "town" && sameArea([actor.x, actor.y], [one.x, one.y]) ? 1 : 0;
+        }
+
+        const most = areaCap(players);
+
+        for (let mx = -2; mx <= 2; mx++) {
+            for (let my = -2; my <= 2; my++) {
+                let things = 0;
+
+                for (let dx = mx - 1; dx <= mx + 1; dx++) {
+                    for (let dy = my - 1; dy <= my + 1; dy++) {
+                        things += held.get(dx * 16 + dy) ?? 0;
+                    }
+                }
+
+                if (things >= most) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /** How many of the director's things are in a place's area, how many players, and how many it holds with them there (core/director.js AREA): for the tests. */
+    areaOf([x, y]) {
+        const there = (at) => sameArea([x, y], at);
+        const things = this.#directed().filter(there).length;
+        const players = [...this.players.keys()].map((id) => this.battle.actor(id)).filter((one) => one && one.map === "town" && there([one.x, one.y])).length;
+
+        return { things, players, most: areaCap(players) };
     }
 
     // Where something's put out ahead of a player (`actor`, going the way of `heading`, or any way)
