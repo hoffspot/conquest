@@ -2123,6 +2123,10 @@ By tags, a **leader** (a pack's, or a lair's or den's master) pays by medal (the
 bringing down the wolf: most of its spoils for you.", core/credit.js `medalWords`; the "A quest
 done" cue). An ordinary foe pays everyone credited in full, with no medal.
 
+By tags, too, a pack in a fight is sent more of its own when the side **with a tag on one of
+it** grows (the plan's `2-15`; `#reinforce`, `#sideTagging`), not when more players come near:
+one who only walks past a fight brings no more of them down on those in it.
+
 And in any world: one fallen near a foe with a tag on it is paid with those standing, and one
 with a tag who's of another party, or too far off, has it count for their requests.
 

@@ -46,9 +46,9 @@ function run(host, ms) {
 const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null, spawn: [x, y] });
 
 // A world with its player in it (the orc gone), and where its start town's middle and edge are
-function hosted() {
+function hosted(rules = undefined) {
     const world = buildWorld({ seed: 2 });
-    const host = new Host(world, { populate: false });
+    const host = new Host(world, { populate: false, ...(rules ? { rules } : {}) });
 
     host.join({ id: HOST_PLAYER, hero: HERO });
     host.populate();
@@ -1146,6 +1146,54 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
         // (No more while it stays as strong)
         Object.assign(me, { hp: me.maxHp });
         assert.ok(!run(host, 2000).some(({ type, pack }) => type === "reinforced" && pack === fighting));
+    });
+
+    it("with loot by tags (the world's rule): no more of a pack for players who only walk past its fight; more once a newcomer has a tag on one of it", () => {
+        const context = outside(hosted({ loot: "tagged" }));
+        const { host, me } = context;
+
+        run(host, 5000);
+
+        const fighting = [...host.packs.keys()][0];
+        const foe = about(host).find((actor) => !actor.dead && host.wild.get(actor.id).pack === fighting);
+
+        Object.assign(foe, { hp: 1e5, maxHp: 1e5 });
+        host.command(HOST_PLAYER, { type: "engage", target: foe.id });
+
+        for (let s = 0; s < 30 && !(foe.target === HOST_PLAYER && foe.tags?.[HOST_PLAYER]); s++) {
+            run(host, 1000);
+            Object.assign(me, { hp: me.maxHp });
+        }
+
+        assert.ok(foe.tags?.[HOST_PLAYER], "the player's tag on it");
+        assert.equal(host.packs.get(fighting).strength, 1);
+
+        // (Three more players come by, near enough to be of a side by nearness, out of its reach)
+        for (const [k, name] of ["Bea", "Cy", "Di"].entries()) {
+            host.join({ id: name, hero: { ...HERO, name } });
+            Object.assign(host.battle.actor(name), { hp: 5000, maxHp: 5000, stunnedUntil: Infinity });
+            put(host.battle.actor(name), [me.square[0] + 25 + k, me.square[1] + 25]);
+        }
+
+        const passing = run(host, 3000);
+        const pack = () => about(host).filter((actor) => !actor.dead && host.wild.get(actor.id)?.pack === fighting);
+
+        Object.assign(me, { hp: me.maxHp });
+        assert.equal(host.strengthOf(HOST_PLAYER).strength, 4, "(a side of four, by nearness)");
+        assert.ok(pack().every((actor) => !["Bea", "Cy", "Di"].some((name) => actor.tags?.[name])), "(none of them with a tag on it)");
+        assert.ok(!passing.some(({ type, pack: which }) => type === "reinforced" && which === fighting), "walking past: no more of it");
+        assert.equal(host.packs.get(fighting).strength, 1);
+
+        // They strike it (their tags on it): the side it's fighting is four
+        for (const name of ["Bea", "Cy", "Di"]) {
+            foe.tags[name] = [5, 0, 0, host.battle.time];
+        }
+
+        const joined = run(host, 1000).filter(({ type, pack: which }) => type === "reinforced" && which === fighting);
+
+        assert.equal(joined.length, 1);
+        assert.ok(joined[0].ids.length >= 1);
+        assert.equal(host.packs.get(fighting).strength, 4);
     });
 
     it("carries on exactly from a snapshot, the creatures and all", () => {
