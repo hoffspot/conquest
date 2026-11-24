@@ -10,7 +10,7 @@ import { CREATURES, tierPower } from "../client/js/core/creatures.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { SPELL_COOLDOWN, SPELLS } from "../client/js/core/spells.js";
-import { BODIES, fightingValue, groupsOf, harm, opposition, OPPOSITION, SCALING, scalingOf, sideStrength, spellHarm, STRENGTH, toughness, weaponHarm, wholeOf, withinBudget } from "../client/js/core/strength.js";
+import { BODIES, CROWD, fightingValue, groupsOf, harm, opposition, OPPOSITION, SCALING, scalingFor, scalingOf, sideStrength, spellHarm, STRENGTH, toughness, weaponHarm, wholeOf, withinBudget } from "../client/js/core/strength.js";
 import { createRandom } from "../client/js/core/random.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
 
@@ -304,5 +304,44 @@ describe("a side's strength in play (host.js strengthOf)", () => {
         assert.equal(sideLine({ strength: 1, opposition: 1, players: 1, allies: 0 }), "Side S 1.00  F 1.00  (1 player, 0 allies)");
         assert.equal(sideLine({ strength: 2.4, opposition: 2.0141, players: 2, allies: 1 }), "Side S 2.40  F 2.01  (2 players, 1 ally)");
         assert.equal(sideLine(null), null);
+    });
+});
+
+describe("a crowd's answer (strength.js CROWD, scalingFor; host.js RULES scaling)", () => {
+    it("is a side's own for four or fewer; past four, how many come counted from a softened strength, an ordinary one's hit points at most three times, a leader's flat past 25: a table", () => {
+        assert.deepEqual(CROWD, { full: 4, soft: 0.5, health: 3, leaders: 25 });
+
+        // (Four or fewer, and by the side's rule at any strength: as ever)
+        for (const strength of [0, 1, 1.6, 2, 3.25, 4]) {
+            assert.deepEqual(scalingFor(strength, "crowd"), scalingOf(opposition(strength)), `S ${strength}`);
+        }
+
+        for (const strength of [1, 4, 8, 25, 50]) {
+            assert.deepEqual(scalingFor(strength), scalingOf(opposition(strength)));
+            assert.deepEqual(scalingFor(strength, "side"), scalingOf(opposition(strength)));
+        }
+
+        // [S, how many (×), as a side has them (×), an ordinary one's hit points (×), a leader's (×)]
+        const table = [
+            [8, 4.36, 5.86, 1.56, 4.11],
+            [16, 5.86, 10.56, 1.8, 6.59],
+            [25, 7.08, 15.43, 1.98, 8.92],
+            [50, 9.5, 27.81, 2.3, 8.92],
+            [400, 23, 162.84, 3, 8.92],
+        ];
+
+        for (const [strength, count, sided, health, leader] of table) {
+            const crowd = scalingFor(strength, "crowd");
+            const near = (a, b) => Math.abs(a - b) < 0.01 * Math.max(1, b);
+
+            assert.ok(near(crowd.count, count), `S ${strength}: × ${crowd.count} of them`);
+            assert.ok(near(scalingOf(opposition(strength)).count, sided), `S ${strength}: × ${scalingOf(opposition(strength)).count} by a side's rule`);
+            assert.ok(near(crowd.health, health), `S ${strength}: hit points × ${crowd.health}`);
+            assert.ok(near(crowd.leader, leader), `S ${strength}: a leader's × ${crowd.leader}`);
+            assert.ok(crowd.count < scalingOf(opposition(strength)).count && crowd.health <= CROWD.health);
+        }
+
+        // (No step at four: just past it, just more)
+        assert.ok(scalingFor(4.01, "crowd").count > scalingFor(4, "crowd").count && scalingFor(4.01, "crowd").count - scalingFor(4, "crowd").count < 0.01);
     });
 });

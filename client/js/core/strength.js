@@ -228,6 +228,36 @@ export function scalingOf(opposition) {
 }
 
 /**
+ * How a crowd's answered, a world's rule (`scaling: "crowd"`, core/host.js RULES; the scaling
+ * plan's 2-16): a side of strength `full` or less as ever; past it, how many come counted from a
+ * softened strength, `full` × (S / `full`)^`soft` (8 alike as 5.7, 16 as 8, 25 as 10); an
+ * ordinary one's hit points never more than × `health`; and a leader's as against a side of
+ * `leaders`, however many more there are.
+ */
+export const CROWD = Object.freeze({ full: 4, soft: 0.5, health: 3, leaders: 25 });
+
+/**
+ * What a side of strength S has made of a pack, by a world's rule (`rule`: "side", as scalingOf
+ * of its opposition; "crowd", CROWD): { count, health, leader }. The same either way for a side
+ * of CROWD.full or less.
+ */
+export function scalingFor(strength, rule = "side") {
+    const whole = Math.max(1, strength);
+
+    if (rule !== "crowd" || whole <= CROWD.full) {
+        return scalingOf(opposition(whole));
+    }
+
+    const soft = CROWD.full * pow(whole / CROWD.full, CROWD.soft);
+
+    return {
+        count: pow(opposition(soft), SCALING.count),
+        health: Math.min(CROWD.health, pow(opposition(whole), SCALING.health)),
+        leader: pow(opposition(Math.min(whole, CROWD.leaders)), SCALING.leader),
+    };
+}
+
+/**
  * So many made whole with the world's own dice (`random`: random.js): 4.5 as often 4 as 5, 4.25
  * once in four 5; a number already whole as it is, no dice thrown.
  */

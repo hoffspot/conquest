@@ -50,6 +50,12 @@ export const SIDES = Object.freeze({
     hirelings: { players: 1, hired: ["warrior", "warrior", "warrior", "warrior"], aim: 0.8 },
     company: { players: 1, hired: ["warrior", "cleric", "mage", "ranger"], aim: 0.8 },
     summoner: { players: 1, summons: 5, aim: 0.8 },
+    // (A crowd, alike, answered as a world shared by strangers answers one: host.js RULES
+    // `scaling: "crowd"`, core/strength.js CROWD. Their aims are N^-0.2 still, not yet tuned
+    // against runs; run only when asked for, `--sides eight,sixteen,twentyfive`: they're slow)
+    eight: { players: 8, rules: { scaling: "crowd" }, aim: 0.66, crowd: true },
+    sixteen: { players: 16, rules: { scaling: "crowd" }, aim: 0.57, crowd: true },
+    twentyfive: { players: 25, rules: { scaling: "crowd" }, aim: 0.53, crowd: true },
 });
 
 /** The tiers of land they're set at, unless told otherwise. */
@@ -145,7 +151,7 @@ export function boosting(host, ids, times) {
 export function balance(name, tier, { fights = 4, seed = 2 } = {}) {
     const side = SIDES[name];
     const world = buildWorld({ seed });
-    const host = new Host(world, { populate: false });
+    const host = new Host(world, { populate: false, ...(side.rules ? { rules: side.rules } : {}) });
     const players = Array.from({ length: side.players }, (each, k) => (k ? `player-${k + 1}` : HOST_PLAYER));
 
     // (The first's hired adventurers with them as a character brings them: host.js #follow)
@@ -317,7 +323,7 @@ function main() {
     const args = process.argv.slice(2);
     const option = (flag) => (args.includes(flag) ? args[args.indexOf(flag) + 1] : null);
     const tiers = option("--tiers")?.split(",").map(Number) ?? TIERS_RUN;
-    const sides = option("--sides")?.split(",") ?? Object.keys(SIDES);
+    const sides = option("--sides")?.split(",") ?? Object.keys(SIDES).filter((name) => !SIDES[name].crowd);
     const fights = Number(option("--fights") ?? 4);
     const seeds = option("--seeds")?.split(",").map(Number) ?? [2];
     const rows = [];

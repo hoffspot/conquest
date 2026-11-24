@@ -394,6 +394,25 @@ what one alone would (0.87 for two, 0.76 for four): a little easier together, as
 runner bears out (*Tuning it*, below: it was S^0.75 first, then S^0.8, when each of four took about
 two thirds of what one alone did once the runner was put right).
 
+### A crowd's answer
+
+A world's rule, `scaling` (core/host.js `RULES`; the scaling plan's `2-16`), says how a side
+bigger than a party is answered. `side`, as ever and unless a world says, is everything above at
+any strength. `crowd`, a world shared by strangers' (the `shared` preset), is the same for a side
+of strength four or less, and past it (core/strength.js `CROWD`, `scalingFor`):
+
+- **How many come** is counted from a softened strength, 4 × (S / 4)^0.5: eight alike are
+  answered with about 4.4 times as many as one alone (5.9 by `side`), sixteen with 5.9 (10.6),
+  twenty-five with 7.1 (15.4).
+- **An ordinary one's hit points** are never more than three times one alone's.
+- **A leader's** are as against a side of 25, however many more there are (about 8.9 times).
+- **A side halved or more** mid-fight has the pack's living made no tougher than they'd be
+  against those left (`#eased`: hit points whole and left, in proportion); never tougher.
+
+The balance runner has sides of 8, 16 and 25 alike answered so (`npm run balance -- --sides
+eight,sixteen,twentyfive`); their aims are N^-0.2 still, not tuned against runs.
+(`test/strength.test.js`, `test/creatures.test.js`.)
+
 ### Where it applies
 
 Wherever foes are put out near the players, against the side there when they are:

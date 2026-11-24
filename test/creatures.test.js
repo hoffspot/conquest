@@ -17,7 +17,7 @@ import { calledAt, CAMP_FOLK, candidatesAt, clearOfSettlements, CREATURES, elite
 import { HOST_PLAYER, Host, snagChoice, snaggable, SNAG_GRADES, SNAG_KINDS, WILDS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
-import { scalingOf } from "../client/js/core/strength.js";
+import { opposition, scalingOf } from "../client/js/core/strength.js";
 import { ITEMS } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
 import { ELITE_SPOILS, PARTS, rollSpoils, SPOILS, TOME_DROP } from "../client/js/core/spoils.js";
@@ -1194,6 +1194,49 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
         assert.equal(joined.length, 1);
         assert.ok(joined[0].ids.length >= 1);
         assert.equal(host.packs.get(fighting).strength, 4);
+    });
+
+    it("with a crowd's answer (the world's rule): a pack's living made no tougher than the side left is answered with once it's halved or more; never by a side's rule, and never tougher", () => {
+        const eased = (rules) => {
+            const context = outside(hosted(rules));
+            const { host, me } = context;
+
+            run(host, 5000);
+
+            const fighting = [...host.packs.keys()][0];
+            const foe = about(host).find((actor) => !actor.dead && host.wild.get(actor.id).pack === fighting);
+
+            host.command(HOST_PLAYER, { type: "engage", target: foe.id });
+
+            for (let s = 0; s < 30 && foe.target !== HOST_PLAYER; s++) {
+                run(host, 1000);
+                Object.assign(me, { hp: me.maxHp });
+            }
+
+            // (As if put out against four, three of them gone since: tough, and half hurt)
+            Object.assign(foe, { hp: 5000, maxHp: 10000 });
+            host.packs.get(fighting).strength = 4;
+            run(host, STEP_MS);
+
+            return { host, foe, pack: host.packs.get(fighting) };
+        };
+        const by = scalingOf(opposition(1)).health / scalingOf(opposition(4)).health;
+        const crowd = eased({ scaling: "crowd" });
+
+        assert.equal(crowd.host.rules.scaling, "crowd");
+        assert.equal(crowd.pack.strength, 1, "weighed against the one left");
+        assert.equal(crowd.foe.maxHp, Math.round(10000 * by));
+        assert.ok(Math.abs(crowd.foe.hp / crowd.foe.maxHp - 0.5) < 0.01, "as hurt as it was");
+
+        const { maxHp } = crowd.foe;
+
+        run(crowd.host, 2000);
+        assert.ok(crowd.foe.maxHp === maxHp, "(once: not again while the side's as it is)");
+
+        const side = eased(undefined);
+
+        assert.equal(side.host.rules.scaling, "side");
+        assert.deepEqual([side.foe.maxHp, side.pack.strength], [10000, 4], "by a side's rule: as they were put out");
     });
 
     it("carries on exactly from a snapshot, the creatures and all", () => {

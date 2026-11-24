@@ -63,7 +63,7 @@ function raw(port, { method = "GET", route = "/", headers = {}, body = null }) {
 }
 
 describe("the rules a shared world changes (core/host.js RULE_CHOICES)", () => {
-    it("has each as it is today in RULES, its other way named with the slice that builds it, and only those built whose slices are (pvp: 2-2; loot: 2-13)", () => {
+    it("has each as it is today in RULES, its other way named with the slice that builds it, and only those built whose slices are (pvp: 2-2; loot: 2-13; scaling: 2-16)", () => {
         assert.deepEqual(Object.keys(RULE_CHOICES), ["pvp", "loot", "scaling", "director", "instances", "rares", "stock"]);
 
         for (const [key, { of, shared, slice, built }] of Object.entries(RULE_CHOICES)) {
@@ -71,7 +71,7 @@ describe("the rules a shared world changes (core/host.js RULE_CHOICES)", () => {
             assert.equal(of.length, 2, key);
             assert.equal(shared, of[1], `${key}: a shared world has the other`);
             assert.match(slice, /^2-\d+$/, key);
-            assert.equal(built, key === "pvp" || key === "loot", `${key}: turned on by ${slice}, with its tests (pvp's: test/duel.test.js; loot's: test/loot.test.js)`);
+            assert.equal(built, ["pvp", "loot", "scaling"].includes(key), `${key}: turned on by ${slice}, with its tests (pvp's: test/duel.test.js; loot's: test/loot.test.js; scaling's: test/strength.test.js)`);
         }
 
         assert.deepEqual(
@@ -98,7 +98,7 @@ describe("the rules a shared world changes (core/host.js RULE_CHOICES)", () => {
         const today = Object.fromEntries(Object.keys(RULE_CHOICES).map((key) => [key, RULES[key]]));
 
         assert.deepEqual(presetRules("company"), today);
-        assert.deepEqual(presetRules("shared"), { ...today, pvp: "optin", loot: "tagged" }, "(pvp and loot built: a shared world's players fight only by a duel, and are paid by their tags; the rest as a company's)");
+        assert.deepEqual(presetRules("shared"), { ...today, pvp: "optin", loot: "tagged", scaling: "crowd" }, "(pvp, loot and scaling built: a shared world's players fight only by a duel, are paid by their tags, and are answered as a crowd; the rest as a company's)");
         assert.deepEqual(presetRules("shared", NONE), today, "(none built: as a company's)");
         assert.deepEqual(presetRules(undefined), today);
         assert.deepEqual(presetRules("company", BUILT), today);
@@ -113,7 +113,7 @@ describe("the rules a shared world changes (core/host.js RULE_CHOICES)", () => {
         const host = new Host(buildWorld({ seed: 2 }), { populate: false, rules: { rest: "everyone", debug: "owner", mortal: true } });
 
         host.preset("shared");
-        assert.deepEqual(host.rules, { ...RULES, rest: "everyone", debug: "owner", mortal: true, pvp: "optin", loot: "tagged" }, "(its other rules as they were)");
+        assert.deepEqual(host.rules, { ...RULES, rest: "everyone", debug: "owner", mortal: true, pvp: "optin", loot: "tagged", scaling: "crowd" }, "(its other rules as they were)");
         host.preset("company");
         assert.equal(host.rules.pvp, "war");
         assert.equal(host.rules.loot, "near");
