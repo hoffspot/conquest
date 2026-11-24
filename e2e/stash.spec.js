@@ -214,7 +214,8 @@ test("the stash's Sort and Stow alike; held, a thing's card; Enter sends a thing
     await expect(pack.locator(".pack-about")).toBeHidden();
     await place(0).focus();
     await page.keyboard.press("Enter");
-    expect(await stashed(page, 0)).toEqual([[1, "meal", 6], [2, "ale", 4]]);
+    // (Sent across at the game's next step, which the key doesn't wait for)
+    await expect.poll(() => stashed(page, 0)).toEqual([[1, "meal", 6], [2, "ale", 4]]);
     expect(await carried(page)).toEqual([[0, "sword", 1], [25, "potion", 5]]);
     await page.keyboard.press("Escape");
     await expect(page.locator(".pack")).toBeHidden();
