@@ -92,7 +92,7 @@ describe("a world with no host player (core/host.js RULES)", () => {
     it("keeps its rules with it, each copy and each restored one playing by them; anything unknown as RULES has it", () => {
         const { host } = served();
 
-        assert.deepEqual(RULES, { rest: "host", debug: "host", invasions: true, mortal: false, afk: { mark: 10 * MINUTE, out: 30 * MINUTE }, pvp: "war", loot: "near", scaling: "side", director: "player", instances: "site", rares: "world", stock: "shared" }, "(a world a browser hosts, to begin with; the last seven a shared world's to change: test/rules.test.js)");
+        assert.deepEqual(RULES, { rest: "host", debug: "host", invasions: true, mortal: false, afk: { mark: 10 * MINUTE, out: 30 * MINUTE }, pvp: "war", loot: "near", scaling: "side", followers: "free", director: "player", instances: "site", rares: "world", stock: "shared" }, "(a world a browser hosts, to begin with; the last seven a shared world's to change: test/rules.test.js)");
         assert.deepEqual(host.rules, SERVED);
         assert.deepEqual(host.snapshot().rules, SERVED);
         assert.deepEqual(Host.restore(buildWorld({ seed: 2 }), host.snapshot()).rules, SERVED);

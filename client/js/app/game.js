@@ -18370,7 +18370,7 @@ export class Game {
         }
 
         const name = CREATURES[creature]?.name.toLowerCase() ?? "creature";
-        const said = { risen: `The ${name} rises from the dead to follow you!`, called: `A ${name} answers your call, at your side.`, over: `Your ${name} is gone, its time up.`, fallen: `Your ${name} has fallen.`, lost: `Your ${name} is left behind.`, dismissed: `You let your ${name} go.`, replaced: `Your ${name} goes, to make room for another.`, tamed: `The ${name} follows you now, fed and tamed: yours till it falls, or you let it go.` }[change];
+        const said = { risen: `The ${name} rises from the dead to follow you!`, called: `A ${name} answers your call, at your side.`, over: `Your ${name} is gone, its time up.`, fallen: `Your ${name} has fallen.`, lost: `Your ${name} is left behind.`, dismissed: `You let your ${name} go.`, replaced: `Your ${name} goes, to make room for another.`, tamed: `The ${name} follows you now, fed and tamed: yours till it falls, or you let it go.`, crowded: `No ${name} comes: too many are gathered here. While more than six of you are together, no one calls more than one creature to their side.`, outside: "Those with you wait outside." }[change];
 
         if (said) {
             this.hud.message(said, change === "tamed" ? 4 : 3);

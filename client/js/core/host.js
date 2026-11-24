@@ -549,7 +549,15 @@ function afkOf(given) {
  *    out ({ mark, out }, ms: AFK);
  *  - and the rules a world shared by strangers changes (RULE_CHOICES), each as it is today.
  */
-export const RULES = Object.freeze({ rest: "host", debug: "host", invasions: true, mortal: false, afk: Object.freeze({ mark: AFK.mark, out: AFK.out }), pvp: "war", loot: "near", scaling: "side", director: "player", instances: "site", rares: "world", stock: "shared" });
+export const RULES = Object.freeze({ rest: "host", debug: "host", invasions: true, mortal: false, afk: Object.freeze({ mark: AFK.mark, out: AFK.out }), pvp: "war", loot: "near", scaling: "side", followers: "free", director: "player", instances: "site", rares: "world", stock: "shared" });
+
+/**
+ * A crowd, for how many each player in it can take on (a world's rule, `followers: "limited"`;
+ * the scaling plan's 2-17): more than `players` of them within `reach` metres of one another's
+ * leader; in it, no more hired adventurers taken on past `hired`, no more creatures called,
+ * raised or tamed past `called`. Those already with a player stay.
+ */
+export const CROWDING = Object.freeze({ players: 6, reach: 80, hired: 1, called: 1 });
 
 /**
  * The rules a world shared by strangers plays by (generated/multiplayer_scaling_plan.md Stage 2,
@@ -562,6 +570,8 @@ export const RULES = Object.freeze({ rest: "host", debug: "host", invasions: tru
  *  - `pvp`: players of peoples at war are enemies ("war"), or only by a duel or their flags;
  *  - `loot`: a wild foe's spoils go to those near it ("near"), or to those who fought it;
  *  - `scaling`: a foe's answer to a bigger side grows with it ("side"), or is softened for a crowd;
+ *  - `followers`: a player takes on as many as they can lead anywhere ("free"), or no more than
+ *    one hired and one called while in a crowd, and none of theirs come into a town's buildings;
  *  - `director`: the wilds deal to each player ("player"), or no more than an area can hold;
  *  - `instances`: a dungeon is one for its site ("site"), or one for each party;
  *  - `rares`: a unique is met once in the world ("world"), or once by each character;
@@ -571,6 +581,7 @@ export const RULE_CHOICES = Object.freeze({
     pvp: Object.freeze({ of: Object.freeze(["war", "optin"]), shared: "optin", slice: "2-2", built: true }),
     loot: Object.freeze({ of: Object.freeze(["near", "tagged"]), shared: "tagged", slice: "2-13", built: true }),
     scaling: Object.freeze({ of: Object.freeze(["side", "crowd"]), shared: "crowd", slice: "2-16", built: true }),
+    followers: Object.freeze({ of: Object.freeze(["free", "limited"]), shared: "limited", slice: "2-17", built: true }),
     director: Object.freeze({ of: Object.freeze(["player", "area"]), shared: "area", slice: "2-18", built: false }),
     instances: Object.freeze({ of: Object.freeze(["site", "party"]), shared: "party", slice: "2-21", built: false }),
     rares: Object.freeze({ of: Object.freeze(["world", "character"]), shared: "character", slice: "2-25", built: false }),
@@ -1177,6 +1188,7 @@ export const REFUSALS = Object.freeze({
     food: "You've nothing they'd eat: a hot meal, or two cuts of meat.",
     hire: "They're not for hire.",
     company: "You can't lead any more than you have: those mending at the guild count too.",
+    crowded: "Too many are gathered here: while more than six of you are together, no one takes on more than one hired adventurer.",
     follower: "They don't follow you.",
     downed: "They're down: get them up first (stand by them, heal them, or give them a draught).",
     recall: "No one of yours is mending at the guild.",
@@ -2086,7 +2098,7 @@ export class Host {
         // core/wary.js)
         for (const one of followers) {
             if (one.tamed) {
-                this.#companion(player, one.creature, one.tier, { map, square: at }, { tamed: true });
+                this.#companion(player, one.creature, one.tier, { map, square: at }, { tamed: true, back: true });
             } else if (one.away) {
                 this.mending.set(`follower-${this.nextFollower++}`, { leader: id, ...this.#recordOf(one), waiting: false, since: this.battle.time });
             } else {
@@ -3178,6 +3190,8 @@ export class Host {
             } else if (event.type === "death" && this.players.has(event.id)) {
                 this.#arenaFell(event.id);
             } else if (event.type === "respawn" && this.players.has(event.id)) {
+                // (Up again, wherever: any of theirs who waited out of sight by a door, in sight)
+                this.#backInSight(event.id);
                 this.#arenaBack(event.id);
             }
 
@@ -16211,6 +16225,11 @@ export class Host {
             return refuse("company");
         }
 
+        // (In a crowd, by the world's rule: no more than CROWDING has each take on)
+        if (this.#crowded(player) && this.#company(player.id).length >= CROWDING.hired) {
+            return refuse("crowded");
+        }
+
         const { calling, level, price, renowned } = offer;
 
         if (player.progress.gold < price) {
@@ -16686,6 +16705,10 @@ export class Host {
             return refuse("recall");
         }
 
+        if (this.#crowded(player) && this.#company(player.id).length >= CROWDING.hired) {
+            return refuse("crowded");
+        }
+
         if (player.progress.gold < offer.price) {
             return refuse("gold");
         }
@@ -16895,8 +16918,8 @@ export class Host {
      * settings have them (`afk`: AFK), the rest as they were: as a kept world's opened
      * (server/reopen.js), before anyone's in it, so nobody's told.
      */
-    preset(preset, { afk = this.rules.afk } = {}) {
-        this.rules = rulesOf({ ...this.rules, ...presetRules(preset), afk });
+    preset(preset, { afk = this.rules.afk, rules = {} } = {}) {
+        this.rules = rulesOf({ ...this.rules, ...presetRules(preset), ...rules, afk });
     }
 
     // One of the world's rules changed (RULES mortal), by whoever may (debugs: its host's player,
@@ -16920,6 +16943,29 @@ export class Host {
     // they've come out, unless they were told to wait
     #bring(playerId) {
         const leader = this.battle.actor(playerId);
+
+        // (By the world's rule, `followers`: none of theirs into a town's buildings, which
+        // everyone shares. They wait outside, out of sight and out of everyone's way (the
+        // owner: "We don't want a mass of followers standing outside a shop"): hidden, as one
+        // lying in wait is, core/battle.js `hidden`, so not drawn, not moving, no one's enemy;
+        // and with them again as they come out)
+        const theirs = [...this.#company(playerId), ...[...this.companions].filter(([, one]) => one.leader === playerId).map(([each]) => each)].map((id) => this.battle.actor(id)).filter((one) => one && !one.dead);
+
+        if (this.rules.followers === "limited" && this.#townInside(leader.map)) {
+            const waits = theirs.filter((one) => one.map !== leader.map && one.hidden !== true && !this.waiting(one.id));
+
+            for (const one of waits) {
+                Object.assign(one, { hidden: true, path: [], target: null });
+            }
+
+            if (waits.length) {
+                this.#event("companion", { id: playerId, companion: null, creature: null, change: "outside", count: waits.length });
+            }
+
+            return;
+        }
+
+        this.#backInSight(playerId);
         const squares = squaresOf(this.world.maps?.[leader.map] ?? this.world);
         const taken = new Set(this.battle.actors.filter((each) => each.map === leader.map).map(({ square: [x, y] }) => squareKey(x, y)));
 
@@ -16939,6 +16985,46 @@ export class Host {
                 // (No room by them: they'll catch up another time)
             }
         }
+    }
+
+    // A player's followers who waited out of sight while they were in one of a town's buildings
+    // (#bring) in sight again, where they waited
+    #backInSight(playerId) {
+        for (const id of [...this.#company(playerId), ...[...this.companions].filter(([, one]) => one.leader === playerId).map(([each]) => each)]) {
+            const one = this.battle.actor(id);
+
+            if (one?.hidden === true) {
+                one.hidden = undefined;
+            }
+        }
+    }
+
+    // Whether a map's inside one of a town's buildings (a shop, a tavern, a guild: every player's
+    // to walk into), not out in the world, nor a dungeon's or a lair's floor
+    #townInside(map) {
+        const building = map === "town" ? null : this.#buildingOfMap(map);
+
+        return Boolean(building && building.place && !building.site && building.kind !== "dungeon");
+    }
+
+    // Whether a player's in a crowd, by the world's rule (`followers: "limited"`, CROWDING): more
+    // than so many players, themselves among them, on their map within reach of them
+    #crowded(player) {
+        const actor = this.rules.followers === "limited" ? this.battle.actor(player.id) : null;
+
+        if (!actor) {
+            return false;
+        }
+
+        let near = 0;
+
+        for (const other of this.players.keys()) {
+            const one = this.battle.actor(other);
+
+            near += one && one.map === actor.map && hypot(one.x - actor.x, one.y - actor.y) <= CROWDING.reach ? 1 : 0;
+        }
+
+        return near > CROWDING.players;
     }
 
     // A follower told what to do in talk, by the player they follow (#orderUnit)
@@ -17868,7 +17954,15 @@ export class Host {
     // fighting whoever's their enemy: risen from the dead (Zombify), or called (Summon). As many of
     // each at once as the spell's `level` allows (SPELLS company: one at level 1, five at 5); with
     // that many already, the oldest of them let go to make room. Its id
-    #companion(player, creature, tier, { map, square }, { risen = false, level = 1, tamed = false } = {}) {
+    #companion(player, creature, tier, { map, square }, { risen = false, level = 1, tamed = false, back = false } = {}) {
+        // (In a crowd, by the world's rule: no more than CROWDING has each call; told so. Not
+        // one that was theirs already, `back` with them as they come into the world)
+        if (!back && this.#crowded(player) && [...this.companions].filter(([, one]) => one.leader === player.id).length >= CROWDING.called) {
+            this.#event("companion", { id: player.id, companion: null, creature, change: "crowded" });
+
+            return null;
+        }
+
         const spec = CREATURES[creature];
         const power = tierPower(tier);
         const id = `companion-${this.nextCompanion++}`;
@@ -18003,6 +18097,12 @@ export class Host {
     // player's in a fight too, while it's in one. Whether it was
     #caughtUp(actor, leader) {
         if (actor.dead || leader.dead || (actor.map === leader.map && hypot(actor.x - leader.x, actor.y - leader.y) <= FOLLOW.lost)) {
+            return false;
+        }
+
+        // (By the world's rule, `followers`: none of theirs into a town's buildings after them.
+        // It waits outside, out of sight: #bring)
+        if (this.rules.followers === "limited" && actor.map !== leader.map && this.#townInside(leader.map)) {
             return false;
         }
 
