@@ -1242,9 +1242,10 @@ times over as they had been, so a player saved deep in a dungeon is back where t
 
 ### A run for each party (`host.js` `RUNS`, `runFor`; `insides.js` `addRun`)
 
-Not on in any world yet: the rule `instances` is `site` everywhere, and its other way, `party`,
-isn't built till a snapshot keeps the runs and a game is told of them (the scaling plan's 2-21).
-What the host does under it:
+A world's rule, `instances` (the scaling plan's 2-21). `site`, as ever: a dungeon has one run, and
+everyone who goes in is in it together. `party`, in a world shared by strangers (the `shared`
+preset), unless that world's **sharedDungeons** setting turns it off (docs/SERVER.md): each
+party has a run of its own. Under `party`:
 
 - A dungeon keeps its one front door. Whoever goes in by it is sent through to **their party's
   run** of the dungeon; one in no party gets a run of their own. Nobody's refused at the door.
@@ -1263,7 +1264,13 @@ What the host does under it:
   as strong and scaled for its own only. It's taken out of the world at once when it's cleared and
   its own are away, when it's no one's and empty, or when no one ever went in; otherwise after ten
   minutes with no one in it or near (`RUNS.linger`).
-- The wild dungeons, the hells and Bellhaven's keep all work this way.
+- The wild dungeons, the hells and Bellhaven's keep all work this way. A hell's rite at its way
+  in is still the world's one; its portals' seals are each run's own.
+- A snapshot keeps the runs, each with the lane it's drawn in. A game that's only told of the
+  world (a replicated one) is told each run with its dungeon and lane (the summary's `dungeons`,
+  a run's `run`) and makes the run its hero's in as the world has it.
+- The map marks a dungeon found, never a run. It greys a dungeon cleared only where its one run
+  is everyone's: a party's run that's cleared goes once they've left.
 
 ## Always the same, and stable as it grows (`seeds.js`)
 

@@ -3,22 +3,52 @@
 // through to their own party's run of it, with its own levels, foes and slain; a party's is its
 // leader's; one who leaves their party inside stays till they walk out; one who left the world
 // is let back into theirs; no one's called into another's; and a run no one's in or near goes.
-// The rule's other way isn't built yet (RULE_CHOICES `built`): these give a host it as it will be.
+// A world shared by strangers has it (the `shared` preset), unless its own setting says not
+// (`sharedDungeons`: server/reopen.js).
 
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { DELVES } from "../client/js/core/dungeons/play.js";
 import { hypot } from "../client/js/core/exact.js";
-import { delveKey, HOST_PLAYER, Host, RULE_CHOICES, ruled, RUNS, runBase, runSite } from "../client/js/core/host.js";
-import { DUNGEON_ORIGINS, dungeonLevel, KEEP_ORIGINS } from "../client/js/core/insides.js";
+import { delveKey, HOST_PLAYER, Host, presetRules, REFUSALS, RULE_CHOICES, ruled, RULES, RUNS, runBase, runSite } from "../client/js/core/host.js";
+import { DUNGEON_ORIGINS, dungeonLevel, HELL_ORIGINS, KEEP_ORIGINS } from "../client/js/core/insides.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { keepSiteOf } from "../client/js/core/scenery.js";
+import { decode, encode } from "../client/js/core/wire.js";
+import { relaxedFor, rulesFor } from "../server/reopen.js";
+import { WORLD_SETTINGS } from "../server/storage/worlds.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
-const PARTY_RULE = ruled({ instances: "party" }, { ...RULE_CHOICES, instances: { ...RULE_CHOICES.instances, built: true } });
+const PARTY_RULE = ruled({ instances: "party" });
 
 const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null });
+
+describe("the rule (host.js RULES instances, RUNS)", () => {
+    it("is a dungeon's one run for everyone unless a world says, a run for each party in a world shared by strangers, and a world's own setting turns that off", () => {
+        assert.equal(RULES.instances, "site");
+        assert.deepEqual(RULE_CHOICES.instances, { of: ["site", "party"], shared: "party", slice: "2-21", built: true });
+        assert.deepEqual(RUNS, { linger: 600000 });
+        assert.equal(presetRules("shared").instances, "party");
+        assert.equal(presetRules("company").instances, "site");
+        assert.ok(REFUSALS.otherRun.includes("another party's"));
+
+        assert.equal(WORLD_SETTINGS.sharedDungeons.default, false);
+        assert.deepEqual(relaxedFor({ settings: { sharedDungeons: true } }), { instances: "site" });
+        assert.deepEqual(relaxedFor({ settings: { sharedDungeons: true, freeFollowers: true } }), { followers: "free", instances: "site" });
+        assert.equal(rulesFor({ settings: { preset: "shared" } }).instances, "party");
+        assert.equal(rulesFor({ settings: { preset: "shared", sharedDungeons: true } }).instances, "site");
+        assert.equal(rulesFor({ settings: { preset: "company" } }).instances, "site");
+
+        const host = new Host(buildWorld({ seed: 2 }), { populate: false, rules: { instances: "party" } });
+
+        assert.equal(host.rules.instances, "party");
+        host.preset("shared", { rules: relaxedFor({ settings: { sharedDungeons: true } }) });
+        assert.equal(host.rules.instances, "site", "(a kept world, as it's opened)");
+        host.preset("shared");
+        assert.equal(host.rules.instances, "party");
+    });
+});
 
 describe("a dungeon's runs in the interiors (insides.js addRun, dropRun)", () => {
     it("stands a run beside its site's dungeon: the same dungeon, its own levels in a lane of its own, a door that only leads out; and takes it out again whole", () => {
@@ -201,6 +231,41 @@ describe("a dungeon's run for each party (host.js RULES instances \"party\")", (
         const twin = host.delveOf(hers.site).awake[0].find((each) => host.wild.get(each)?.foe === key);
 
         assert.ok(twin && !actor(twin).dead, "the same foe still standing in the other");
+    });
+
+    it("is kept in a snapshot: each run taken up again as it was, in its lane, with whoever's in it; one with no runs keeps nothing of them", () => {
+        const kept = decode(encode(host.snapshot()));
+        const again = Host.restore(buildWorld({ seed: 1 }), kept);
+
+        assert.equal(again.rules.instances, "party", "the rule kept with it");
+        assert.deepEqual([...again.runs], [...host.runs]);
+        assert.deepEqual(kept.runs.map(({ lane }) => lane), [1, 2]);
+        assert.equal(again.nextRun, 3);
+
+        for (const id of [HOST_PLAYER, "bea"]) {
+            const [was, now] = [runOf(id), again.world.interiors.of(again.battle.actor(id).map)];
+
+            assert.equal(again.battle.actor(id).map, actor(id).map);
+            assert.deepEqual([now.key, now.base, now.lane, now.tier, now.maps], [was.key, was.base, was.lane, was.tier, was.maps]);
+            assert.deepEqual(again.world.maps[now.maps[0]].origin, world.maps[was.maps[0]].origin);
+            assert.deepEqual(again.delveOf(now.site), host.delveOf(was.site));
+            assert.equal(again.runFor(id, site.id).id, was.site);
+        }
+
+        assert.equal(again.world.interiors.buildings.get(`site:${site.id}`).made, false);
+
+        // (Played on: still theirs, nothing made or let go for it)
+        for (let t = 0; t < 1000; t += STEP_MS) {
+            again.advance(STEP_MS);
+        }
+
+        assert.deepEqual([...again.runs.keys()], [...host.runs.keys()]);
+        assert.deepEqual(decode(encode(again.snapshot())).runs.map(({ id }) => id), kept.runs.map(({ id }) => id));
+
+        // (Where a dungeon's one run is everyone's: no word of runs in what's kept)
+        const plain = new Host(buildWorld({ seed: 1 }), { populate: false }).snapshot();
+
+        assert.ok(!("runs" in plain) && !("nextRun" in plain));
     });
 
     it("lets no one be called into a run that isn't theirs to go into", () => {
@@ -399,5 +464,88 @@ describe("a run of Bellhaven's keep for each party (scenery.js keepSiteOf)", () 
         assert.ok(cross("bea", hers.door), "out");
         assert.equal(host.battle.actor("bea").map, castle.maps[0]);
         assert.deepEqual(host.battle.actor("bea").square, keep.door.ends[0].arrive);
+    });
+});
+
+describe("a run of a hell, and a leader's followers (host.js #doorFor, #bring)", () => {
+    // Stood before a way in and sent through it as the battle takes anyone through: whether they crossed
+    const through = (host, id, link) => {
+        const me = host.battle.actor(id);
+
+        put(me, link.ends.find(({ map }) => map === me.map).arrive);
+        me.order = { type: "enter", link: link.id };
+
+        for (let t = 0; t < 30000; t += STEP_MS) {
+            me.hp = me.maxHp;
+
+            if (host.advance(STEP_MS).some((event) => event.type === "cross" && event.id === id)) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    it("gives each who goes through a hell's portal a hell of their own: its realms in their own lane, each portal on sealed by its own boss, and its way out back before the one portal", () => {
+        const world = buildWorld({ seed: 1 });
+        const host = new Host(world, { populate: false, rules: { instances: "party" } });
+
+        host.join({ id: HOST_PLAYER, hero: HERO });
+        Object.assign(host.battle.actor(HOST_PLAYER), { hp: 1e6, maxHp: 1e6 });
+
+        const site = world.plan.sites.find(({ kind, theme }) => kind === "dungeon" && theme === "hell");
+
+        world.maps.town.sites.heartOf(site);
+
+        const front = world.interiors.buildings.get(`site:${site.id}`);
+
+        // (Its rite's the one portal's, the world's: gone through here as if it were broken)
+        assert.ok(through(host, HOST_PLAYER, front.door));
+
+        const mine = world.interiors.of(host.battle.actor(HOST_PLAYER).map);
+
+        assert.deepEqual([mine.site, mine.base, mine.theme, front.made], [runSite(site.id, 1), site.id, "hell", false]);
+        assert.equal(world.maps[mine.maps[0]].origin[0] >= HELL_ORIGINS.x, true);
+        assert.equal(world.maps[mine.maps[0]].origin[1] >= DUNGEON_ORIGINS.lane, true);
+        assert.ok(mine.flights.length >= mine.maps.length - 1);
+
+        for (const flight of mine.flights) {
+            assert.ok(flight.seal && mine.maps.includes(flight.seal.map), `${flight.id} sealed by a boss of its own run`);
+        }
+
+        // (Its way out, from beyond its lord: to before the portal, in the world)
+        const out = mine.flights.at(-1).ends[0];
+
+        assert.deepEqual([out.map, out.arrive], [front.door.ends[0].map, front.door.ends[0].arrive]);
+        assert.ok(host.delveOf(mine.site));
+    });
+
+    it("brings a leader's followers into their leader's run with them", () => {
+        const world = buildWorld({ seed: 1 });
+        const host = new Host(world, { populate: false, rules: { instances: "party" } });
+
+        host.join({ id: HOST_PLAYER, hero: HERO, followers: [{ name: "Wren", calling: "warrior", sex: "f", seed: 7, level: 1 }] });
+        host.join({ id: "bea", hero: { ...HERO, name: "bea" } });
+
+        for (const id of [HOST_PLAYER, "bea"]) {
+            Object.assign(host.battle.actor(id), { hp: 1e6, maxHp: 1e6 });
+        }
+
+        const [sx, sy] = world.start.at;
+        const site = world.plan.sites.filter(({ kind, theme }) => kind === "dungeon" && theme !== "hell").sort((a, b) => hypot(a.at[0] - sx, a.at[1] - sy) - hypot(b.at[0] - sx, b.at[1] - sy))[0];
+
+        world.maps.town.sites.heartOf(site);
+
+        const front = world.interiors.buildings.get(`site:${site.id}`);
+        const [follower] = [...host.followers.keys()];
+
+        assert.ok(follower, "one with them");
+        assert.ok(through(host, "bea", front.door));
+        assert.ok(through(host, HOST_PLAYER, front.door));
+
+        const [mine, hers] = [HOST_PLAYER, "bea"].map((id) => world.interiors.of(host.battle.actor(id).map));
+
+        assert.notEqual(mine, hers);
+        assert.equal(host.battle.actor(follower).map, host.battle.actor(HOST_PLAYER).map);
     });
 });

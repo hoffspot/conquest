@@ -583,7 +583,7 @@ export const RULE_CHOICES = Object.freeze({
     scaling: Object.freeze({ of: Object.freeze(["side", "crowd"]), shared: "crowd", slice: "2-16", built: true }),
     followers: Object.freeze({ of: Object.freeze(["free", "limited"]), shared: "limited", slice: "2-17", built: true }),
     director: Object.freeze({ of: Object.freeze(["player", "area"]), shared: "area", slice: "2-18", built: true }),
-    instances: Object.freeze({ of: Object.freeze(["site", "party"]), shared: "party", slice: "2-21", built: false }),
+    instances: Object.freeze({ of: Object.freeze(["site", "party"]), shared: "party", slice: "2-21", built: true }),
     rares: Object.freeze({ of: Object.freeze(["world", "character"]), shared: "character", slice: "2-25", built: false }),
     stock: Object.freeze({ of: Object.freeze(["shared", "personal"]), shared: "personal", slice: "2-33", built: false }),
 });
@@ -3749,6 +3749,9 @@ export class Host {
             held: [...this.held.entries()],
             caches: copy([...this.caches.entries()]),
             dungeons: copy([...this.dungeons.entries()]),
+            // (Each party's runs of them, RUNS: none where a dungeon's one run is everyone's)
+            ...(this.runs.size ? { runs: copy([...this.runs.values()]) } : {}),
+            ...(this.nextRun > 1 ? { nextRun: this.nextRun } : {}),
             nextCache: this.nextCache,
             treasures: copy([...this.treasures.entries()]),
             nextTreasure: this.nextTreasure,
@@ -3901,6 +3904,12 @@ export class Host {
     #load(snapshot) {
         const host = this;
         const world = this.world;
+
+        // (Each party's runs of the dungeons, RUNS: known before their levels are made again, each
+        // in the lane it was drawn in)
+        host.runs = new Map(structuredClone(snapshot.runs ?? []).map((run) => [run.id, run]));
+        host.nextRun = snapshot.nextRun ?? 1;
+        host.runSites = new Map();
 
         // (The dungeons as many times made as they were, and as strong, before any's made again)
         for (const [key, { generation, tier = null }] of snapshot.dungeons ?? []) {
@@ -15843,7 +15852,7 @@ export class Host {
         }
 
         if (!run && make && this.#siteOf(site)?.kind === "dungeon") {
-            run = { id: runSite(site, this.nextRun++), site, owner, dropped: [], entered: false, emptySince: null };
+            run = { id: runSite(site, this.nextRun++), site, owner, dropped: [], entered: false, emptySince: null, lane: null };
             this.runs.set(run.id, run);
         }
 
@@ -16125,7 +16134,10 @@ export class Host {
 
     // A site's run begun, of a making of it: kept by its key (delveKey), and what it is
     #delveBegun(site, generation) {
-        const delve = { generation, awake: [], dead: [], opened: [], cleared: false };
+        const run = this.runs.get(site);
+        // (A party's run's, RUNS: whose dungeon it's a run of and the lane it's drawn in said
+        // with it, for a game that's only told of the world: core/viewing.js)
+        const delve = { generation, awake: [], dead: [], opened: [], cleared: false, ...(run ? { run: { site: run.site, lane: run.lane } } : {}) };
 
         this.dungeons.set(delveKey(site, generation), delve);
         this.#delving.of = null;
@@ -21154,7 +21166,13 @@ export class Host {
 
         // (A party's run of a dungeon, runSite: beside its site's own, Interiors.addRun)
         if (key.startsWith("site:") && this.runs.has(key.slice(5))) {
-            return interiors.buildings.get(key) ?? (this.#building(`site:${this.runs.get(key.slice(5)).site}`) ? interiors.addRun(`site:${this.runs.get(key.slice(5)).site}`, key.slice(5)) : null);
+            const run = this.runs.get(key.slice(5));
+            const building = interiors.buildings.get(key) ?? (this.#building(`site:${run.site}`) ? interiors.addRun(`site:${run.site}`, run.id, run.lane ?? null) : null);
+
+            // (The lane it's drawn in kept with it: the same wherever it's set down again)
+            run.lane ??= building?.lane ?? null;
+
+            return building;
         }
 
         if (!interiors.buildings.has(key)) {

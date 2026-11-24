@@ -135,6 +135,7 @@ export const WORLD_SETTINGS = Object.freeze({
     awayAfter: { kind: "integer", min: 1, max: 120, default: 10, about: "Minutes without doing anything before a player's marked away: not counted in a fight's size, nor given a share of what falls by them (from when the world's next opened)" },
     outAfter: { kind: "integer", min: 1, max: 720, default: 30, about: "Minutes without doing anything before a player's sent out of the world, never sooner than they're marked away (from when the world's next opened)" },
     freeFollowers: { kind: "boolean", default: false, about: "Every follower, even in a crowd: with the Shared preset, don't hold players to one hired adventurer and one called creature while more than six are together, and let followers into the town's buildings (from when the world's next opened)" },
+    sharedDungeons: { kind: "boolean", default: false, about: "One run of each dungeon for everyone: with the Shared preset, don't give each party a run of its own of a dungeon, a hell or the keep (from when the world's next opened)" },
     trustedMayInvite: { kind: "boolean", default: false, about: "Trusted players may give others keys" },
     debugCommands: { kind: "boolean", default: false, about: "Its owners may use the debug commands (a field battle, say)" },
     netcode: { kind: "choice", of: NETCODES, words: NETCODE_WORDS, default: "lockstep", about: "How it's played with those who come in (changed only while nobody's in it)" },

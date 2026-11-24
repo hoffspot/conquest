@@ -30,10 +30,11 @@ export function rulesFor(meta) {
 
 /**
  * The rules of its preset a world's settings relax (storage/worlds.js): `freeFollowers`, every
- * follower a player can lead, in a crowd and in a town's buildings, whatever its preset has.
+ * follower a player can lead, in a crowd and in a town's buildings, whatever its preset has;
+ * `sharedDungeons`, each dungeon's one run everyone's, not a run for each party.
  */
 export function relaxedFor(meta) {
-    return meta.settings?.freeFollowers === true ? { followers: "free" } : {};
+    return { ...(meta.settings?.freeFollowers === true ? { followers: "free" } : {}), ...(meta.settings?.sharedDungeons === true ? { instances: "site" } : {}) };
 }
 
 /**

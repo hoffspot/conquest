@@ -225,6 +225,10 @@ export class Viewing extends Joining {
         if (dungeons) {
             // (Told by the site; kept by the site and its making, as the host keeps them: delveKey)
             host.dungeons = new Map(structuredClone([...dungeons]).map(([site, delve]) => [delveKey(site, delve?.generation ?? 0), delve]));
+            // (Each party's runs of them, the plan's 2-21: known here by what each one's told
+            // with, so the run the hero's in can be got ready as any dungeon is, Host.keepNear)
+            host.runs = new Map([...host.delves()].filter(([, delve]) => delve?.run).map(([id, { run }]) => [id, { id, site: run.site, lane: run.lane, owner: null, dropped: [], entered: true, emptySince: null }]));
+            host.runSites = new Map();
         }
 
         this.#parties(parts.get("parties"));
@@ -703,6 +707,10 @@ export class Viewing extends Joining {
                     Object.assign(said, { generation: building.generation + 1, awake: [], dead: [], opened: [], cleared: false });
                 }
 
+                host.open.delete(`site:${event.site}`);
+            } else if (event.type === "dungeon" && event.change === "retired") {
+                // (A party's run taken out of the world: its levels let go here too)
+                host.world.interiors?.dropRun(event.site);
                 host.open.delete(`site:${event.site}`);
             }
         }

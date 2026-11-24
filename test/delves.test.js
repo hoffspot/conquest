@@ -6,6 +6,7 @@
 // dungeon at their own power (core/dungeons/play.js), small chests a share for whoever's by them;
 // and once it's cleared and everyone's gone, made again, the next generation (core/host.js)
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { before, describe, it } from "node:test";
 import { ICON_KINDS } from "../client/js/app/mapicons.js";
 import { STEP_MS } from "../client/js/core/battle.js";
@@ -21,6 +22,7 @@ import { DUNGEON_ORIGINS, dungeonLevel, dungeonTier } from "../client/js/core/in
 import { buildWorld } from "../client/js/core/overworld.js";
 import { CHEST_GOLD } from "../client/js/core/places.js";
 import { createRandom } from "../client/js/core/random.js";
+import { LocalView } from "../client/js/core/worldview.js";
 import { HELL_CAMP, layoutNeutral } from "../client/js/core/setpieces/neutral.js";
 import { scalingOf } from "../client/js/core/strength.js";
 import { decode, encode } from "../client/js/core/wire.js";
@@ -490,6 +492,11 @@ describe("a dungeon in play (host.js #dungeons)", () => {
         assert.ok(bundle.gold >= HOARD.gold[0]);
         assert.ok(bundle.items.length >= HOARD.gear[0] + HOARD.potions[0]);
         assert.equal(delve.cleared, true);
+        // (And greyed on the map by it: the game's view asks the run in use at the site, since
+        // the host keeps runs by site and making; read by the site alone it was never greyed)
+        assert.equal(new LocalView(host).delveOf(site.id).cleared, true);
+        assert.equal(new LocalView(host).dungeons.get(site.id), undefined);
+        assert.ok(readFileSync(new URL("../client/js/app/game.js", import.meta.url), "utf8").includes("const cleared = Boolean(this.worldview?.delveOf?.(icon.id)?.cleared);"));
         assert.ok(events.some(({ type, change }) => type === "dungeon" && change === "cleared"));
     });
 

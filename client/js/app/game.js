@@ -8422,7 +8422,8 @@ export class Game {
         // (Each one's rim and words written again only when it's cleared, or made again: not a
         // sentence for every dungeon in the world every time the minimap's drawn)
         for (const icon of known.icons) {
-            const cleared = Boolean(this.worldview?.dungeons?.get(icon.id)?.cleared);
+            // (The run in use at its site: the host keeps runs by site and making, delveOf)
+            const cleared = Boolean(this.worldview?.delveOf?.(icon.id)?.cleared);
 
             if (cleared !== (icon.rim !== null)) {
                 icon.rim = cleared ? PLACE_RIMS.cleared : null;

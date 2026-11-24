@@ -84,7 +84,7 @@ export const READS = Object.freeze({
     party: { words: "Party and roster: the players wherever they are, their parties, invitations and ready checks, and their duels.", state: ["players", "pausable", "afar"], asks: ["partyFor", "partyOf", "fellows", "invitation", "waiting", "duelOf", "challenge"] },
     company: { words: "Followers, companions and the hero's own: who follows whom, those mending, and what each may do.", state: ["followers", "companions", "mending"], asks: ["mendingOf", "mostFollowers", "unitAbility", "stance", "recallOffer", "vitalsOf", "capFor", "mightFor", "fightFor", "canFight", "characterOf"] },
     props: { words: "The director's props: caches, finds, strangers, obstacles, trails, what's dropped, campfires, treasures and what's open or shut.", state: ["caches", "finds", "strangers", "obstacles", "ground", "campfires", "ambushes", "treasures", "open", "fresh", "wild", "slain"], asks: ["trailCreatureOf", "treasuresOf", "campRefusal", "shutOf"] },
-    rest: { words: "The rest: legends and their threads, the dungeons, hell's rifts, the world's rules, its folk out of doors, and where and when.", state: ["legends", "dungeons", "hellRifts", "rules", "done", "folk", "world"], asks: ["placeOf", "dueTo"] },
+    rest: { words: "The rest: legends and their threads, the dungeons, hell's rifts, the world's rules, its folk out of doors, and where and when.", state: ["legends", "dungeons", "hellRifts", "rules", "done", "folk", "world"], asks: ["placeOf", "dueTo", "delveOf"] },
 });
 
 const STATE = Object.values(READS).flatMap(({ state }) => state);
