@@ -1396,7 +1396,7 @@ function dungeonFloors(building, dungeon) {
  * `across` to a row, its levels `step` apart, a row `row` deep: room for three levels and an
  * arena (build.js), each under 120 metres across.
  */
-export const DUNGEON_ORIGINS = Object.freeze({ x: 20000, step: 120, across: 40, row: 600 });
+export const DUNGEON_ORIGINS = Object.freeze({ x: 20000, step: 120, across: 40, row: 600, lane: 16000 });
 
 /**
  * Where the hells' levels are drawn (a theme never found in a wild dungeon: themes.js `wild`),
@@ -1974,7 +1974,8 @@ export class Interiors {
         const map = readPlan(id, floor.name, floor.rows, { ground: floor.ground });
 
         Object.assign(map, {
-            origin: [origin[0], origin[1] + k * block.step],
+            // (Each making of it that stands here in a lane of its own: setGeneration)
+            origin: [origin[0], origin[1] + k * block.step + (building.lane ?? 0) * DUNGEON_ORIGINS.lane],
             style: floor.style,
             look: floor.look,
             finish: null,
@@ -2124,24 +2125,33 @@ export class Interiors {
     }
 
     /**
-     * A dungeon cleared and everyone gone from it, made again (core/host.js): its levels taken out
-     * of the world (and its stairs out of the links), and its next generation's to be made the
-     * next time they're wanted, its front door leading to them. The building, or null for one
-     * that isn't a dungeon.
+     * One of a dungeon's makings (a run of it: `generation`, the one in use unless said) taken out
+     * of the world: its levels, and its stairs out of the links. The one in use, its building's
+     * to be made again the next time its levels are wanted, of whichever making is then in use
+     * (setGeneration); one standing aside (`runs`), forgotten. The building, or null for one that
+     * isn't a dungeon, or a making of it that isn't here. (The scaling plan's 2-20: this was
+     * `remake`, which also began its next making; the host does that itself now.)
      */
-    remake(key) {
+    retire(key, generation = null) {
         const building = this.buildings.get(key);
 
         if (building?.kind !== "dungeon") {
             return null;
         }
 
-        for (const id of building.maps) {
+        const inUse = generation === null || generation === building.generation;
+        const run = inUse ? building : building.runs?.get(generation);
+
+        if (!run) {
+            return null;
+        }
+
+        for (const id of run.maps) {
             delete this.world.maps[id];
             this.byMap.delete(id);
         }
 
-        for (const link of building.flights) {
+        for (const link of run.flights) {
             const at = this.world.links.indexOf(link);
 
             if (at >= 0) {
@@ -2149,12 +2159,22 @@ export class Interiors {
             }
         }
 
+        if (!inUse) {
+            building.runs.delete(generation);
+            this.version++;
+
+            return building;
+        }
+
         if (this.order.includes(key)) {
             this.order.splice(this.order.indexOf(key), 1);
         }
 
-        this.byMap.delete(building.door.ends[1].map);
-        this.setGeneration(key, building.generation + 1);
+        Object.assign(building, { made: false, maps: [], flights: [], dungeon: null });
+        Object.assign(building.door.ends[1], { squares: [], arrive: null, pending: true });
+        // (Its front door leads where it did, to be made: still its building's)
+        this.byMap.set(building.door.ends[1].map, building);
+        this.version++;
 
         return building;
     }
@@ -2175,25 +2195,58 @@ export class Interiors {
     }
 
     /**
-     * How many times a dungeon's been made (a saved world's, or one hosted elsewhere): kept, and,
-     * if its building's here and not made yet, its front door leading to that generation's first
-     * level.
+     * Which making of a dungeon is in use (how many times it's been made: a saved world's, one
+     * hosted elsewhere, or the next after one retired): kept, and its building's, its front door
+     * leading to that making's first level. A making already made here and not retired stands
+     * aside as it is (`runs`, by its generation: its levels still in the world, in the lane of
+     * DUNGEON_ORIGINS they were drawn in), and one asked for that's standing aside is taken up
+     * again as it was; so several makings of one site can be here at once, each with its own
+     * maps and its own lane (the scaling plan's 2-20; one's in use at a time).
      */
     setGeneration(key, generation) {
         this.generations.set(key, generation);
 
         const building = this.buildings.get(key);
 
-        if (building?.kind !== "dungeon" || building.made && building.generation === generation) {
+        if (building?.kind !== "dungeon" || building.generation === generation) {
             return;
         }
 
-        const inside = dungeonLevel(key, generation, 0);
+        building.runs ??= new Map();
 
-        this.byMap.delete(building.door.ends[1].map);
-        Object.assign(building, { generation, made: false, maps: [], flights: [], dungeon: null });
-        Object.assign(building.door.ends[1], { map: inside, squares: [], arrive: null, pending: true });
-        this.byMap.set(inside, building);
+        // (The one in use till now, made: stood aside, with all that's its own)
+        if (building.made) {
+            building.runs.set(building.generation, { generation: building.generation, lane: building.lane ?? 0, maps: building.maps, flights: building.flights, dungeon: building.dungeon, door: { ...building.door.ends[1] } });
+
+            if (this.order.includes(key)) {
+                this.order.splice(this.order.indexOf(key), 1);
+            }
+        } else {
+            this.byMap.delete(building.door.ends[1].map);
+        }
+
+        const stood = building.runs.get(generation);
+
+        if (stood) {
+            building.runs.delete(generation);
+            Object.assign(building, { generation, lane: stood.lane, made: true, maps: stood.maps, flights: stood.flights, dungeon: stood.dungeon });
+            Object.assign(building.door.ends[1], stood.door);
+            this.order.push(key);
+        } else {
+            const inside = dungeonLevel(key, generation, 0);
+            // (Drawn in the first lane no making of it standing here is drawn in)
+            const lanes = new Set([...building.runs.values()].map(({ lane }) => lane));
+            let lane = 0;
+
+            while (lanes.has(lane)) {
+                lane++;
+            }
+
+            Object.assign(building, { generation, lane, made: false, maps: [], flights: [], dungeon: null });
+            Object.assign(building.door.ends[1], { map: inside, squares: [], arrive: null, pending: true });
+            this.byMap.set(inside, building);
+        }
+
         this.version++;
     }
 }

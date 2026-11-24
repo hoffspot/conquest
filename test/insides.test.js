@@ -18,7 +18,7 @@ const { EQUIPMENT } = await import("../client/js/characters/equipment.js");
 const { Battle, STEP_MS } = await import("../client/js/core/battle.js");
 const { treeFor, upstairsIs } = await import("../client/js/core/dialogue.js");
 const { TALK_CALLINGS } = await import("../client/js/core/rare.js");
-const { clearOfWaysIn, ENTERABLE, ENTRANCES, entranceOf, entranceSpecOf, SHOP_DOORS, FINISHES, guildFolkOf, guildRooms, heldWithin, LAYOUTS, openEntrances, shrinesOf, SITE_INSIDES, SITE_PATRONS, smithyFolkOf, smithyRooms, STRUCTURE_DOORS, taproomPlan, tavernFolkOf, tavernRooms, templeFolkOf, templeRooms, WAY_IN_CLEAR } = await import("../client/js/core/insides.js");
+const { clearOfWaysIn, DUNGEON_ORIGINS, dungeonLevel, ENTERABLE, ENTRANCES, entranceOf, entranceSpecOf, SHOP_DOORS, FINISHES, guildFolkOf, guildRooms, heldWithin, LAYOUTS, openEntrances, shrinesOf, SITE_INSIDES, SITE_PATRONS, smithyFolkOf, smithyRooms, STRUCTURE_DOORS, taproomPlan, tavernFolkOf, tavernRooms, templeFolkOf, templeRooms, WAY_IN_CLEAR } = await import("../client/js/core/insides.js");
 const { GOD_IDS, GODS } = await import("../client/js/core/lore/gods.js");
 const { crosses, squaresOf } = await import("../client/js/core/grid.js");
 const { readPlan } = await import("../client/js/core/interiors.js");
@@ -1180,5 +1180,93 @@ describe("letting go of a character (battle.js remove)", () => {
         battle.remove("player");
         assert.equal(battle.actor("orc").target, null);
         assert.deepEqual(battle.actors.map(({ id }) => id), ["orc"]);
+    });
+});
+
+describe("a dungeon's makings, several at once (insides.js Interiors setGeneration, retire; the scaling plan's 2-20)", () => {
+    // A world's first dungeon, its ground laid (so its building's known), and the interiors that keep it
+    const dungeon = () => {
+        const world = buildWorld({ seed: 1 });
+        const site = world.plan.sites.find(({ kind }) => kind === "dungeon");
+        const key = `site:${site.id}`;
+        const [cx, cy] = [Math.floor(site.at[0] / CHUNK), Math.floor(site.at[1] / CHUNK)];
+
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                world.maps.town.chunk(cx + dx, cy + dy);
+            }
+        }
+
+        return { world, interiors: world.interiors, key, building: world.interiors.buildings.get(key) };
+    };
+    const originsOf = (world, maps) => maps.map((id) => world.maps[id].origin.join(","));
+
+    it("makes a second making of a site with the first still here: disjoint map ids and origins, each its own stairs; the one in use at its front door", () => {
+        const { world, interiors, key, building } = dungeon();
+
+        assert.equal(building.kind, "dungeon");
+        interiors.make(key);
+
+        const first = { maps: [...building.maps], flights: [...building.flights], origins: originsOf(world, building.maps), inside: building.door.ends[1].map };
+
+        assert.ok(first.maps.length > 0 && building.made);
+        assert.equal(building.lane ?? 0, 0);
+
+        // The next making in use, the first not retired: it stands aside as it was
+        interiors.setGeneration(key, 1);
+        assert.equal(building.made, false);
+        assert.deepEqual([...building.runs.keys()], [0]);
+        assert.ok(first.maps.every((id) => world.maps[id] && interiors.of(id) === building), "the first's levels in the world still, its building's");
+        interiors.make(key);
+
+        const second = { maps: [...building.maps], origins: originsOf(world, building.maps) };
+
+        assert.equal(building.generation, 1);
+        assert.equal(building.lane, 1, "in a lane of its own");
+        assert.ok(second.maps.every((id) => !first.maps.includes(id)), "no map of one is the other's");
+        assert.ok(second.origins.every((origin) => !first.origins.includes(origin)), "nor drawn where the other's is");
+        assert.equal(new Set([...first.origins, ...second.origins]).size, first.maps.length + second.maps.length);
+        // (A lane off: each of its levels where the first's would be, DUNGEON_ORIGINS.lane further)
+        assert.deepEqual(second.origins.slice(0, first.origins.length).map((origin) => Number(origin.split(",")[1])), first.origins.slice(0, second.origins.length).map((origin) => Number(origin.split(",")[1]) + DUNGEON_ORIGINS.lane));
+        assert.deepEqual(second.origins.map((origin) => origin.split(",")[0]), second.origins.map(() => first.origins[0].split(",")[0]), "(in its site's column still)");
+        assert.equal(building.door.ends[1].map, second.maps[0], "its front door to the making in use");
+        assert.ok(first.flights.every((link) => world.links.includes(link)) && building.flights.every((link) => world.links.includes(link) && !first.flights.includes(link)));
+
+        // The first taken up again as it was; the second standing aside
+        interiors.setGeneration(key, 0);
+        assert.deepEqual([building.generation, building.lane, building.made, building.maps, building.door.ends[1].map], [0, 0, true, first.maps, first.inside]);
+        assert.deepEqual([...building.runs.keys()], [1]);
+    });
+
+    it("retires one making and leaves the other: the one standing aside forgotten, the one in use to be made again; a site with one making made again as ever, in the first lane", () => {
+        const { world, interiors, key, building } = dungeon();
+
+        interiors.make(key);
+
+        const first = [...building.maps];
+
+        interiors.setGeneration(key, 1);
+        interiors.make(key);
+
+        const second = [...building.maps];
+
+        // The one standing aside
+        assert.equal(interiors.retire(key, 0), building);
+        assert.ok(first.every((id) => !world.maps[id] && !interiors.of(id)), "its levels gone from the world");
+        assert.ok(second.every((id) => world.maps[id]), "the other's as they were");
+        assert.equal(building.runs.size, 0);
+        assert.equal(interiors.retire(key, 0), null, "(not here: nothing to retire)");
+
+        // The one in use: its building to be made again, of the making next in use
+        assert.equal(interiors.retire(key), building);
+        assert.ok(second.every((id) => !world.maps[id]));
+        assert.deepEqual([building.made, building.maps, building.flights], [false, [], []]);
+        assert.equal(world.links.filter((link) => link.building === key && link.kind === "stairs").length, 0, "no stairs of either left among the links");
+        interiors.setGeneration(key, 2);
+        interiors.make(key);
+        assert.equal(building.lane, 0, "none standing aside: the first lane again");
+        assert.equal(building.maps[0], dungeonLevel(key, 2, 0));
+        assert.equal(interiors.of(building.maps[0]), building);
+        assert.equal(interiors.retire("no-such-building"), null);
     });
 });
