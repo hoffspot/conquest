@@ -34,6 +34,27 @@ import { foundMap } from "./treasure.js";
 export const DIRECTOR = Object.freeze({ every: [250, 450], cards: Object.freeze(["cache", "remains", "campsite", "tracks", "stranger", "obstacle", "ambush"]) });
 
 /**
+ * How much an area holds of what the director deals, by a world's rule (`director: "area"`,
+ * core/host.js RULES; the scaling plan's 2-18): the land in cells `cell` metres across, and in a
+ * cell and those round it no more of the director's things at once than `things` and the square
+ * root, rounded down, of the players there (areaCap). A card that would be one more waits in its
+ * deck.
+ */
+export const AREA = Object.freeze({ cell: 256, things: 2 });
+
+/** The most of the director's things a cell and those round it hold at once, with so many players there (AREA): 3 for one, 4 for four, 5 for nine, 7 for twenty-five. */
+export function areaCap(players) {
+    return AREA.things + Math.floor(Math.sqrt(Math.max(0, players)));
+}
+
+/** Whether two places out in the world ([x, y], metres) are in one cell or in cells side by side or corner to corner (AREA). */
+export function sameArea([ax, ay], [bx, by]) {
+    const cell = (value) => Math.floor(value / AREA.cell);
+
+    return Math.abs(cell(ax) - cell(bx)) <= 1 && Math.abs(cell(ay) - cell(by)) <= 1;
+}
+
+/**
  * Fresh tracks: the pack they lead to, one roaming within `reach` metres ([least, most]) of the
  * player (the nearest ahead of them first), or, none, one of the land's put out `ahead` metres
  * before them ([least, most], within `spread` radians of the way they're going): within the 90 m

@@ -11,7 +11,7 @@ import { describe, it } from "node:test";
 import { STAMINA_RECOVERY, STEP_MS } from "../client/js/core/battle.js";
 import { LOOKS } from "../client/js/beasts/looks.js";
 import { CREATURES, WILD } from "../client/js/core/creatures.js";
-import { banditToll, clearedTurnsUp, clearRate, DIRECTOR, FINDS, foodFor, FRESH, freshTrail, noteOf, obstacleBox, OBSTACLES, PACING, PEACEFUL, peacefulNext, rollRemains, rollSpilled, shuffled, STRANGERS, TOOLS, TRACKLESS, WELL_RESTED } from "../client/js/core/director.js";
+import { AREA, areaCap, sameArea, banditToll, clearedTurnsUp, clearRate, DIRECTOR, FINDS, foodFor, FRESH, freshTrail, noteOf, obstacleBox, OBSTACLES, PACING, PEACEFUL, peacefulNext, rollRemains, rollSpilled, shuffled, STRANGERS, TOOLS, TRACKLESS, WELL_RESTED } from "../client/js/core/director.js";
 import { hypot } from "../client/js/core/exact.js";
 import { HOST_PLAYER, Host, REST, WILDS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -939,5 +939,66 @@ describe("something across the way (director.js OBSTACLES; host.js #putObstacle,
         assert.ok(gone.some(({ type, obstacle: id, change }) => type === "obstacle" && id === obstacle.id && change === "gone"));
         assert.ok(!squaresOf(world.maps.town).blocked(obstacle.box[0], obstacle.box[1]), "(its squares free)");
         assert.equal("obstacles" in keptOfNew(), false, "(none kept till one's dealt)");
+    });
+});
+
+describe("an area's director (director.js AREA; host.js RULES director)", () => {
+    it("holds 2 and the square root of the players there, in a cell of 256 m and those round it", () => {
+        assert.deepEqual(AREA, { cell: 256, things: 2 });
+        assert.deepEqual([0, 1, 3, 4, 8, 9, 12, 25, 50].map(areaCap), [2, 3, 3, 4, 4, 5, 5, 7, 9]);
+        assert.equal(sameArea([10, 10], [500, 500]), true, "(corner to corner)");
+        assert.equal(sameArea([10, 10], [520, 10]), false, "(two cells off)");
+        assert.equal(sameArea([255, 0], [256, 0]), true);
+        assert.equal(sameArea([-1, 0], [300, 0]), false, "(the cell west of the first, and the second)");
+    });
+
+    it("twelve walkers on one road never have more dealt about any of them than their area holds, the cards waiting in their decks; dealt to each player as ever, they do", () => {
+        // Twelve players in a column, 70 m apart (each a group of their own), walked out of the
+        // start town over the same ground: the most of the director's things about any of them
+        // (in their cell and those round it) on the way
+        const walked = (rules) => {
+            const world = buildWorld({ seed: 2 });
+            const host = new Host(world, { populate: false, ...(rules ? { rules } : {}) });
+            const ids = Array.from({ length: 12 }, (each, k) => (k ? `walker-${k}` : HOST_PLAYER));
+
+            for (const id of ids) {
+                host.join({ id, hero: { ...HERO, name: id } });
+            }
+
+            host.populate();
+            Object.assign(host.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+            const [sx, sy] = world.start.at;
+            const along = Math.SQRT1_2;
+            let most = 0;
+
+            for (let d = 0; d <= 2200; d += 8) {
+                for (const [k, id] of ids.entries()) {
+                    const actor = host.battle.actor(id);
+                    const far = Math.max(0, d - k * 70);
+
+                    Object.assign(actor, { square: [Math.floor(sx + along * far), Math.floor(sy + along * far)], path: [], order: null, target: null, hp: 1e6, maxHp: 1e6, dead: false });
+                    Object.assign(actor, { x: actor.square[0] + 0.5, y: actor.square[1] + 0.5 });
+                }
+
+                run(host, 500);
+
+                for (const id of ids) {
+                    const actor = host.battle.actor(id);
+
+                    most = Math.max(most, host.areaOf([actor.x, actor.y]).things);
+                }
+            }
+
+            return { most, rule: host.rules.director };
+        };
+        const area = walked({ director: "area" });
+        const each = walked(undefined);
+
+        assert.equal(area.rule, "area");
+        assert.ok(area.most > 0, "things were dealt");
+        assert.ok(area.most <= areaCap(12), `never more about any of them than an area holds with all twelve in it (${area.most} at most, of ${areaCap(12)})`);
+        assert.equal(each.rule, "player");
+        assert.ok(each.most > areaCap(12), `dealt to each player, more than that about them (${each.most})`);
     });
 });

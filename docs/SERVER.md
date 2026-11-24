@@ -874,7 +874,9 @@ players of peoples at war are enemies (`pvp`), whose a foe's spoils are
 a dungeon for each party (`instances`), a unique met by each character (`rares`), and a shop's
 stock for each (`stock`). Each is a rule kept with the world (`RULES`, `RULE_CHOICES` in
 `client/js/core/host.js`), and each is as it is today until the slice of the plan that builds its
-other way turns it on. Four are built. `followers`: on a `shared` world, while more than six
+other way turns it on. Five are built. `director`: on a `shared` world the wilds deal no more
+caches, finds, strangers, obstacles and ambushes into one stretch of land than it holds, however
+many players cross it (docs/WILDS.md, *An area's director*). `followers`: on a `shared` world, while more than six
 players are together none of them takes on more than one hired adventurer or calls more than one
 creature, and no one's followers come into a town's buildings (docs/WILDS.md, *A crowd's
 followers*); a world's **freeFollowers** setting (off unless set; taken as the world's next
