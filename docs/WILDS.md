@@ -958,6 +958,14 @@ debug mode's sample.
 - **Two kinds** (`RARE_CARDS` `kind`): a *unique* card comes once in a world and once to a
   character (one who's overcome it never meets it again, in any world: `progress.legends.met`); a
   *recurring* one now and then, at most once every 4 to 6 hours of the world's play (`RARE.recur`).
+- **In a world shared by strangers a unique is each character's to overcome** (the rule `rares`,
+  "character"; core/host.js `RULES`; the scaling plan's 2-25), not the world's once. Overcome,
+  it isn't gone from the world: it's away half an hour of the world's play (`RARE.returns`), then
+  put out again for a group none of whose characters has overcome it. It's open to all who come
+  to it, and each of them has its reward once. One who's overcome it never has it dealt to them
+  again, in any world, as ever. A world that had it done before the rule was its has it again.
+  One is out at a time for every eight players (`rareMost`): one, in any world there can be
+  today.
 - **Each player's own clock** (`Legends` `clocks`, `RARE.wilds`): the time they've spent out in the
   wilds (out of the settlements) since their last rare card, or since they first came out in the
   world. From `least` on, at each of the director's cards dealt them, a chance of the rare one

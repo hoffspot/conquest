@@ -63,7 +63,7 @@ function raw(port, { method = "GET", route = "/", headers = {}, body = null }) {
 }
 
 describe("the rules a shared world changes (core/host.js RULE_CHOICES)", () => {
-    it("has each as it is today in RULES, its other way named with the slice that builds it, and only those built whose slices are (pvp: 2-2; loot: 2-13; scaling: 2-16; followers: 2-17; director: 2-18; instances: 2-21)", () => {
+    it("has each as it is today in RULES, its other way named with the slice that builds it, and only those built whose slices are (pvp: 2-2; loot: 2-13; scaling: 2-16; followers: 2-17; director: 2-18; instances: 2-21; rares: 2-25)", () => {
         assert.deepEqual(Object.keys(RULE_CHOICES), ["pvp", "loot", "scaling", "followers", "director", "instances", "rares", "stock"]);
 
         for (const [key, { of, shared, slice, built }] of Object.entries(RULE_CHOICES)) {
@@ -71,7 +71,7 @@ describe("the rules a shared world changes (core/host.js RULE_CHOICES)", () => {
             assert.equal(of.length, 2, key);
             assert.equal(shared, of[1], `${key}: a shared world has the other`);
             assert.match(slice, /^2-\d+$/, key);
-            assert.equal(built, ["pvp", "loot", "scaling", "followers", "director", "instances"].includes(key), `${key}: turned on by ${slice}, with its tests (pvp's: test/duel.test.js; loot's: test/loot.test.js; scaling's: test/strength.test.js; followers': test/crowding.test.js; instances': test/runs.test.js)`);
+            assert.equal(built, ["pvp", "loot", "scaling", "followers", "director", "instances", "rares"].includes(key), `${key}: turned on by ${slice}, with its tests (pvp's: test/duel.test.js; loot's: test/loot.test.js; scaling's: test/strength.test.js; followers': test/crowding.test.js; instances': test/runs.test.js; rares': test/rare.test.js)`);
         }
 
         assert.deepEqual(
@@ -83,11 +83,11 @@ describe("the rules a shared world changes (core/host.js RULE_CHOICES)", () => {
     });
 
     it("keeps a rule that isn't built as it is today whatever a world's given, and one that is as it's given", () => {
-        const asked = { pvp: "optin", loot: "tagged", rares: "character", stock: "nobody's" };
+        const asked = { pvp: "optin", loot: "tagged", stock: "personal", rares: "nobody's" };
 
         assert.deepEqual(ruled(asked), { ...RULES, pvp: "optin", loot: "tagged" }, "(pvp and loot built: the rest as today)");
         assert.deepEqual(ruled(asked, NONE), RULES, "(nothing built: as today)");
-        assert.deepEqual(ruled({ ...asked, rest: "everyone" }, BUILT), { ...RULES, rest: "everyone", pvp: "optin", loot: "tagged", rares: "character" }, "(built: as given, anything unknown as today)");
+        assert.deepEqual(ruled({ ...asked, rest: "everyone" }, BUILT), { ...RULES, rest: "everyone", pvp: "optin", loot: "tagged", stock: "personal" }, "(built: as given, anything unknown as today)");
         assert.deepEqual(new Host(buildWorld({ seed: 2 }), { populate: false, rules: asked }).rules, { ...RULES, pvp: "optin", loot: "tagged" });
         assert.deepEqual(new Host(buildWorld({ seed: 2 }), { populate: false }).rules, RULES, "(a world a browser hosts never sets them)");
     });
@@ -98,7 +98,7 @@ describe("the rules a shared world changes (core/host.js RULE_CHOICES)", () => {
         const today = Object.fromEntries(Object.keys(RULE_CHOICES).map((key) => [key, RULES[key]]));
 
         assert.deepEqual(presetRules("company"), today);
-        assert.deepEqual(presetRules("shared"), { ...today, pvp: "optin", loot: "tagged", scaling: "crowd", followers: "limited", director: "area", instances: "party" }, "(pvp, loot, scaling, followers, director and instances built: a shared world's players fight only by a duel, are paid by their tags, are answered as a crowd, and have a run of each dungeon for each party; the rest as a company's)");
+        assert.deepEqual(presetRules("shared"), { ...today, pvp: "optin", loot: "tagged", scaling: "crowd", followers: "limited", director: "area", instances: "party", rares: "character" }, "(all but stock built: a shared world's players fight only by a duel, are paid by their tags, are answered as a crowd, have a run of each dungeon for each party, and each overcome a unique for themselves; the rest as a company's)");
         assert.deepEqual(presetRules("shared", NONE), today, "(none built: as a company's)");
         assert.deepEqual(presetRules(undefined), today);
         assert.deepEqual(presetRules("company", BUILT), today);
@@ -113,7 +113,7 @@ describe("the rules a shared world changes (core/host.js RULE_CHOICES)", () => {
         const host = new Host(buildWorld({ seed: 2 }), { populate: false, rules: { rest: "everyone", debug: "owner", mortal: true } });
 
         host.preset("shared");
-        assert.deepEqual(host.rules, { ...RULES, rest: "everyone", debug: "owner", mortal: true, pvp: "optin", loot: "tagged", scaling: "crowd", followers: "limited", director: "area", instances: "party" }, "(its other rules as they were)");
+        assert.deepEqual(host.rules, { ...RULES, rest: "everyone", debug: "owner", mortal: true, pvp: "optin", loot: "tagged", scaling: "crowd", followers: "limited", director: "area", instances: "party", rares: "character" }, "(its other rules as they were)");
         host.preset("company");
         assert.equal(host.rules.pvp, "war");
         assert.equal(host.rules.loot, "near");

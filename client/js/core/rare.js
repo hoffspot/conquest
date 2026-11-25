@@ -64,7 +64,22 @@ export const RARE = Object.freeze({
     calm: 5000,
     health: 0.5,
     kept: 40,
+    // (Where a unique is each character's to overcome, core/host.js RULES `rares` "character":
+    // how long one overcome is away from the world before it may be put out again; how many
+    // players there are to each one out at once; and how far apart two out at once are, m)
+    returns: 30 * MINUTE,
+    each: 8,
+    apart: 1500,
 });
+
+/**
+ * How many rare encounters may be out at once in a world of `players`, where a unique is each
+ * character's to overcome (RARE `each`): one to every eight, and one at least. One, in any world
+ * there can be today (none takes more than 8 players: server/access/cap.js), which is all the
+ * legends keep out at once (`active`); two out at once, RARE `apart` from each other, come with
+ * worlds of more.
+ */
+export const rareMost = (players) => Math.max(1, Math.ceil(players / RARE.each));
 
 /** The venues a card's dealt in: out in the wilds, or inside (a dungeon's floor, a tower's). */
 export const VENUES = Object.freeze(["wilds", "inside"]);
@@ -1178,7 +1193,7 @@ export class Legends {
      * `pass` times; or none. The deck made (shuffled with `random`)
      * from the cards in play the first time, any new since put in at the back; none of debug mode's.
      */
-    pick(venue, { met = new Set(), at, random }) {
+    pick(venue, { met = new Set(), at, random, each = false }) {
         const cards = this.cards;
         const playing = Object.values(cards).filter((card) => card.venue === venue && !card.debug);
         const deck = this.decks[venue].filter((id) => cards[id]);
@@ -1193,7 +1208,9 @@ export class Legends {
 
         for (const id of [...wanted, ...rest]) {
             const card = cards[id];
-            const may = card.where === "ahead" && !met.has(id) && (card.kind === "unique" ? !this.gone.has(id) : this.played >= (this.recurs[id] ?? 0));
+            // (`each`: a unique each character's to overcome, not the world's once: away only a
+            // while after it's overcome, as a recurring one is, `away`)
+            const may = card.where === "ahead" && !met.has(id) && (card.kind === "unique" ? !this.away(id, each) : this.played >= (this.recurs[id] ?? 0));
 
             if (!may) {
                 continue;
@@ -1293,7 +1310,7 @@ export class Legends {
      * world, a recurring one away a while (RARE `recur`). Failed or passed: where it was not put
      * again, and it comes again in its turn. Kept as met. What ended.
      */
-    end(how, { by = [], random = null } = {}) {
+    end(how, { by = [], random = null, each = false } = {}) {
         const active = this.active;
         const card = this.cards[active.card];
         const ended = { n: active.n, card: active.card, at: active.at, map: active.map, when: this.played, how, by: [...by] };
@@ -1302,6 +1319,9 @@ export class Legends {
             const [least, most] = RARE.recur;
 
             this.recurs[active.card] = this.played + least + (random ? random.next() : 0.5) * (most - least);
+        } else if (how === "done" && each) {
+            // (Each character's to overcome: back in the world once RARE `returns` has gone by)
+            this.recurs[active.card] = this.played + RARE.returns;
         } else if (how === "done") {
             this.gone.add(active.card);
         } else {
@@ -1313,6 +1333,15 @@ export class Legends {
         this.last = this.played;
 
         return ended;
+    }
+
+    /**
+     * Whether a unique card (its id) isn't the world's to put out now: done in this world, for
+     * good; or, where a unique is each character's to overcome (`each`), done and not yet back
+     * (RARE `returns`: whatever was done in the world before the rule was its, forgotten).
+     */
+    away(id, each = false) {
+        return each ? this.played < (this.recurs[id] ?? 0) : this.gone.has(id);
     }
 
     /** A player owed the rewards of `card`, gone before it was given. */
