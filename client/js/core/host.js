@@ -602,9 +602,13 @@ export const delveSite = (key) => key.slice(0, key.lastIndexOf("@"));
  * A dungeon's runs where each party has its own (RULES `instances` "party"; the scaling plan's
  * 2-21): how long one stands with no one in it and none of its party near its way in before it's
  * taken out of the world (`linger`, ms: ten minutes; one never gone into, or no one's any more,
- * goes at once).
+ * goes at once); how many stand in a world at once (`most`: one more is begun only once one with
+ * no one in it or near has been let go for it, and with none such, no one's let in to a new one);
+ * and how many each player may go into for the first time in an `hour` (`hourly`; the plan's
+ * 2-22). A dungeon's hoard is a player's in full once a world day at each dungeon: again that
+ * day, its gold alone.
  */
-export const RUNS = Object.freeze({ linger: 600000 });
+export const RUNS = Object.freeze({ linger: 600000, most: 4, hourly: 10, hour: 3600000 });
 
 /**
  * A party's run of a dungeon, as a site of its own to everything that keeps a dungeon by its
@@ -1317,6 +1321,8 @@ export const REFUSALS = Object.freeze({
     orders: "Those orders can't be carried out.",
     unsummoned: "No one's calling you.",
     otherRun: "That dungeon is another party's: you can't be called into it.",
+    runsFull: "Too many parties are in the world's dungeons just now. Try again when one of them comes out.",
+    runsSpent: "You've gone into ten new dungeon runs this hour. Wait a while before another.",
     duelist: "No one there to duel.",
     duelFar: "Too far away to ask them to a duel.",
     dueling: "One of you is in a duel already.",
@@ -1969,6 +1975,14 @@ export class Host {
         this.nextRun = 1;
         this.runSites = new Map();
         /**
+         * When each player last went into a run for the first time (by player: the battle's ms,
+         * those of the last RUNS.hour), and the world day each last had a dungeon's hoard in full
+         * (by player: { the dungeon's site: the day }): kept of those who've left the world too,
+         * so coming back in begins neither again.
+         */
+        this.runsBegun = new Map();
+        this.hoarded = new Map();
+        /**
          * Duels (DUEL): who's been asked to one, by the one asked ({ from, until }); who's in one,
          * by each of the two ({ with, at: when it begins }); and who isn't accepting them.
          */
@@ -2612,6 +2626,14 @@ export class Host {
 
                 if (rite) {
                     return refuse(rite);
+                }
+
+                // (A dungeon's front door, where each party has a run of it: no new run past
+                // the world's cap on them or the player's own for the hour, RUNS)
+                const barred = here === link.ends[0] ? this.#runBarred(player.id, link, { room: true }) : null;
+
+                if (barred) {
+                    return refuse(barred);
                 }
 
                 // (Heading into a building: it's got ready now, and its people made, before any
@@ -3752,6 +3774,8 @@ export class Host {
             // (Each party's runs of them, RUNS: none where a dungeon's one run is everyone's)
             ...(this.runs.size ? { runs: copy([...this.runs.values()]) } : {}),
             ...(this.nextRun > 1 ? { nextRun: this.nextRun } : {}),
+            ...(this.runsBegun.size ? { runsBegun: copy([...this.runsBegun.entries()]) } : {}),
+            ...(this.hoarded.size ? { hoarded: copy([...this.hoarded.entries()]) } : {}),
             nextCache: this.nextCache,
             treasures: copy([...this.treasures.entries()]),
             nextTreasure: this.nextTreasure,
@@ -3907,9 +3931,11 @@ export class Host {
 
         // (Each party's runs of the dungeons, RUNS: known before their levels are made again, each
         // in the lane it was drawn in)
-        host.runs = new Map(structuredClone(snapshot.runs ?? []).map((run) => [run.id, run]));
+        host.runs = new Map(structuredClone(snapshot.runs ?? []).map((run) => [run.id, { been: [], ...run }]));
         host.nextRun = snapshot.nextRun ?? 1;
         host.runSites = new Map();
+        host.runsBegun = new Map(structuredClone(snapshot.runsBegun ?? []));
+        host.hoarded = new Map(structuredClone(snapshot.hoarded ?? []));
 
         // (The dungeons as many times made as they were, and as strong, before any's made again)
         for (const [key, { generation, tier = null }] of snapshot.dungeons ?? []) {
@@ -15852,7 +15878,7 @@ export class Host {
         }
 
         if (!run && make && this.#siteOf(site)?.kind === "dungeon") {
-            run = { id: runSite(site, this.nextRun++), site, owner, dropped: [], entered: false, emptySince: null, lane: null };
+            run = { id: runSite(site, this.nextRun++), site, owner, dropped: [], been: [], entered: false, emptySince: null, lane: null };
             this.runs.set(run.id, run);
         }
 
@@ -15888,6 +15914,11 @@ export class Host {
             return null;
         }
 
+        // (No way in past the caps on runs, RUNS: where they are, their order let go)
+        if (this.#runBarred(who, link)) {
+            return false;
+        }
+
         const run = this.runFor(who, front.site, { make: true });
         const building = run ? this.#building(`site:${run.id}`) : null;
 
@@ -15896,9 +15927,58 @@ export class Host {
 
         if (building && who === actor.id) {
             run.entered = true;
+
+            // (Their first time in it: one of their new runs this hour)
+            if (!run.been.includes(who)) {
+                run.been.push(who);
+                this.runsBegun.set(who, [...this.#runsLately(who), this.battle.time]);
+            }
         }
 
         return building?.door ?? null;
+    }
+
+    // When a player's gone into a run for the first time in the last RUNS.hour (the battle's ms)
+    #runsLately(playerId) {
+        return (this.runsBegun.get(playerId) ?? []).filter((at) => this.battle.time - at < RUNS.hour);
+    }
+
+    // The run with no one in it or near that's been so the longest (#runsTended: `emptySince`),
+    // the one let go to make room for a new one at the world's cap; or none
+    #runToSpare() {
+        return [...this.runs.values()].filter((run) => run.emptySince !== null).sort((a, b) => a.emptySince - b.emptySince)[0] ?? null;
+    }
+
+    // Why a player can't go in by a dungeon's front door (`link`) where each party has a run of
+    // it, or null: into a run they've not been in, with RUNS.hourly new ones this hour already
+    // ("runsSpent"); or with no run to go into and RUNS.most standing in the world, none of them
+    // to spare ("runsFull"). With `room`, one to spare is let go now, for theirs to be begun
+    #runBarred(playerId, link, { room = false } = {}) {
+        const front = link.kind === "door" ? this.world.interiors?.buildings.get(link.building) : null;
+
+        if (this.rules.instances !== "party" || front?.kind !== "dungeon" || front.base) {
+            return null;
+        }
+
+        const run = this.runFor(playerId, front.site);
+
+        if (!run?.been.includes(playerId) && this.#runsLately(playerId).length >= RUNS.hourly) {
+            return "runsSpent";
+        }
+
+        if (!run && this.runs.size >= RUNS.most) {
+            const spare = this.#runToSpare();
+
+            if (!spare) {
+                return "runsFull";
+            }
+
+            if (room) {
+                this.#runRetired(spare, "room");
+            }
+        }
+
+        return null;
     }
 
     // Whether a player (their actor) stands within `reach` of a dungeon's way in, out by it
@@ -15919,8 +15999,10 @@ export class Host {
 
         for (const site of this.#dungeonSites()) {
             for (const actor of actors) {
+                // (None begun past the world's cap for one only coming near: at the door, one
+                // with no one in it is let go for theirs, #runBarred)
                 if (this.#nearWayIn(actor, site, DELVES.near)) {
-                    this.runFor(actor.id, site.id, { make: true });
+                    this.runFor(actor.id, site.id, { make: this.runs.size < RUNS.most });
                 }
             }
         }
@@ -16308,6 +16390,22 @@ export class Host {
     // the fallen's remains searched, rollFallen; the hoard's for everyone in the dungeon,
     // rollHoard at each one's own power), theirs alone to take, where it stood; the hoard opened,
     // the dungeon cleared, to be made again once everyone's left
+    // Whether a player's had a dungeon's hoard (`site`: its own id) in full this world day
+    // already, where each party has a run of it (RUNS); and if not, that they have now: kept by
+    // the day, those of days gone forgotten
+    #hoardedToday(playerId, site) {
+        const day = this.war ? dayOf(elapsedOf(this.war)) : Math.floor(this.battle.time / DAY.length);
+        const had = Object.fromEntries(Object.entries(this.hoarded.get(playerId) ?? {}).filter(([, on]) => on === day));
+
+        if (had[site] === day) {
+            return true;
+        }
+
+        this.hoarded.set(playerId, { ...had, [site]: day });
+
+        return false;
+    }
+
     #openDungeonChest(dropped) {
         const delve = this.delveOf(dropped.dungeon);
         const building = this.world.interiors?.buildings.get(`site:${dropped.dungeon}`);
@@ -16335,17 +16433,22 @@ export class Host {
 
             const hoard = dropped.hoard ? hoardTier(level.tier, mightTier(this.mightFor(player.id))) : null;
             const made = { ...this.#making(player, tierPowerOf(hoard ?? level.tier)), maker };
-            const bundle = dropped.hoard ? rollHoard(hoard, this.random, made) : dropped.remains ? rollFallen(level.tier, this.random, made) : dropped.floor ? rollFloorChest(Math.min(TIERS, level.tier + 1), this.random, made) : rollCoffer(level.tier, this.random, made);
+            // (Where each party has a run of it, RUNS: the hoard theirs in full once a world day
+            // at each dungeon; again that day, its gold alone)
+            const again = dropped.hoard && this.rules.instances === "party" && this.#hoardedToday(player.id, runBase(dropped.dungeon));
+            const rolled = dropped.hoard ? rollHoard(hoard, this.random, made) : dropped.remains ? rollFallen(level.tier, this.random, made) : dropped.floor ? rollFloorChest(Math.min(TIERS, level.tier + 1), this.random, made) : rollCoffer(level.tier, this.random, made);
+
+            const bundle = again ? { ...rolled, items: [] } : rolled;
 
             // (A treasure map in a chest or the hoard now and then: core/treasure.js MAP_FINDS)
-            if (!dropped.remains) {
+            if (!dropped.remains && !again) {
                 withMap(bundle, dropped.hoard ? "hoard" : "dungeon", level.tier, this.random);
             }
             const ground = `ground-${this.nextGround++}`;
             const from = dropped.remains ? "remains" : "chest";
 
             this.ground.set(ground, { id: ground, bundle, for: player.id, from, map: dropped.map, square: [...dropped.square], until: this.battle.time + GROUND_MS });
-            this.#event("spoils", { id: player.id, ground, from: dropped.id, creature: from, dungeon: dropped.dungeon, ...(dropped.hoard ? { hoard: true } : {}) });
+            this.#event("spoils", { id: player.id, ground, from: dropped.id, creature: from, dungeon: dropped.dungeon, ...(dropped.hoard ? { hoard: true } : {}), ...(again ? { lesser: true } : {}) });
         }
 
         if (dropped.hoard) {

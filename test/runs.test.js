@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { DELVES } from "../client/js/core/dungeons/play.js";
+import { DELVES, HOARD } from "../client/js/core/dungeons/play.js";
 import { hypot } from "../client/js/core/exact.js";
 import { delveKey, HOST_PLAYER, Host, presetRules, REFUSALS, RULE_CHOICES, ruled, RULES, RUNS, runBase, runSite } from "../client/js/core/host.js";
 import { DUNGEON_ORIGINS, dungeonLevel, HELL_ORIGINS, KEEP_ORIGINS } from "../client/js/core/insides.js";
@@ -28,7 +28,7 @@ describe("the rule (host.js RULES instances, RUNS)", () => {
     it("is a dungeon's one run for everyone unless a world says, a run for each party in a world shared by strangers, and a world's own setting turns that off", () => {
         assert.equal(RULES.instances, "site");
         assert.deepEqual(RULE_CHOICES.instances, { of: ["site", "party"], shared: "party", slice: "2-21", built: true });
-        assert.deepEqual(RUNS, { linger: 600000 });
+        assert.deepEqual(RUNS, { linger: 600000, most: 4, hourly: 10, hour: 3600000 });
         assert.equal(presetRules("shared").instances, "party");
         assert.equal(presetRules("company").instances, "site");
         assert.ok(REFUSALS.otherRun.includes("another party's"));
@@ -547,5 +547,212 @@ describe("a run of a hell, and a leader's followers (host.js #doorFor, #bring)",
 
         assert.notEqual(mine, hers);
         assert.equal(host.battle.actor(follower).map, host.battle.actor(HOST_PLAYER).map);
+    });
+});
+
+describe("the caps on runs, and the hoard a day (host.js RUNS most, hourly; the plan's 2-22)", () => {
+    const IDS = [HOST_PLAYER, "bea", "cal", "dov", "eve"];
+    let world;
+    let host;
+    let sites;
+    let far;
+
+    const actor = (id) => host.battle.actor(id);
+    const front = (site) => world.interiors.buildings.get(`site:${site.id}`);
+    const runOf = (id) => world.interiors.of(actor(id).map);
+
+    function run(ms) {
+        const events = [];
+
+        for (let t = 0; t < ms; t += STEP_MS) {
+            for (const id of IDS) {
+                actor(id).hp = actor(id).maxHp;
+            }
+
+            events.push(...host.advance(STEP_MS));
+        }
+
+        return events;
+    }
+
+    // Stood before a way and told to go through: what the host says; and, if it will, played on
+    // till they have
+    function cross(id, link) {
+        const me = actor(id);
+
+        put(me, link.ends.find(({ map }) => map === me.map).arrive);
+
+        const told = host.command(id, { type: "enter", link: link.id });
+
+        if (!told.ok) {
+            return told;
+        }
+
+        for (let t = 0; t < 60000; t += 250) {
+            if (run(250).some((event) => event.type === "cross" && event.id === id)) {
+                return told;
+            }
+        }
+
+        return { ok: false, reason: "never crossed" };
+    }
+
+    const out = (id) => {
+        assert.ok(cross(id, runOf(id).door).ok);
+        put(actor(id), [far[0] + IDS.indexOf(id), far[1]]);
+    };
+
+    before(() => {
+        world = buildWorld({ seed: 1 });
+        host = new Host(world, { populate: false, rules: { instances: "party" } });
+
+        for (const id of IDS) {
+            host.join({ id, hero: { ...HERO, name: id } });
+            Object.assign(actor(id), { hp: 1e6, maxHp: 1e6 });
+        }
+
+        const [sx, sy] = world.start.at;
+
+        // (The two nearest: one for the cap, the other for a run they've not been in)
+        sites = world.plan.sites.filter(({ kind, theme }) => kind === "dungeon" && theme !== "hell").sort((a, b) => hypot(a.at[0] - sx, a.at[1] - sy) - hypot(b.at[0] - sx, b.at[1] - sy)).slice(0, 2);
+
+        for (const site of sites) {
+            world.maps.town.sites.heartOf(site);
+        }
+
+        far = [...actor(HOST_PLAYER).square];
+    });
+
+    it("lets no more than RUNS.most runs stand in a world: one more coming near begins none, and is told so at the door; with one of them empty, it's let go for theirs", () => {
+        const [site] = sites;
+
+        for (const id of IDS.slice(0, RUNS.most)) {
+            assert.ok(cross(id, front(site).door).ok, `${id} in`);
+        }
+
+        assert.equal(host.runs.size, RUNS.most);
+        put(actor("eve"), front(site).door.ends[0].arrive);
+        run(500);
+        assert.equal(host.runFor("eve", site.id), null, "none begun for one coming near");
+        assert.deepEqual(cross("eve", front(site).door), { ok: false, reason: "runsFull" });
+        assert.equal(actor("eve").map, "town");
+
+        // (One of them out and away: its run empty, and the one to spare)
+        const spare = runOf("dov").site;
+
+        out("dov");
+        run(500);
+        assert.equal(typeof host.runs.get(spare).emptySince, "number");
+        put(actor("eve"), front(site).door.ends[0].arrive);
+        assert.ok(host.command("eve", { type: "enter", link: front(site).door.id }).ok);
+        assert.equal(host.runs.has(spare), false, "let go as she's let in");
+
+        const events = run(3000);
+
+        assert.ok(events.some((event) => event.type === "cross" && event.id === "eve"));
+        assert.equal(host.runs.size, RUNS.most);
+        assert.deepEqual(host.runs.get(runOf("eve").site).been, ["eve"]);
+    });
+
+    it("counts each run a player goes into for the first time, RUNS.hourly an hour: then none new till the hour's by, though one they've been in is theirs still", () => {
+        const [site, other] = sites;
+        const mine = runOf(HOST_PLAYER).site;
+
+        assert.equal(host.runsBegun.get(HOST_PLAYER).length, 1);
+        out(HOST_PLAYER);
+        run(500);
+        assert.ok(cross(HOST_PLAYER, front(site).door).ok);
+        assert.equal(runOf(HOST_PLAYER).site, mine);
+        assert.equal(host.runsBegun.get(HOST_PLAYER).length, 1, "back into the same one: not counted again");
+        out(HOST_PLAYER);
+
+        // (Ten begun this hour, as if they had been)
+        host.runsBegun.set(HOST_PLAYER, new Array(RUNS.hourly).fill(host.battle.time));
+        // (Room in the world for one: two of the others out and away, their runs let go in time)
+        out("bea");
+        out("cal");
+        run(500);
+
+        for (const each of [...host.runs.values()].filter(({ emptySince, id }) => emptySince !== null && id !== mine)) {
+            each.emptySince = host.battle.time - RUNS.linger;
+        }
+
+        run(1500);
+        assert.ok(host.runs.size < RUNS.most);
+        assert.deepEqual(cross(HOST_PLAYER, front(other).door), { ok: false, reason: "runsSpent" });
+        assert.equal(host.runFor(HOST_PLAYER, other.id), null);
+        assert.ok(cross(HOST_PLAYER, front(site).door).ok, "the one they've been in");
+        out(HOST_PLAYER);
+
+        // (The hour gone by: a clock stepped)
+        host.runsBegun.set(HOST_PLAYER, new Array(RUNS.hourly).fill(host.battle.time - RUNS.hour));
+        assert.ok(cross(HOST_PLAYER, front(other).door).ok);
+        assert.equal(runOf(HOST_PLAYER).base, other.id);
+        assert.equal(host.runsBegun.get(HOST_PLAYER).length, 1, "those of an hour ago forgotten");
+        out(HOST_PLAYER);
+    });
+
+    it("gives a dungeon's hoard in full once a world day at each dungeon, and its gold alone again that day; kept in a snapshot", () => {
+        const [site, other] = sites;
+        // A hoard, unlocked, set before a player in the run they're in: opened, their share of it
+        const opened = (id) => {
+            const me = actor(id);
+            const chest = `test-hoard-${host.nextGround++}`;
+
+            host.ground.set(chest, { id: chest, chest: true, locked: false, dungeon: runOf(id).site, coffer: chest, hoard: true, map: me.map, square: [me.square[0], me.square[1] - 1], until: null });
+            assert.ok(host.command(id, { type: "pickUp", ground: chest }).ok);
+
+            const share = run(500).find((event) => event.type === "spoils" && event.from === chest && event.id === id);
+
+            return { share, bundle: host.ground.get(share.ground).bundle };
+        };
+
+        assert.ok(cross("bea", front(site).door).ok);
+
+        const first = opened("bea");
+
+        assert.ok(!first.share.lesser && first.bundle.items.length >= HOARD.gear[0] + HOARD.potions[0] && first.bundle.gold >= HOARD.gold[0]);
+
+        const again = opened("bea");
+
+        assert.equal(again.share.lesser, true);
+        assert.deepEqual(again.bundle.items, []);
+        assert.ok(again.bundle.gold >= HOARD.gold[0]);
+        assert.deepEqual(Object.keys(host.hoarded.get("bea")), [site.id], "by the dungeon, not the run");
+
+        // (Kept: the same from a world taken up again)
+        const kept = Host.restore(buildWorld({ seed: 1 }), decode(encode(host.snapshot())));
+
+        assert.deepEqual([...kept.hoarded], [...host.hoarded]);
+        assert.deepEqual([...kept.runsBegun], [...host.runsBegun]);
+
+        // (Another dungeon's, the same day: in full)
+        out("bea");
+        run(500);
+        assert.ok(cross("bea", front(other).door).ok);
+        assert.ok(!opened("bea").share.lesser);
+
+        // (And the first again another day: in full, the day before forgotten)
+        host.hoarded.set("bea", Object.fromEntries(Object.entries(host.hoarded.get("bea")).map(([key, day]) => [key, day - 1])));
+        assert.ok(!opened("bea").share.lesser);
+        assert.deepEqual(Object.keys(host.hoarded.get("bea")), [other.id]);
+    });
+
+    it("has neither where a dungeon's one run is everyone's", () => {
+        const plain = new Host(buildWorld({ seed: 1 }), { populate: false });
+
+        plain.join({ id: HOST_PLAYER, hero: HERO });
+        Object.assign(plain.battle.actor(HOST_PLAYER), { hp: 1e6, maxHp: 1e6 });
+        plain.runsBegun.set(HOST_PLAYER, new Array(RUNS.hourly).fill(0));
+
+        const [site] = sites;
+
+        plain.world.maps.town.sites.heartOf(plain.world.plan.sites.find(({ id }) => id === site.id));
+
+        const door = plain.world.interiors.buildings.get(`site:${site.id}`).door;
+
+        put(plain.battle.actor(HOST_PLAYER), door.ends[0].arrive);
+        assert.ok(plain.command(HOST_PLAYER, { type: "enter", link: door.id }).ok);
+        assert.ok(!("runsBegun" in new Host(buildWorld({ seed: 1 }), { populate: false }).snapshot()));
     });
 });

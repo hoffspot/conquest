@@ -227,7 +227,7 @@ export class Viewing extends Joining {
             host.dungeons = new Map(structuredClone([...dungeons]).map(([site, delve]) => [delveKey(site, delve?.generation ?? 0), delve]));
             // (Each party's runs of them, the plan's 2-21: known here by what each one's told
             // with, so the run the hero's in can be got ready as any dungeon is, Host.keepNear)
-            host.runs = new Map([...host.delves()].filter(([, delve]) => delve?.run).map(([id, { run }]) => [id, { id, site: run.site, lane: run.lane, owner: null, dropped: [], entered: true, emptySince: null }]));
+            host.runs = new Map([...host.delves()].filter(([, delve]) => delve?.run).map(([id, { run }]) => [id, { id, site: run.site, lane: run.lane, owner: null, dropped: [], been: [], entered: true, emptySince: null }]));
             host.runSites = new Map();
         }
 
