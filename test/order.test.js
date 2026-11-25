@@ -289,9 +289,9 @@ function run(host, ms, players = []) {
 
 // A host with two players in a party (Ada and Bea) and a third (Cy) not, Bellhaven's castle made,
 // and Ada gone in over its bridge's foot
-function inTheCastle() {
+function inTheCastle(rules = null) {
     const world = buildWorld({ seed: 1 });
-    const host = new Host(world, { populate: false });
+    const host = new Host(world, { populate: false, ...(rules ? { rules } : {}) });
     const building = world.interiors.buildings.get(`site:${world.plan.sites.find(({ scenery }) => scenery === "bellhaven").id}`);
 
     host.join({ id: HOST_PLAYER, hero: HERO });
@@ -659,6 +659,94 @@ describe("the Bell Tolls Again (rare.js THREADS bellhaven, writings.js)", () => 
         assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "bellhaven", step: 4 } }).ok, true);
         assert.ok(thread.done);
         assert.ok(host.legends.lasting().some(({ kind, name, town }) => kind === "festival" && name === "the Feast of the Silent Bell" && town === opener.town.id));
+    });
+
+    it("has its steps done from any run of the keep, where each party has its own (the scaling plan's 2-23): gone into by one, in their run; the Prior felled by another, in a run of their own, and the reward theirs", () => {
+        const { host, building, ada, cy } = inTheCastle({ instances: "party" });
+        const plan = host.world.plan;
+        const castle = plan.sites.find(({ id }) => id === building.site);
+        const keepId = `${castle.id}-keep`;
+        const keep = host.world.interiors.buildings.get(`${building.key}-keep`);
+        // Into the keep by its doors off the court, played on till they're in a run of it
+        const intoKeep = (actor) => {
+            if (actor.map !== building.maps[0]) {
+                put(actor, building.door.ends[0].arrive, "town");
+                host.command(actor.id, { type: "enter", link: building.door.id });
+
+                for (let t = 0; t < 30000 && actor.map === "town"; t += 250) {
+                    run(host, 250, [ada, cy]);
+                }
+            }
+
+            put(actor, squareIn("bellhaven", [-0.5, -138.5]));
+            assert.ok(host.command(actor.id, { type: "enter", link: keep.door.id }).ok);
+
+            for (let t = 0; t < 30000 && !host.world.interiors.of(actor.map)?.base; t += 250) {
+                run(host, 250, [ada, cy]);
+            }
+
+            return host.world.interiors.of(actor.map);
+        };
+
+        assert.equal(host.rules.instances, "party");
+
+        // (The thread at its third step, the keep to be gone into: begun, and brought there as
+        // its first two done would have it)
+        const [first] = host.courts.get(building.key).ids.map((id) => host.battle.actor(id));
+
+        put(ada, [first.square[0], first.square[1] + 2]);
+        assert.ok(run(host, 3000, [ada, cy]).some(({ type, change }) => type === "thread" && change === "begun"));
+
+        const thread = host.legends.threads.bellhaven;
+
+        put(ada, thread.place.map(Math.floor), "town");
+        run(host, 1500, [ada, cy]);
+
+        for (const id of thread.foes) {
+            host.battle.afflict(id, "poison", { by: HOST_PLAYER, damage: 1e7 });
+        }
+
+        run(host, 2000, [ada, cy]);
+        assert.equal(thread.step, 1);
+
+        const temple = into(host, "church", openerOf(plan, "bellhaven").town.id);
+
+        assert.ok(talkTo(host, temple.folk.find((one) => one.role === "priest")));
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "bellhaven", step: 1 } }).ok, true);
+        host.command(HOST_PLAYER, { type: "talk", with: null });
+        assert.deepEqual([thread.step, thread.site], [2, keepId]);
+
+        // Gone into: by Ada, into her own run of the keep, never the keep's own
+        const hers = intoKeep(ada);
+
+        assert.deepEqual([hers.base, keep.made], [keepId, false]);
+        assert.equal(thread.step, 3, "the way in's step, from her run");
+        assert.deepEqual([thread.site, thread.place], [keepId, [...castle.at]]);
+
+        // Felled: by Cy, in no party of hers, in a run of his own
+        const his = intoKeep(cy);
+
+        assert.deepEqual([his.base, his !== hers], [keepId, true]);
+
+        const top = his.maps.at(-1);
+        const stairs = host.battle.links.find(({ ends }) => ends.some(({ map }) => map === top));
+
+        put(cy, stairs.ends.find(({ map }) => map === top).arrive, top);
+        run(host, 1500, [ada, cy]);
+
+        const [prior] = [...host.wild].find(([, beast]) => beast.dungeon === his.site && beast.champion === "boss") ?? [];
+
+        assert.equal(host.wild.get(prior)?.creature, "priorVane");
+
+        const slain = felled(host, cy, prior);
+
+        assert.equal(thread.step, 4, "the slaying's step, from his run");
+        // (The reward his, who was in the run where the Prior fell; not hers, in another)
+        assert.ok(slain.some(({ type, change, id, gold, writing }) => type === "thread" && change === "given" && id === "cy" && gold === 150 && writing === "bell"));
+        assert.ok(!slain.some(({ type, change, id }) => type === "thread" && change === "given" && id === HOST_PLAYER));
+        // (And the Prior in her run stands yet)
+        assert.deepEqual([Boolean(host.delveOf(his.site).masterFell), Boolean(host.delveOf(hers.site).masterFell)], [true, false]);
+        assert.deepEqual(host.delveOf(hers.site).dead.filter((key) => host.delveOf(his.site).dead.includes(key)), []);
     });
 
     it("is begun by the priest's rumour, and, it not begun, as the Bellbound's word's taken back to the rogue", () => {
