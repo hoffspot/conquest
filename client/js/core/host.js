@@ -602,10 +602,11 @@ export const delveSite = (key) => key.slice(0, key.lastIndexOf("@"));
  * A dungeon's runs where each party has its own (RULES `instances` "party"; the scaling plan's
  * 2-21): how long one stands with no one in it and none of its party near its way in before it's
  * taken out of the world (`linger`, ms: ten minutes; one never gone into, or no one's any more,
- * goes at once); how many stand in a world at once (`most`: one more is begun only once one with
- * no one in it or near has been let go for it, and with none such, no one's let in to a new one);
- * and how many each player may go into for the first time in an `hour` (`hourly`; the plan's
- * 2-22). A dungeon's hoard is a player's in full once a world day at each dungeon: again that
+ * goes at once); how many have players in them at once in a world every game of which plays the
+ * whole of it (`most`: a lockstep world, where each level with someone on it is a cost to every
+ * player's step; with as many, no one's let into one that's empty or new. A world its server
+ * alone plays has no such cap: Host `runsCapped`); and how many each player may go into for the
+ * first time in an `hour` (`hourly`; the plan's 2-22). A dungeon's hoard is a player's in full once a world day at each dungeon: again that
  * day, its gold alone.
  */
 export const RUNS = Object.freeze({ linger: 600000, most: 4, hourly: 10, hour: 3600000 });
@@ -1983,6 +1984,13 @@ export class Host {
         this.runsBegun = new Map();
         this.hoarded = new Map();
         /**
+         * Whether the world holds runs with players in them to RUNS.most: a world every game
+         * plays the whole of (lockstep), as any is unless its server says it alone plays it (a
+         * replicated one: server/world-worker.js, each time it's opened). No rule of the world's:
+         * how it's played isn't one, and nothing of it is kept or told.
+         */
+        this.runsCapped = true;
+        /**
          * Duels (DUEL): who's been asked to one, by the one asked ({ from, until }); who's in one,
          * by each of the two ({ with, at: when it begins }); and who isn't accepting them.
          */
@@ -2630,7 +2638,7 @@ export class Host {
 
                 // (A dungeon's front door, where each party has a run of it: no new run past
                 // the world's cap on them or the player's own for the hour, RUNS)
-                const barred = here === link.ends[0] ? this.#runBarred(player.id, link, { room: true }) : null;
+                const barred = here === link.ends[0] ? this.#runBarred(player.id, link) : null;
 
                 if (barred) {
                     return refuse(barred);
@@ -15943,17 +15951,22 @@ export class Host {
         return (this.runsBegun.get(playerId) ?? []).filter((at) => this.battle.time - at < RUNS.hour);
     }
 
-    // The run with no one in it or near that's been so the longest (#runsTended: `emptySince`),
-    // the one let go to make room for a new one at the world's cap; or none
-    #runToSpare() {
-        return [...this.runs.values()].filter((run) => run.emptySince !== null).sort((a, b) => a.emptySince - b.emptySince)[0] ?? null;
+    // The runs with a player in them, fallen or not (by the run's id)
+    #runsHeld() {
+        return new Set([...this.players.keys()].map((id) => this.world.interiors?.of(this.battle.actor(id)?.map)).filter((building) => building?.base).map(({ site }) => site));
+    }
+
+    // Whether a world that caps them (`runsCapped`) has as many runs with players in them as it
+    // may, RUNS.most; `held`: which have (#runsHeld)
+    #runsFull(held = this.#runsHeld()) {
+        return this.runsCapped && held.size >= RUNS.most;
     }
 
     // Why a player can't go in by a dungeon's front door (`link`) where each party has a run of
     // it, or null: into a run they've not been in, with RUNS.hourly new ones this hour already
-    // ("runsSpent"); or with no run to go into and RUNS.most standing in the world, none of them
-    // to spare ("runsFull"). With `room`, one to spare is let go now, for theirs to be begun
-    #runBarred(playerId, link, { room = false } = {}) {
+    // ("runsSpent"); or into one with no one in it, theirs or new, with as many as the world may
+    // have with players in them ("runsFull")
+    #runBarred(playerId, link) {
         const front = link.kind === "door" ? this.world.interiors?.buildings.get(link.building) : null;
 
         if (this.rules.instances !== "party" || front?.kind !== "dungeon" || front.base) {
@@ -15966,19 +15979,9 @@ export class Host {
             return "runsSpent";
         }
 
-        if (!run && this.runs.size >= RUNS.most) {
-            const spare = this.#runToSpare();
+        const held = this.#runsHeld();
 
-            if (!spare) {
-                return "runsFull";
-            }
-
-            if (room) {
-                this.#runRetired(spare, "room");
-            }
-        }
-
-        return null;
+        return !held.has(run?.id) && this.#runsFull(held) ? "runsFull" : null;
     }
 
     // Whether a player (their actor) stands within `reach` of a dungeon's way in, out by it
@@ -15996,19 +15999,20 @@ export class Host {
     // into, else after RUNS.linger
     #runsTended(on) {
         const actors = [...this.players.keys()].map((id) => this.battle.actor(id)).filter((actor) => actor && !actor.dead && !this.world.maps[actor.map]?.dungeon);
+        const full = this.#runsFull();
 
         for (const site of this.#dungeonSites()) {
             for (const actor of actors) {
-                // (None begun past the world's cap for one only coming near: at the door, one
-                // with no one in it is let go for theirs, #runBarred)
+                // (None begun for one coming near while the world has as many with players in
+                // them as it may: they'd not be let into it, #runBarred)
                 if (this.#nearWayIn(actor, site, DELVES.near)) {
-                    this.runFor(actor.id, site.id, { make: this.runs.size < RUNS.most });
+                    this.runFor(actor.id, site.id, { make: !full });
                 }
             }
         }
 
         // (Which have a player in them, fallen or not: none of those is empty)
-        const held = new Set([...this.players.keys()].map((id) => this.world.interiors.of(this.battle.actor(id)?.map)).filter((building) => building?.base).map(({ site }) => site));
+        const held = this.#runsHeld();
 
         for (const run of [...this.runs.values()]) {
             const site = this.#siteOf(run.id);

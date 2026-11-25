@@ -29,6 +29,13 @@ export function rulesFor(meta) {
 }
 
 /**
+ * Whether a world holds its dungeon runs with players in them to a cap (core/host.js RUNS
+ * `most`, Host `runsCapped`): one every game plays the whole of, lockstep, where each such run
+ * is a cost to every player's step; not one its server alone plays (`netcode` "replicated").
+ */
+export const runsCappedFor = (settings) => (settings?.netcode ?? "lockstep") !== "replicated";
+
+/**
  * The rules of its preset a world's settings relax (storage/worlds.js): `freeFollowers`, every
  * follower a player can lead, in a crowd and in a town's buildings, whatever its preset has;
  * `sharedDungeons`, each dungeon's one run everyone's, not a run for each party.
