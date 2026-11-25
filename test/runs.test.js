@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { before, describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { DELVES, HOARD } from "../client/js/core/dungeons/play.js";
+import { DELVES, foeKey, HOARD } from "../client/js/core/dungeons/play.js";
 import { hypot } from "../client/js/core/exact.js";
 import { delveKey, HOST_PLAYER, Host, presetRules, REFUSALS, RULE_CHOICES, ruled, RULES, RUNS, runBase, runSite } from "../client/js/core/host.js";
 import { DUNGEON_ORIGINS, dungeonLevel, HELL_ORIGINS, KEEP_ORIGINS } from "../client/js/core/insides.js";
@@ -519,6 +519,59 @@ describe("a run of a hell, and a leader's followers (host.js #doorFor, #bring)",
 
         assert.deepEqual([out.map, out.arrive], [front.door.ends[0].map, front.door.ends[0].arrive]);
         assert.ok(host.delveOf(mine.site));
+    });
+
+    it("seals each run of a hell by its own bosses (the scaling plan's 2-24): a portal on opened by its realm's lord falling in one run is sealed still in another", () => {
+        const world = buildWorld({ seed: 1 });
+        const host = new Host(world, { populate: false, rules: { instances: "party" } });
+        const ids = [HOST_PLAYER, "bea"];
+
+        for (const id of ids) {
+            host.join({ id, hero: { ...HERO, name: id } });
+            Object.assign(host.battle.actor(id), { hp: 1e6, maxHp: 1e6 });
+        }
+
+        const site = world.plan.sites.find(({ kind, theme }) => kind === "dungeon" && theme === "hell");
+
+        world.maps.town.sites.heartOf(site);
+
+        const front = world.interiors.buildings.get(`site:${site.id}`);
+
+        for (const id of ids) {
+            assert.ok(through(host, id, front.door), `${id} in`);
+        }
+
+        const [mine, hers] = ids.map((id) => world.interiors.of(host.battle.actor(id).map));
+        // The way on from a run's first realm, asked for from before it
+        const on = (id, building) => {
+            const [portal] = building.flights;
+
+            put(host.battle.actor(id), portal.ends.find(({ map }) => map === building.maps[0]).arrive);
+
+            return host.command(id, { type: "enter", link: portal.id });
+        };
+
+        assert.notEqual(mine, hers);
+        assert.deepEqual([on(HOST_PLAYER, mine).reason, on("bea", hers).reason], ["sealed", "sealed"]);
+
+        // (Its lord, the first of the pack its seal waits on: felled in the one run)
+        const { level, pack } = mine.flights[0].seal;
+        const [lord] = [...host.wild].find(([, one]) => one.dungeon === mine.site && one.foe === foeKey(level, pack, 0));
+
+        host.battle.afflict(lord, "poison", { by: HOST_PLAYER, damage: 1e7 });
+
+        for (let t = 0; t < 4000; t += STEP_MS) {
+            for (const id of ids) {
+                host.battle.actor(id).hp = 1e6;
+            }
+
+            host.advance(STEP_MS);
+        }
+
+        assert.ok(host.delveOf(mine.site).dead.includes(foeKey(level, pack, 0)));
+        assert.deepEqual(host.delveOf(hers.site).dead, []);
+        assert.equal(on(HOST_PLAYER, mine).ok, true);
+        assert.equal(on("bea", hers).reason, "sealed");
     });
 
     it("brings a leader's followers into their leader's run with them", () => {

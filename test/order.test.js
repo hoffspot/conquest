@@ -18,7 +18,7 @@ import { humanoidLook, LOOKS } from "../client/js/beasts/looks.js";
 import { REGALIA } from "../client/js/beasts/champions.js";
 import { SPOILS } from "../client/js/core/spoils.js";
 import { swingOf } from "../client/js/app/game.js";
-import { COURT, HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { COURT, HOST_PLAYER, Host, RUNS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { ORDER } from "../client/js/core/creatures.js";
 import { SCENERY, squareIn } from "../client/js/core/scenery.js";
@@ -747,6 +747,23 @@ describe("the Bell Tolls Again (rare.js THREADS bellhaven, writings.js)", () => 
         // (And the Prior in her run stands yet)
         assert.deepEqual([Boolean(host.delveOf(his.site).masterFell), Boolean(host.delveOf(hers.site).masterFell)], [true, false]);
         assert.deepEqual(host.delveOf(hers.site).dead.filter((key) => host.delveOf(his.site).dead.includes(key)), []);
+
+        // (The plan's 2-24: both out and away, and their runs' time gone by. The Great Bell tolls
+        // for the run its Prior fell in, as it does when the keep's own is made again; not for hers)
+        const away = host.world.start.at.map(Math.floor);
+
+        put(ada, away, "town");
+        put(cy, [away[0] + 1, away[1]], "town");
+        run(host, 1500, [ada, cy]);
+
+        for (const each of host.runs.values()) {
+            each.emptySince = host.battle.time - RUNS.linger;
+        }
+
+        const after = run(host, 1500, [ada, cy]);
+
+        assert.equal(host.runs.size, 0);
+        assert.deepEqual(after.filter(({ type, change }) => type === "order" && change === "tolls").map(({ site, words }) => [site, words]), [[keepId, SCENERY.bellhaven.court.tolls]]);
     });
 
     it("is begun by the priest's rumour, and, it not begun, as the Bellbound's word's taken back to the rogue", () => {
