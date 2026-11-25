@@ -1278,6 +1278,10 @@ party has a run of its own. Under `party`:
 - **A dungeon's hoard in full once a world day** for each player at each dungeon (a world day is
   an hour of play). Again that day at the same dungeon, in any run of it, their share is its
   gold alone, with no gear, draughts or map, and they're told so.
+- **A thread's steps are done from any run** (core/rare.js THREADS: a thread is the world's, not
+  a party's). Its way-in step is done by whoever goes in by the dungeon's front door, into
+  whichever run is theirs; its slay step by the master falling in any run, and the reward is
+  theirs who were in that run. So one party can go in and another fell the master.
 - The wild dungeons, the hells and Bellhaven's keep all work this way. A hell's rite at its way
   in is still the world's one; its portals' seals are each run's own.
 - A snapshot keeps the runs, each with the lane it's drawn in. A game that's only told of the

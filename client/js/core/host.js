@@ -14127,8 +14127,9 @@ export class Host {
 
     // A dungeon's master fallen (`site`: its id; #delveFell): a thread whose slay step's that
     // dungeon's (its `site`: the Keep of Bellhaven's, its Prior) done, by those in it then
-    #threadSlain(site) {
-        const maps = this.world.interiors?.buildings.get(`site:${site}`)?.maps ?? [];
+    #threadSlain(site, run = site) {
+        // (In a party's run of it, RUNS: those in that run, `run` its id)
+        const maps = this.world.interiors?.buildings.get(`site:${run}`)?.maps ?? [];
 
         for (const [id, thread] of Object.entries(this.legends.threads)) {
             if (this.legends.stepOf(id)?.kind === "slay" && thread.site === site) {
@@ -16367,7 +16368,7 @@ export class Host {
             }
 
             this.#event("dungeon", { site: beast.dungeon, change: "boss", name: this.#siteOf(beast.dungeon)?.name ?? null, boss: this.battle.actor(id)?.name ?? null });
-            this.#threadSlain(runBase(beast.dungeon));
+            this.#threadSlain(runBase(beast.dungeon), beast.dungeon);
 
             delve.masterFell = true;
 
