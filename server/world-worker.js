@@ -59,7 +59,7 @@ import { RUNNER, WorldRunner } from "../client/js/core/runner.js";
 import { decode } from "../client/js/core/wire.js";
 import { Ahead } from "./ahead.js";
 import { Keeper } from "./keeper.js";
-import { openWorld } from "./reopen.js";
+import { openWorld, runsCappedFor } from "./reopen.js";
 import { MOST_HEROES } from "./storage/heroes.js";
 import { StoredWorld, WORLD_SETTINGS } from "./storage/worlds.js";
 import { WorldMetrics } from "./world-metrics.js";
@@ -193,6 +193,8 @@ const replicate = (mode) => {
 
 // (How the world's played with those who come in: its own setting, core/netplay.js NETCODES)
 hosting.session.netcode = settings.netcode ?? "lockstep";
+// (And whether its dungeon runs are capped: only where every game plays the whole world)
+host.runsCapped = runsCappedFor(settings);
 
 replicate(workerData.replication);
 

@@ -7,6 +7,7 @@
 // (`sharedDungeons`: server/reopen.js).
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { before, describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { DELVES, HOARD } from "../client/js/core/dungeons/play.js";
@@ -16,7 +17,7 @@ import { DUNGEON_ORIGINS, dungeonLevel, HELL_ORIGINS, KEEP_ORIGINS } from "../cl
 import { buildWorld } from "../client/js/core/overworld.js";
 import { keepSiteOf } from "../client/js/core/scenery.js";
 import { decode, encode } from "../client/js/core/wire.js";
-import { relaxedFor, rulesFor } from "../server/reopen.js";
+import { relaxedFor, rulesFor, runsCappedFor } from "../server/reopen.js";
 import { WORLD_SETTINGS } from "../server/storage/worlds.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -623,8 +624,12 @@ describe("the caps on runs, and the hoard a day (host.js RUNS most, hourly; the 
         far = [...actor(HOST_PLAYER).square];
     });
 
-    it("lets no more than RUNS.most runs stand in a world: one more coming near begins none, and is told so at the door; with one of them empty, it's let go for theirs", () => {
+    it("lets no more than RUNS.most runs have players in them at once, in a world every game plays the whole of: one more coming near begins none, and is told so at the door; let in as one of them empties, which still stands; and a world its server alone plays has no such cap", () => {
         const [site] = sites;
+
+        assert.equal(host.runsCapped, true);
+        assert.deepEqual([runsCappedFor({}), runsCappedFor({ netcode: "lockstep" }), runsCappedFor({ netcode: "replicated" })], [true, true, false]);
+        assert.ok(readFileSync(new URL("../server/world-worker.js", import.meta.url), "utf8").includes("host.runsCapped = runsCappedFor(settings);"));
 
         for (const id of IDS.slice(0, RUNS.most)) {
             assert.ok(cross(id, front(site).door).ok, `${id} in`);
@@ -637,21 +642,30 @@ describe("the caps on runs, and the hoard a day (host.js RUNS most, hourly; the 
         assert.deepEqual(cross("eve", front(site).door), { ok: false, reason: "runsFull" });
         assert.equal(actor("eve").map, "town");
 
-        // (One of them out and away: its run empty, and the one to spare)
-        const spare = runOf("dov").site;
+        // (One of them out and away: its run empty, and still standing)
+        const empty = runOf("dov").site;
 
         out("dov");
         run(500);
-        assert.equal(typeof host.runs.get(spare).emptySince, "number");
         put(actor("eve"), front(site).door.ends[0].arrive);
-        assert.ok(host.command("eve", { type: "enter", link: front(site).door.id }).ok);
-        assert.equal(host.runs.has(spare), false, "let go as she's let in");
-
-        const events = run(3000);
-
-        assert.ok(events.some((event) => event.type === "cross" && event.id === "eve"));
-        assert.equal(host.runs.size, RUNS.most);
+        assert.ok(cross("eve", front(site).door).ok);
+        assert.equal(host.runs.has(empty), true, "the empty one kept its time");
+        assert.equal(host.runs.size, RUNS.most + 1);
         assert.deepEqual(host.runs.get(runOf("eve").site).been, ["eve"]);
+
+        // (Four with players in them again: not back into their own, empty as it is)
+        assert.equal(host.runFor("dov", site.id).id, empty);
+        assert.deepEqual(cross("dov", front(site).door), { ok: false, reason: "runsFull" });
+
+        // (Its server alone playing it: no cap)
+        host.runsCapped = false;
+        assert.ok(cross("dov", front(site).door).ok);
+        assert.equal(runOf("dov").site, empty);
+        assert.equal(new Set(IDS.map((id) => runOf(id).site)).size, RUNS.most + 1);
+        host.runsCapped = true;
+        out("dov");
+        out("eve");
+        run(500);
     });
 
     it("counts each run a player goes into for the first time, RUNS.hourly an hour: then none new till the hour's by, though one they've been in is theirs still", () => {
