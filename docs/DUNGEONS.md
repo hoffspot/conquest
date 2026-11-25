@@ -1264,6 +1264,17 @@ party has a run of its own. Under `party`:
   as strong and scaled for its own only. It's taken out of the world at once when it's cleared and
   its own are away, when it's no one's and empty, or when no one ever went in; otherwise after ten
   minutes with no one in it or near (`RUNS.linger`).
+- **No more than four runs stand in a world at once** (`RUNS.most`). At four, one more coming
+  near a way in begins none. At the door, if one of the four has no one in it or near, it's let
+  go for theirs (the one empty the longest); if all four have someone, they're told so
+  (`runsFull`) and stay outside.
+- **Ten new runs an hour for each player** (`RUNS.hourly`): each run a player goes into for the
+  first time counts, by the world's clock. At ten they're told so at the door (`runsSpent`); a
+  run they've been in is still theirs to go back into. Leaving the world and coming back doesn't
+  begin the count again.
+- **A dungeon's hoard in full once a world day** for each player at each dungeon (a world day is
+  an hour of play). Again that day at the same dungeon, in any run of it, their share is its
+  gold alone, with no gear, draughts or map, and they're told so.
 - The wild dungeons, the hells and Bellhaven's keep all work this way. A hell's rite at its way
   in is still the world's one; its portals' seals are each run's own.
 - A snapshot keeps the runs, each with the lane it's drawn in. A game that's only told of the

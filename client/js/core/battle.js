@@ -7777,6 +7777,16 @@ export class Battle {
         // to their party's run of it, core/host.js `doorFor`; they come out as if by that one's
         // door, which leads back out to where this one stands)
         const own = here === link.ends[0] ? (this.doorFor?.(actor, link) ?? null) : null;
+
+        // (No way in for them just now, its host says: where they are, their order let go)
+        if (own === false) {
+            if (actor.order?.type === "enter") {
+                actor.order = null;
+            }
+
+            return;
+        }
+
         const there = own ? own.ends[1] : link.ends.find((end) => end !== here);
 
         if (own) {
