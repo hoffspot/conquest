@@ -11,11 +11,11 @@ import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { DIRECTOR } from "../client/js/core/director.js";
 import { GEAR } from "../client/js/core/gear.js";
-import { HOST_PLAYER, Host, REFUSALS, RUNS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
+import { HOST_PLAYER, Host, presetRules, REFUSALS, RULE_CHOICES, RULES, RUNS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { Progress } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
-import { CAMP, campOf, cardOf, CHANGES, DEBUG_CARDS, gatesHold, GUILD_KINDS, hourOf, keeperOf, Legends, LOCKS, lockSite, makeUnique, openerOf, priceTimes, RARE, RARE_CARDS, SAMPLE, SAMPLE_DEEP, SAMPLE_KIN, SHAPES, siteDoor, STEPS, TAKE_BACK, threadTalk, threadTracks, threadWares, threadWords, THREADS, UNIQUES, VAULT, VENUES } from "../client/js/core/rare.js";
+import { CAMP, campOf, cardOf, CHANGES, DEBUG_CARDS, gatesHold, GUILD_KINDS, hourOf, keeperOf, Legends, LOCKS, lockSite, makeUnique, openerOf, priceTimes, RARE, RARE_CARDS, rareMost, SAMPLE, SAMPLE_DEEP, SAMPLE_KIN, SHAPES, siteDoor, STEPS, TAKE_BACK, threadTalk, threadTracks, threadWares, threadWords, THREADS, UNIQUES, VAULT, VENUES } from "../client/js/core/rare.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { squaresOf } from "../client/js/core/grid.js";
 import { Conversation, TREES } from "../client/js/core/dialogue.js";
@@ -136,6 +136,40 @@ describe("rare encounters (rare.js)", () => {
         // (Never to those who've done it in another world)
         assert.equal(legends.pick("wilds", { met: new Set(["b", "c"]), at: DAY, random }), null);
         assert.equal(legends.pick("wilds", { met: new Set(["c"]), at: DAY, random }), "b");
+    });
+
+    it("leaves a unique in the world where it's each character's to overcome (the scaling plan's 2-25): done, away RARE.returns and then dealt again, to those who haven't done it and never to one who has; one out to every eight players", () => {
+        const random = createRandom(5);
+        const legends = new Legends(null, { cards: { a: CARDS.a } });
+        const deal = (met = new Set()) => legends.pick("wilds", { met, at: DAY, random, each: true });
+
+        assert.equal(CARDS.a.kind, "unique");
+        assert.deepEqual([RARE.returns, RARE.each, RARE.apart], [30 * MINUTE, 8, 1500]);
+        assert.deepEqual([1, 8, 9, 16, 25].map(rareMost), [1, 1, 2, 2, 4]);
+
+        assert.equal(deal(), "a");
+        legends.deal("a", { venue: "wilds", at: [0, 0], map: "town", to: "ada" });
+        legends.end("done", { random, each: true });
+        legends.last = -Infinity;
+
+        assert.equal(legends.gone.has("a"), false, "not gone from the world");
+        assert.deepEqual([legends.away("a", true), legends.away("a")], [true, false]);
+        assert.equal(deal(), null, "away a while");
+        legends.pass(RARE.returns - 1);
+        assert.equal(deal(), null);
+        legends.pass(1);
+        assert.equal(legends.away("a", true), false);
+        assert.equal(deal(new Set(["a"])), null, "never to one who's done it");
+        assert.equal(deal(), "a", "to those who haven't");
+
+        // (And one the world had done before the rule was its: its again)
+        const old = new Legends({ gone: ["a"] }, { cards: { a: CARDS.a } });
+
+        assert.equal(old.pick("wilds", { met: new Set(), at: DAY, random }), null);
+        assert.equal(old.pick("wilds", { met: new Set(), at: DAY, random, each: true }), "a");
+
+        // (Kept: the same after a round trip)
+        assert.deepEqual(new Legends(JSON.parse(JSON.stringify(legends)), { cards: { a: CARDS.a } }).recurs, legends.recurs);
     });
 
     it("passes a card over while its gates don't hold, and deals it anyway once they've passed it over enough", () => {
@@ -456,9 +490,9 @@ const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5
 
 // A world (seed 2) with Ada in it, hard to kill, the orc gone, out in the wilds north-east of the
 // start town, and Bram beside her (in her party, `party`)
-function hosted({ party = true } = {}) {
+function hosted({ party = true, rules = null } = {}) {
     const world = buildWorld({ seed: 2 });
-    const host = new Host(world, { populate: false });
+    const host = new Host(world, { populate: false, ...(rules ? { rules } : {}) });
 
     host.join({ id: HOST_PLAYER, hero: HERO });
     host.join({ id: "bram", hero: { ...HERO, name: "Bram" } });
@@ -576,6 +610,53 @@ describe("rare encounters in play (host.js)", () => {
 
         assert.ok(twice.some(({ change, id }) => change === "had" && id === HOST_PLAYER), twice.map(({ change }) => change).join());
         assert.equal(host.players.get(HOST_PLAYER).progress.pack.filter((stack) => stack?.unique).length, 1);
+    });
+
+    it("keeps a unique in a world shared by strangers for the next to come (RULES rares \"character\"): done, it isn't gone; each who took part has it once; and it's away RARE.returns", () => {
+        assert.deepEqual([RULES.rares, RULE_CHOICES.rares.built, presetRules("shared").rares, presetRules("company").rares], ["world", true, "character", "world"]);
+
+        const { host, ada, bram } = hosted({ rules: { rares: "character" } });
+        // The sample dealt before Ada and felled by her, Bram beside her: what's told of it
+        const felled = () => {
+            host.legends.last = -Infinity;
+            host.command(HOST_PLAYER, { type: "rare" });
+
+            const foe = host.battle.actor(host.legends.active.ids[0]);
+
+            put(ada, [Math.floor(foe.x) - 2, Math.floor(foe.y)]);
+            put(bram, [Math.floor(foe.x) - 3, Math.floor(foe.y) + 1]);
+            run(host, 2500);
+            Object.assign(foe, { hp: 1 });
+            Object.assign(ada, { power: { melee: 1e4, ranged: 1e4 } });
+            host.command(HOST_PLAYER, { type: "engage", target: foe.id });
+
+            return run(host, 8000).filter(({ type }) => type === "rare");
+        };
+
+        assert.equal(host.rules.rares, "character");
+        host.legends.count(HOST_PLAYER, "wilds", 30 * MINUTE);
+
+        const first = felled();
+
+        assert.ok(first.some(({ change }) => change === "done"), first.map(({ change }) => change).join());
+        assert.equal(host.legends.gone.has("sample"), false, "still the world's");
+        assert.ok(Math.abs(host.legends.recurs.sample - host.legends.played - RARE.returns) < 10000, "away half an hour");
+        assert.equal(host.legends.away("sample", true), true);
+        assert.deepEqual(first.filter(({ change }) => change === "given").map(({ id }) => id).sort(), [HOST_PLAYER, "bram"].sort());
+
+        for (const id of [HOST_PLAYER, "bram"]) {
+            assert.deepEqual(host.players.get(id).progress.legends, { met: ["sample"], uniques: ["sampleSignet"] });
+        }
+
+        // (Overcome again by the same two: neither given it twice)
+        const again = felled();
+
+        assert.deepEqual(again.filter(({ change }) => change === "had").map(({ id }) => id).sort(), [HOST_PLAYER, "bram"].sort());
+        assert.ok(!again.some(({ change }) => change === "given"));
+
+        for (const id of [HOST_PLAYER, "bram"]) {
+            assert.equal(host.players.get(id).progress.pack.filter((stack) => stack?.unique).length, 1, `${id}: one, not two`);
+        }
     });
 
     it("leaves one no one took up once everyone's far, its foe let go, its spot not used again; and keeps owed a reward for one who left before it was given", () => {

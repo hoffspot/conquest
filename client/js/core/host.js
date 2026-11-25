@@ -584,7 +584,7 @@ export const RULE_CHOICES = Object.freeze({
     followers: Object.freeze({ of: Object.freeze(["free", "limited"]), shared: "limited", slice: "2-17", built: true }),
     director: Object.freeze({ of: Object.freeze(["player", "area"]), shared: "area", slice: "2-18", built: true }),
     instances: Object.freeze({ of: Object.freeze(["site", "party"]), shared: "party", slice: "2-21", built: true }),
-    rares: Object.freeze({ of: Object.freeze(["world", "character"]), shared: "character", slice: "2-25", built: false }),
+    rares: Object.freeze({ of: Object.freeze(["world", "character"]), shared: "character", slice: "2-25", built: true }),
     stock: Object.freeze({ of: Object.freeze(["shared", "personal"]), shared: "personal", slice: "2-33", built: false }),
 });
 
@@ -13258,7 +13258,7 @@ export class Host {
         }
 
         const players = group?.players ?? [this.players.get(actor.id)];
-        const card = legends.pick("wilds", { met: this.#rareMet(players), at: this.#rareAt([actor.x, actor.y]), random: this.random });
+        const card = legends.pick("wilds", { met: this.#rareMet(players), at: this.#rareAt([actor.x, actor.y]), random: this.random, each: this.rules.rares === "character" });
 
         return card ? this.#rarePut(legends.cards[card], actor, was.heading, homes) : false;
     }
@@ -13357,7 +13357,7 @@ export class Host {
 
         for (const card of Object.values(this.legends.cards)) {
             // (In its hours, if it's any: Vharzul only after dusk)
-            const kept = card.where === "site" && !card.debug && card.requires && this.legends.wants(card) && !this.legends.gone.has(card.id) ? this.legends.threads[card.requires.thread]?.place : null;
+            const kept = card.where === "site" && !card.debug && card.requires && this.legends.wants(card) && !this.legends.away(card.id, this.rules.rares === "character") ? this.legends.threads[card.requires.thread]?.place : null;
             const place = kept && gatesHold(card, this.#rareAt(kept)) ? kept : null;
             const comer = place ? [...this.players.values()].find((player) => {
                 const actor = this.battle.actor(player.id);
@@ -13469,7 +13469,7 @@ export class Host {
             }
         }
 
-        const ended = this.legends.end(how, { by, random: this.random });
+        const ended = this.legends.end(how, { by, random: this.random, each: this.rules.rares === "character" });
 
         this.#event("rare", { change: how, n: ended.n, card: ended.card, at: ended.at, took, told, by });
 
@@ -13593,7 +13593,7 @@ export class Host {
         }
 
         const players = [this.players.get(event.id), ...this.fellows(event.id).map((id) => this.players.get(id))];
-        const card = legends.pick("inside", { met: this.#rareMet(players), at: this.#rareAt(this.#whereIs(this.players.get(event.id)) ?? [0, 0]), random: this.random });
+        const card = legends.pick("inside", { met: this.#rareMet(players), at: this.#rareAt(this.#whereIs(this.players.get(event.id)) ?? [0, 0]), random: this.random, each: this.rules.rares === "character" });
 
         if (card) {
             this.#rarePutInside(legends.cards[card], actor);
@@ -14516,7 +14516,7 @@ export class Host {
     #cardNow(player, actor, cardId) {
         const card = this.legends.cards[cardId];
 
-        if (!card || this.legends.active || this.legends.gone.has(card.id) || actor.map !== "town") {
+        if (!card || this.legends.active || this.legends.away(card.id, this.rules.rares === "character") || actor.map !== "town") {
             return refuse("rareOut");
         }
 
