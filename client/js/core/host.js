@@ -16047,6 +16047,16 @@ export class Host {
     #runRetired(run, why) {
         const key = `site:${run.id}`;
         const building = this.world.interiors.buildings.get(key);
+        // (The Order's keep, its Prior felled in this run of it: the Great Bell tolls as it does
+        // when the keep's own is made again, #remakeDungeon)
+        const tolls = (building?.dungeon?.theme ?? building?.theme) === "keep" && Boolean(this.delveOf(run.id)?.masterFell);
+
+        // (Its sealed rooms let go of with it, core/rare.js VAULT: their maps, doors and records)
+        for (const vault of Object.values(this.legends.vaults)) {
+            if (vault.building === key) {
+                this.#vaultForget(vault);
+            }
+        }
 
         if (building) {
             this.#delveEmptied(run.id, building);
@@ -16059,6 +16069,10 @@ export class Host {
         this.runs.delete(run.id);
         this.runSites.delete(run.id);
         this.#event("dungeon", { site: run.id, change: "retired", name: building?.name ?? "", why });
+
+        if (tolls) {
+            this.#event("order", { change: "tolls", site: run.site, words: SCENERY.bellhaven.court.tolls });
+        }
     }
 
     // A player out of their party, or the world (`leaving` it): the runs that were their party's.

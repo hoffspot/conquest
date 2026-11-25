@@ -1282,8 +1282,16 @@ party has a run of its own. Under `party`:
   a party's). Its way-in step is done by whoever goes in by the dungeon's front door, into
   whichever run is theirs; its slay step by the master falling in any run, and the reward is
   theirs who were in that run. So one party can go in and another fell the master.
-- The wild dungeons, the hells and Bellhaven's keep all work this way. A hell's rite at its way
-  in is still the world's one; its portals' seals are each run's own.
+- The wild dungeons, the hells and Bellhaven's keep all work this way.
+- **Seals are each run's own.** A hell's portal on, the keep's stair up and a wild dungeon's
+  stairs down open when their boss falls in that run, and stay shut in every other run. A
+  hell's rite at its way in is still the world's one.
+- **A sealed room and its key belong to the run they're found in** (core/rare.js VAULT): its
+  door is on that run's floor, its key drops there, and the room, its door and its record go
+  when the run does.
+- **The Great Bell tolls** when a run of the keep whose Prior fell is taken out of the world, as
+  it does when the keep's own dungeon is made again. It doesn't toll for a run he still stands
+  in.
 - A snapshot keeps the runs, each with the lane it's drawn in. A game that's only told of the
   world (a replicated one) is told each run with its dungeon and lane (the summary's `dungeons`,
   a run's `run`) and makes the run its hero's in as the world has it.
