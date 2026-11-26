@@ -2656,12 +2656,17 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   turns them off: none are shown, and To has no Shout. To has **Area (this town, or this stretch
   of land)** beside Shout (docs/WAR.md *Parties*, The area channel): heard by every player in the
   same settlement, or on the same 256 m of land out of one, "Cai, to the area: ...", in gold as a
-  shout is, and off with the same switch. With **Party chat on screen** (Game options' Chat and players,
+  shout is, and off with the same switch. In a squad (docs/WAR.md *Parties*, A squad in the
+  page), To has **Squad** too: the line goes to the party and to every player of the parties
+  allied with it, wherever they are, "Cai, to the squad: ...", in the squad's pale blue; allies'
+  dots are on the minimap and the maps in that blue, and the Party tab's **Squad** section forms,
+  joins, leads and leaves one. With **Party chat on screen** (Game options' Chat and players,
   `chatOnScreen`, on to start with), each line said, the party's or a direct message, shows a
   moment just above the Action Bar too (where it rises in a fight), small, three at most,
   the newest at the foot, faded after six seconds (hud.js `chatLine`, `CHAT_FEED`), unless the
   Chat's open to read; all of it's still in the Chat. **Players** is everyone playing in the world, under headings (partypanel.js `playersPage`):
-  the player and their party ("Your party (3)"; "You (1)" in none), **Nearby** (on the player's
+  the player and their party ("Your party (3)"; "You (1)" in none), **Your squad** (the players
+  of the parties allied with theirs, near or not), **Nearby** (on the player's
   map within 150 m, `PLAYERS_PAGE.near`) and **Everyone else**, each with how many are under it;
   **Find a player by name** above them shows those with what's typed in their name alone; and 25
   to a page (`PLAYERS_PAGE.size`), with Previous and Next once there are more. (`PartyPanel #everyone`, game.js

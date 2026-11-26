@@ -49,20 +49,27 @@ export const SHOUT_TO = "*shout";
 /** Whom the Chat's line goes to when it's said to the area (core/netplay.js AREA_CHAT): everyone in the player's settlement, or on their stretch of land. */
 export const AREA_TO = "*area";
 
+/** Whom the Chat's line goes to when it's said to the squad (core/host.js SQUAD): the player's party and every party allied with it. */
+export const SQUAD_TO = "*squad";
+
+/** How a squad takes parties in (core/host.js SQUAD `entries`), as its leader chooses and others read it. */
+export const SQUAD_ENTRIES = Object.freeze({ open: "Open to any party", ask: "By asking", closed: "Closed" });
+
 /** The Players tab: how many players a page of it shows, and how near (m, on the player's map) counts as nearby. */
 export const PLAYERS_PAGE = Object.freeze({ size: 25, near: 150 });
 
 /**
  * The Players tab's players, as a page of it shows them: those whose name has `search` in it
  * (any case; all, with none), in the order given, a page of PLAYERS_PAGE.size, under the heading
- * each belongs to: the player and their party, those near (`near`), and everyone else. Returns
+ * each belongs to: the player and their party, their allies (`ally`: their squad's other
+ * parties), those near (`near`), and everyone else. Returns
  * { found (how many matched), page (the one shown: the nearest there is to the one asked for),
  * pages, sections: [{ key, title, players }] (those with anyone on this page) }.
  */
 export function playersPage(everyone, { search = "", page = 0 } = {}) {
     const wanted = search.trim().toLowerCase();
-    const sectionOf = (player) => (player.me || player.party?.yours ? "party" : player.near ? "near" : "world");
-    const keys = ["party", "near", "world"];
+    const sectionOf = (player) => (player.me || player.party?.yours ? "party" : player.ally ? "squad" : player.near ? "near" : "world");
+    const keys = ["party", "squad", "near", "world"];
     const found = everyone
         .filter(({ name }) => !wanted || name.toLowerCase().includes(wanted))
         .map((player) => ({ player, key: sectionOf(player) }))
@@ -71,7 +78,7 @@ export function playersPage(everyone, { search = "", page = 0 } = {}) {
     const shown = Math.min(Math.max(0, Math.floor(page) || 0), pages - 1);
     const onPage = found.slice(shown * PLAYERS_PAGE.size, (shown + 1) * PLAYERS_PAGE.size);
     const partied = everyone.some((player) => !player.me && player.party?.yours);
-    const titles = { party: partied ? "Your party" : "You", near: "Nearby", world: "Everyone else" };
+    const titles = { party: partied ? "Your party" : "You", squad: "Your squad", near: "Nearby", world: "Everyone else" };
 
     return {
         found: found.length,
@@ -208,13 +215,18 @@ export class PartyPanel {
         this.players = element("ul", "journal-list party-players");
         this.othersHeading = element("h3", "journal-heading", "Ask to your party");
         this.others = element("ul", "journal-list party-others");
+        // (The squad, core/host.js SQUAD: the parties allied with the player's, or those there
+        // are to join)
+        this.squadHeading = element("h3", "journal-heading", "Squad");
+        this.squadBox = element("ul", "journal-list party-squad");
+        this.squadShown = null;
         this.unitsHeading = element("h3", "journal-heading", "With you");
         this.list = element("ul", "journal-list party-list");
         this.empty = element("p", "journal-note party-empty");
         // (Those mending at the guild: core/host.js mendingOf)
         this.mendingHeading = element("h3", "journal-heading", "Mending at the guild");
         this.mendingList = element("ul", "journal-list party-mending");
-        this.body.append(this.playersHeading, this.players, this.othersHeading, this.others, this.unitsHeading, this.list, this.empty, this.mendingHeading, this.mendingList);
+        this.body.append(this.playersHeading, this.players, this.othersHeading, this.others, this.squadHeading, this.squadBox, this.unitsHeading, this.list, this.empty, this.mendingHeading, this.mendingList);
         this.together = null;
 
         // The chat: what's been said, the quick phrases, and a line to send
@@ -345,6 +357,8 @@ export class PartyPanel {
         this.onMessage = () => {};
         this.onChatTo = () => {};
         this.onShouts = () => {};
+        /** A squad command chosen (core/host.js the "squad" command): what, and what of ({ squad, party, entry }). */
+        this.onSquad = () => {};
         this.onBlock = () => {};
     }
 
@@ -371,8 +385,9 @@ export class PartyPanel {
      * (whether the player's in a party);
      * and `world`, whether there's the World button (a world on a server).
      */
-    show({ members = [], most = 1, players = [], others = [], leads = false, full = false, together = false, chat = null, everyone = [], partied = false, world = false, mending = [] } = {}) {
+    show({ members = [], most = 1, players = [], others = [], leads = false, full = false, together = false, chat = null, everyone = [], partied = false, world = false, mending = [], squad = null } = {}) {
         this.#together({ players, others, leads, full, together });
+        this.#squad({ squad, together });
         this.#everyone({ everyone, leads, full, partied });
         this.tabs.hidden = !together;
         this.worldButton.hidden = !world;
@@ -461,10 +476,11 @@ export class PartyPanel {
 
     // The chat as it is: its lines made again only when there's a new one (the newest kept in view,
     // if it was), how many haven't been seen on its tab, and whether there's anyone to say anything to
-    #chat({ lines, unread, canSay, to = null, targets = [], shouts = null }) {
+    #chat({ lines, unread, canSay, to = null, targets = [], shouts = null, squad = false }) {
         const unseen = unreadLabel(unread);
         const shouting = to === SHOUT_TO && shouts === true;
         const toArea = to === AREA_TO && shouts === true;
+        const toSquad = to === SQUAD_TO && squad === true;
         const toName = targets.find(({ id }) => id === to)?.name ?? null;
 
         this.chatBadge.textContent = unseen;
@@ -474,25 +490,26 @@ export class PartyPanel {
         this.chatNote.hidden = canSay;
         this.input.disabled = !canSay;
         this.sendButton.disabled = !canSay;
-        this.input.placeholder = shouting ? "Shout to everyone nearby" : toArea ? "Say something to everyone in this area" : toName ? `Say something to ${toName}` : "Say something to your party";
-        this.input.setAttribute("aria-label", shouting ? "Something to shout to everyone nearby" : toArea ? "Something to say to everyone in this town, or on this stretch of land" : toName ? `Something to say to ${toName}` : "Something to say to your party");
+        this.input.placeholder = shouting ? "Shout to everyone nearby" : toSquad ? "Say something to your squad" : toArea ? "Say something to everyone in this area" : toName ? `Say something to ${toName}` : "Say something to your party";
+        this.input.setAttribute("aria-label", shouting ? "Something to shout to everyone nearby" : toSquad ? "Something to say to your squad" : toArea ? "Something to say to everyone in this town, or on this stretch of land" : toName ? `Something to say to ${toName}` : "Something to say to your party");
         this.shoutsSwitch.hidden = shouts === null;
         this.shoutsBox.checked = shouts !== false;
 
         // (Whom to: the party, then each player, made again only as they change)
-        const shown = JSON.stringify([targets, shouts]);
+        const shown = JSON.stringify([targets, shouts, squad]);
 
         if (shown !== this.targetsShown) {
             this.targetsShown = shown;
             this.toPicker.replaceChildren(
                 Object.assign(document.createElement("option"), { value: "", textContent: "Party" }),
+                ...(squad ? [Object.assign(document.createElement("option"), { value: SQUAD_TO, textContent: "Squad" })] : []),
                 ...(shouts ? [Object.assign(document.createElement("option"), { value: SHOUT_TO, textContent: "Shout (nearby)" }), Object.assign(document.createElement("option"), { value: AREA_TO, textContent: "Area (this town, or this stretch of land)" })] : []),
                 ...targets.map(({ id, name, party }) => Object.assign(document.createElement("option"), { value: id, textContent: party ? `${name} (party)` : name })),
             );
         }
 
-        this.toPicker.value = shouting ? SHOUT_TO : toArea ? AREA_TO : toName ? to : "";
-        this.toPicker.hidden = !targets.length && !shouts;
+        this.toPicker.value = shouting ? SHOUT_TO : toSquad ? SQUAD_TO : toArea ? AREA_TO : toName ? to : "";
+        this.toPicker.hidden = !targets.length && !shouts && !squad;
 
         for (const button of this.quick.children) {
             button.disabled = !canSay;
@@ -510,11 +527,11 @@ export class PartyPanel {
         this.shownLine = newest;
         log.replaceChildren(
             ...(lines.length
-                ? lines.map(({ name, text, mine = false, system = false, dm = null, shout = false, area = false }) => {
-                      const line = element("li", `chat-line${mine ? " mine" : ""}${system ? " system" : ""}${dm ? " dm" : ""}${shout ? " shout" : ""}${area ? " area" : ""}`);
+                ? lines.map(({ name, text, mine = false, system = false, dm = null, shout = false, area = false, squad: toTheSquad = false }) => {
+                      const line = element("li", `chat-line${mine ? " mine" : ""}${system ? " system" : ""}${dm ? " dm" : ""}${shout ? " shout" : ""}${area ? " area" : ""}${toTheSquad ? " squad" : ""}`);
 
                       if (!system) {
-                          line.append(element("span", "chat-name", dm ? `${mine ? "To" : "From"} ${name}` : shout ? (mine ? "You shout" : `${name} shouts`) : area ? (mine ? "You, to the area" : `${name}, to the area`) : name), ": ");
+                          line.append(element("span", "chat-name", dm ? `${mine ? "To" : "From"} ${name}` : shout ? (mine ? "You shout" : `${name} shouts`) : area ? (mine ? "You, to the area" : `${name}, to the area`) : toTheSquad ? (mine ? "You, to the squad" : `${name}, to the squad`) : name), ": ");
                       }
 
                       line.append(element("span", "chat-text", text));
@@ -603,6 +620,109 @@ export class PartyPanel {
                   })
                 : [element("li", "journal-empty", full ? "Your party's full." : players.length ? "Everyone else playing here is in your party." : "No one else is playing in this world.")]),
         );
+    }
+
+    // The squad (core/host.js SQUAD), made again only when what's shown of it changes: the parties
+    // allied with the player's, the party that leads it marked, and what its leader may do (who's
+    // asked let in or not, how parties come in, a party put out, the squad disbanded; a party's
+    // own leader leaving it); or, in none, the squads there are, for a party's leader to join or
+    // ask of, and one of their own to form. `squad`: { mine: { id, entry, leads, parties: [{ id,
+    // name, size, own, leader }], asks: [{ party, name }] } or null, others: [{ id, name, size,
+    // entry, asked, full }], captain (the player leads their party) }
+    #squad({ squad, together }) {
+        const shown = JSON.stringify({ squad, together });
+
+        this.squadHeading.hidden = this.squadBox.hidden = !together || !squad;
+
+        if (shown === this.squadShown) {
+            return;
+        }
+
+        this.squadShown = shown;
+
+        if (!together || !squad) {
+            this.squadBox.replaceChildren();
+
+            return;
+        }
+
+        const act = (label, what, rest = {}, className = "party-squad-act") => {
+            const button = element("button", `journal-button ${className}`, label);
+
+            button.type = "button";
+            button.addEventListener("click", () => this.onSquad(what, rest));
+
+            return button;
+        };
+        const rows = [];
+        const { mine, others = [], captain = false } = squad;
+
+        if (mine) {
+            for (const { id, name, size, own, leader } of mine.parties) {
+                const row = element("li", `party-player party-squad-party${leader ? " leader" : ""}`);
+                const text = element("div", "party-text");
+                const actions = element("div", "party-actions");
+
+                row.dataset.party = id;
+                text.append(element("span", "party-name", `${leader ? "♛ " : ""}${name}'s party${own ? " (yours)" : ""}`), element("span", "party-kind", [`${size} in it`, leader ? "Leads the squad" : "Allied"].join(" · ")));
+
+                if (own && captain) {
+                    actions.append(this.#sure("Leave squad", "Leave?", () => this.onSquad("leave")));
+                } else if (!own && mine.leads) {
+                    actions.append(this.#sure("Remove", "Remove?", () => this.onSquad("remove", { party: id })));
+                }
+
+                row.append(text, actions);
+                rows.push(row);
+            }
+
+            for (const { party, name } of mine.leads ? mine.asks : []) {
+                const row = element("li", "party-player party-squad-ask");
+                const actions = element("div", "party-actions");
+
+                row.dataset.party = party;
+                actions.append(act("Let in", "admit", { party }), act("Refuse", "refuse", { party }));
+                row.append(element("span", "party-name", `${name}'s party asks to join`), actions);
+                rows.push(row);
+            }
+
+            if (mine.leads) {
+                const row = element("li", "party-player party-squad-lead");
+                const picker = Object.assign(document.createElement("select"), { className: "party-squad-entry" });
+                const actions = element("div", "party-actions");
+
+                picker.setAttribute("aria-label", "How parties join the squad");
+                picker.append(...Object.entries(SQUAD_ENTRIES).map(([value, textContent]) => Object.assign(document.createElement("option"), { value, textContent })));
+                picker.value = mine.entry;
+                picker.addEventListener("change", () => this.onSquad("entry", { entry: picker.value }));
+                actions.append(this.#sure("Disband squad", "Disband?", () => this.onSquad("disband")));
+                row.append(picker, actions);
+                rows.push(row);
+            } else {
+                rows.push(element("li", "journal-empty", `${SQUAD_ENTRIES[mine.entry] ?? ""}. Allies see each other on the maps and share pings and the squad's chat; what each party finds, its dungeon runs and its loot stay its own.`));
+            }
+        } else {
+            for (const { id, name, size, entry, asked, full } of others) {
+                const row = element("li", "party-player party-squad-other");
+                const join = act(asked ? "Asked" : entry === "open" ? "Join" : entry === "ask" ? "Ask to join" : "Closed", "join", { squad: id }, "party-squad-join");
+
+                row.dataset.squad = id;
+                join.disabled = !captain || asked || full || entry === "closed";
+                row.append(element("span", "party-name", `${name}'s squad`), element("span", "party-kind", [`${size} of 5 parties`, SQUAD_ENTRIES[entry] ?? ""].join(" · ")), join);
+                rows.push(row);
+            }
+
+            if (captain) {
+                const row = element("li", "party-player party-squad-form");
+
+                row.append(element("span", "party-kind", "Ally your party with others: up to five parties in a squad."), act("Form a squad", "form", {}, "party-squad-new"));
+                rows.push(row);
+            } else {
+                rows.push(element("li", "journal-empty", others.length ? "Only a party's leader can join a squad." : "A party's leader can form a squad: up to five parties allied."));
+            }
+        }
+
+        this.squadBox.replaceChildren(...rows);
     }
 
     // Everyone playing in the world, made again only when what's shown of them changes (as the

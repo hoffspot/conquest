@@ -64,7 +64,7 @@ import { ambienceOf, doorOf, TOLLS, tolled } from "../audio/ambience.js";
 import { footing } from "../audio/footing.js";
 import { useSound, wearSound } from "../audio/handling.js";
 import { CREATURE_VOICES, creatureSounds, ITEM_SOUNDS, spellSounds } from "../audio/sound.js";
-import { FORT_ICONS, ICON_NAMES, partyColour, PING, PLACE_RIMS, WORKS_ICONS, WORKS_RIMS } from "./mapicons.js";
+import { FORT_ICONS, ICON_NAMES, partyColour, PING, PLACE_RIMS, SQUAD_COLOUR, WORKS_ICONS, WORKS_RIMS } from "./mapicons.js";
 import { buildingView } from "./building.js";
 import { battleMapView, heededText } from "./battlemap.js";
 import { PALISADE } from "../core/war/armies.js";
@@ -195,7 +195,7 @@ import { JournalPanel, bearing, keepMessage, regardOf } from "./journal.js";
 import { ReaderPanel } from "./reader.js";
 import { Journey } from "./journey.js";
 import { SpellbookPanel } from "./spellbook.js";
-import { AREA_TO, PartyPanel, PLAYERS_PAGE, SHOUT_TO } from "./partypanel.js";
+import { AREA_TO, PartyPanel, PLAYERS_PAGE, SHOUT_TO, SQUAD_TO } from "./partypanel.js";
 import { medalWords } from "../core/credit.js";
 import { PackPanel } from "./pack.js";
 import { Governor } from "./governor.js";
@@ -1277,7 +1277,7 @@ function riftCry(crier, rift) {
 // at its fullest
 const RIFT_SKY = 0.6;
 
-export const HOST_EVENTS = new Set(["open", "close", "peopled", "vacated", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "duel", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order", "horse", "horseFell", "whistle", "hellRift", "brimstone", "strongroom", "junkSold", "crafted", "brokenDown"]);
+export const HOST_EVENTS = new Set(["squad", "open", "close", "peopled", "vacated", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "duel", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order", "horse", "horseFell", "whistle", "hellRift", "brimstone", "strongroom", "junkSold", "crafted", "brokenDown"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -2867,6 +2867,7 @@ export class Game {
         this.partyPanel.onChoose = (id) => this.#chooseAlly(this.allyTarget === id ? null : id);
         this.partyPanel.onParty = (what, who) => (what === "readyCheck" ? this.readyCheck() : this.#partyOrder(what, who));
         this.partyPanel.onDuel = (what, who) => this.#duelOrder(what, who);
+        this.partyPanel.onSquad = (what, rest) => this.#squadOrder(what, rest);
         this.partyPanel.onSay = (text) => this.#sayToParty(text);
         this.partyPanel.onTab = () => this.#showParty();
         this.partyPanel.onClose = () => this.closeParty();
@@ -8545,8 +8546,11 @@ export class Game {
      */
     partyView() {
         const party = this.worldview.partyFor(this.me);
+        // (And the players of the parties allied with theirs, their squad's, in the squad's one
+        // colour: core/host.js allies, the scaling plan's 2-29)
+        const allies = party ? (this.worldview.allies?.(this.me) ?? []) : [];
 
-        return (party?.members ?? []).flatMap((id) => {
+        return [...(party?.members ?? []), ...allies].flatMap((id) => {
             // (One not in sight, in a world a server tells of: where they were last said to be,
             // core/host.js afar)
             const far = id === this.me || this.battle.actor(id) ? null : this.worldview.afar?.get(id);
@@ -8559,7 +8563,7 @@ export class Game {
             const [x, z] = far && far.map !== "town" ? (far.out ?? [far.x, far.y]) : this.#outside(actor);
             const name = far?.inside ?? this.world.maps?.[actor.map]?.name ?? this.world.interiors?.of(actor.map)?.name ?? null;
 
-            return [{ id, name: this.worldview.players.get(id)?.hero.name ?? actor.name ?? "", colour: partyColour(party.members, id), x, z, map: actor.map, inside: actor.map === "town" ? null : name ? `in ${name.replace(/^The /, "the ")}` : "indoors", dead: Boolean(actor.dead) }];
+            return [{ id, name: this.worldview.players.get(id)?.hero.name ?? actor.name ?? "", colour: party.members.includes(id) ? partyColour(party.members, id) : SQUAD_COLOUR, ...(party.members.includes(id) ? {} : { ally: true }), x, z, map: actor.map, inside: actor.map === "town" ? null : name ? `in ${name.replace(/^The /, "the ")}` : "indoors", dead: Boolean(actor.dead) }];
         });
     }
 
@@ -12555,12 +12559,17 @@ export class Game {
         }
 
         // (Saying to someone who's gone, or blocked since: to the party again)
-        if (this.chatTo && this.chatTo !== SHOUT_TO && this.chatTo !== AREA_TO && (!this.worldview.players.has(this.chatTo) || this.isBlocked(this.chatTo))) {
+        if (this.chatTo && this.chatTo !== SHOUT_TO && this.chatTo !== AREA_TO && this.chatTo !== SQUAD_TO && (!this.worldview.players.has(this.chatTo) || this.isBlocked(this.chatTo))) {
             this.chatTo = null;
         }
 
         // (Shouting, with shouts turned off since: to the party again)
         if ((this.chatTo === SHOUT_TO || this.chatTo === AREA_TO) && !this.dmsTaken.shout) {
+            this.chatTo = null;
+        }
+
+        // (Saying to the squad, out of one since: to the party again)
+        if (this.chatTo === SQUAD_TO && !this.worldview.squadFor?.(this.me)) {
             this.chatTo = null;
         }
 
@@ -12575,6 +12584,8 @@ export class Game {
             to: this.chatTo,
             // (Shouts heard, and to be shouted: core/netplay.js SHOUT, the Chat's Hear shouts)
             shouts: together ? Boolean(this.dmsTaken.shout) : null,
+            // (In a squad: its chat to say to, core/host.js SQUAD)
+            squad: together && Boolean(this.worldview.squadFor?.(this.me)),
             targets: others.map(({ id, hero }) => ({ id, name: hero.name, party: Boolean(party?.members.includes(id)) })).sort((a, b) => b.party - a.party || a.name.localeCompare(b.name)),
         };
     }
@@ -12583,7 +12594,7 @@ export class Game {
      * A line said in the player's party (core/netplay.js: heard as it's sent on to those in it,
      * their own lines too): into the chat; another's with a chime, and counted unread till it's seen.
      */
-    chatHeard({ from, name, text, to = null, toName = "", dm = null, shout = false, area = false }) {
+    chatHeard({ from, name, text, to = null, toName = "", dm = null, shout = false, area = false, squad = false }) {
         const mine = from === this.me;
 
         // (A line to the area, core/netplay.js AREA_CHAT: taken and let go of as a shout is)
@@ -12596,7 +12607,7 @@ export class Game {
         }
 
         // (A direct message by whom it's with: the one it's to, or from)
-        const line = dm ? { name: mine ? toName : name, text, mine, dm, with: mine ? to : from } : { name: mine ? "You" : name, text, mine, ...(area ? { area: true } : shout ? { shout: true } : {}) };
+        const line = dm ? { name: mine ? toName : name, text, mine, dm, with: mine ? to : from } : { name: mine ? "You" : name, text, mine, ...(area ? { area: true } : shout ? { shout: true } : squad ? { squad: true } : {}) };
         const reading = this.partyPanel?.open && this.partyPanel.tab === "chat";
 
         this.#chatLine(line);
@@ -12610,7 +12621,7 @@ export class Game {
 
         // (And a moment on screen, just above the Action Bar, unless the chat's open to read)
         if (this.chatOnScreen && !reading) {
-            this.hud.chatLine({ who: dm ? `${mine ? "To" : "From"} ${line.name}` : area ? (mine ? "You, to the area" : `${line.name}, to the area`) : shout ? (mine ? "You shout" : `${line.name} shouts`) : line.name, text, mine, dm: Boolean(dm) });
+            this.hud.chatLine({ who: dm ? `${mine ? "To" : "From"} ${line.name}` : squad ? (mine ? "You, to the squad" : `${line.name}, to the squad`) : area ? (mine ? "You, to the area" : `${line.name}, to the area`) : shout ? (mine ? "You shout" : `${line.name} shouts`) : line.name, text, mine, dm: Boolean(dm) });
         }
     }
 
@@ -12830,8 +12841,9 @@ export class Game {
 
         const shout = this.chatTo === SHOUT_TO;
         const area = this.chatTo === AREA_TO;
-        const to = shout || area ? null : this.chatTo;
-        const said = !shout && !area && !to && !this.worldview.partyFor(this.me) ? { ok: false, reason: "unpartied" } : this.hosting ? this.hosting.chat(text, { to, shout, area }) : this.remote ? this.remote.chat(text, { to, shout, area }) : { ok: false, reason: "unpartied" };
+        const squad = this.chatTo === SQUAD_TO;
+        const to = shout || area || squad ? null : this.chatTo;
+        const said = !shout && !area && !to && !this.worldview.partyFor(this.me) ? { ok: false, reason: "unpartied" } : this.hosting ? this.hosting.chat(text, { to, shout, area, squad }) : this.remote ? this.remote.chat(text, { to, shout, area, squad }) : { ok: false, reason: "unpartied" };
 
         if (said.ok) {
             this.sound?.play("tap");
@@ -12872,6 +12884,7 @@ export class Game {
             full: (party?.members.length ?? 1) >= PARTY.most,
             partied: Boolean(party),
             everyone: this.#everyone(),
+            squad: this.#squadShown(),
         };
     }
 
@@ -12888,6 +12901,7 @@ export class Game {
         const full = (mine?.members.length ?? 1) >= PARTY.most;
         const order = (id) => (id === this.me ? -1 : mine?.members.includes(id) ? mine.members.indexOf(id) : PARTY.most);
         const duel = this.worldview.duelOf(this.me);
+        const allies = new Set(this.worldview.allies(this.me));
 
         return [...this.worldview.players.values()]
             .sort((a, b) => order(a.id) - order(b.id) || a.hero.name.localeCompare(b.hero.name) || (a.id < b.id ? -1 : 1))
@@ -12907,6 +12921,8 @@ export class Game {
                     where: this.#whereWords(actor, me),
                     // (Near enough to be under Nearby: on the player's map, within PLAYERS_PAGE.near)
                     near: id !== this.me && Boolean(actor && me && actor.map === me.map && Math.hypot(actor.x - me.x, actor.y - me.y) <= PLAYERS_PAGE.near),
+                    // (Of a party allied with the player's: under Your squad)
+                    ally: allies.has(id),
                     party: party ? { yours, leads: party.leader === id, leader: nameOf(party.leader) } : null,
                     asked: asked ? (asked.from === this.me ? "you" : nameOf(asked.from)) : null,
                     away: Boolean(player.away),
@@ -13073,6 +13089,53 @@ export class Game {
 
     // What the player does about their party of players, from the party menu (a "party" command:
     // core/host.js); said why not, if not
+    // A squad command (core/host.js the "squad" command), a party's leader's: refused, why said
+    #squadOrder(what, rest = {}) {
+        this.#command({ type: "squad", do: what, ...rest }, (result) => {
+            if (!result.ok) {
+                this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.8);
+                this.sound?.play("denied");
+            } else {
+                this.sound?.play("tap");
+            }
+
+            if (this.partyPanel?.open) {
+                this.#showParty();
+            }
+        });
+    }
+
+    // The squad as the party menu shows it (app/partypanel.js #squad): the player's own, its
+    // parties each by its leader's name, and who's asked to come into it; or, in none, the
+    // squads there are in the world. Null alone in the world
+    #squadShown() {
+        const view = this.worldview;
+        const party = view.partyFor(this.me);
+        const nameOf = (id) => view.players.get(id)?.hero.name ?? "";
+        const partyOf = (id) => [...view.players.keys()].map((one) => view.partyFor(one)).find((each) => each?.id === id) ?? null;
+        const mine = view.squadFor?.(this.me) ?? null;
+        const squads = [...(view.squads?.values() ?? [])];
+        const asks = [...(view.squadAsks?.entries() ?? [])];
+
+        if (view.players.size < 2) {
+            return null;
+        }
+
+        return {
+            captain: Boolean(party) && party.leader === this.me,
+            mine: mine
+                ? {
+                      id: mine.id,
+                      entry: mine.entry,
+                      leads: mine.leader === party?.id && party?.leader === this.me,
+                      parties: mine.parties.map((id) => ({ id, name: nameOf(partyOf(id)?.leader), size: partyOf(id)?.members.length ?? 0, own: id === party?.id, leader: id === mine.leader })),
+                      asks: asks.filter(([, asked]) => asked.squad === mine.id).map(([id]) => ({ party: id, name: nameOf(partyOf(id)?.leader) })),
+                  }
+                : null,
+            others: mine ? [] : squads.map((squad) => ({ id: squad.id, name: nameOf(partyOf(squad.leader)?.leader), size: squad.parties.length, entry: squad.entry, asked: Boolean(party) && asks.some(([id, asked]) => id === party.id && asked.squad === squad.id), full: squad.parties.length >= 5 })),
+        };
+    }
+
     #partyOrder(what, who) {
         this.#command({ type: "party", do: what, who }, (result) => {
             if (!result.ok) {
@@ -13304,6 +13367,40 @@ export class Game {
         this.moonGates.update(this.clock);
     }
 
+    // The squad's news (core/host.js SQUAD, a "squad" event to each it's for): an ally's ping on
+    // the maps as the party's are; a party come into it or gone from it, the squad over, or
+    // another party leading it, said; and, to its leader, a party asking to come in
+    #squadEvent(event) {
+        if (event.id !== this.me) {
+            return;
+        }
+
+        if (event.change === "ping") {
+            this.#pinged({ who: event.who, name: event.name, at: event.at });
+
+            return;
+        }
+
+        const own = event.party !== undefined && event.party === this.worldview.partyFor(this.me)?.id;
+        const words = {
+            joined: own ? "Your party's in the squad." : `${event.name || "Another"}'s party has joined the squad.`,
+            left: own ? "Your party's left the squad." : "A party's left the squad.",
+            removed: own ? "Your party's been put out of the squad." : "A party's been put out of the squad.",
+            disbanded: event.party === undefined ? "The squad's disbanded." : own ? "Your party's no more: it's out of the squad." : "A party of the squad is no more.",
+            leader: own ? "Your party leads the squad now." : "Another party leads the squad now.",
+            asked: `${event.name || "A party"}'s party asks to join your squad: let them in, or not, in the party menu.`,
+        }[event.change];
+
+        if (words) {
+            this.hud.message(words, 3);
+            this.sound?.play(event.change === "asked" ? "chatHeard" : "tap");
+        }
+
+        if (this.partyPanel?.open) {
+            this.#showParty();
+        }
+    }
+
     #partyEvent(event) {
         if (event.id !== this.me) {
             return;
@@ -13311,6 +13408,17 @@ export class Game {
 
         if (event.change === "ping") {
             this.#pinged({ who: event.who, name: event.name, at: event.at });
+
+            return;
+        }
+
+        // (Their party's asking to come into a squad: asked, or said no to)
+        if (event.change === "squadAsked" || event.change === "squadRefused") {
+            this.hud.message(event.change === "squadAsked" ? "Your party's asked to join the squad: its leader's to say." : "The squad's leader has said no.", 3);
+
+            if (this.partyPanel?.open) {
+                this.#showParty();
+            }
 
             return;
         }
@@ -17738,6 +17846,9 @@ export class Game {
                 break;
             case "party":
                 this.#partyEvent(event);
+                break;
+            case "squad":
+                this.#squadEvent(event);
                 break;
             case "duel":
                 this.#duelEvent(event);

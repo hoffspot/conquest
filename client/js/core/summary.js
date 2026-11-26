@@ -26,7 +26,7 @@ import { decode, encode } from "./wire.js";
 export const SUMMARY = Object.freeze({ every: 20, frame: 6000, near: 512, news: 60 });
 
 /** The parts that are every player's alike (worldParts), and those that are one player's (ownParts). */
-export const WORLD_PARTS = Object.freeze(["rules", "clock", "realms", "towns", "works", "forces", "forts", "relations", "parties", "roster", "invasions", "burnt", "rifts", "done", "dungeons", "camps", "depots", "places", "news", "battles"]);
+export const WORLD_PARTS = Object.freeze(["rules", "clock", "realms", "towns", "works", "forces", "forts", "relations", "parties", "roster", "invasions", "burnt", "rifts", "done", "dungeons", "camps", "depots", "places", "news", "battles", "squads"]);
 export const OWN_PARTS = Object.freeze(["own", "invites", "props", "fellows", "trades", "lore", "duels"]);
 
 /** The director's props a player's told of when near: each a table of the host's, by its name there. */
@@ -100,6 +100,9 @@ export function worldParts(host) {
         places: one(war?.places ?? null),
         news: newsOf(war),
         battles: one([...(host.fields ?? []), ...(host.clashes?.values() ?? []), ...(host.leaders?.values() ?? [])].map(({ engagement }) => engagement).filter(Boolean)),
+        // (The squads, parties allied: core/host.js SQUAD, the scaling plan's 2-29)
+        // (each with the parties that have asked to come into it: `asks`, [{ party, until }])
+        squads: byId([...(host.squads?.values() ?? [])].map((squad) => ({ ...squad, asks: [...(host.squadAsks ?? [])].filter(([, asked]) => asked.squad === squad.id).map(([party, { until }]) => ({ party, until })) }))),
     };
 }
 
@@ -205,7 +208,8 @@ export function ownParts(host, me) {
     // metre and the point; one in sight is told of far finer by the frames)
     const fellows = new Map();
 
-    for (const id of host.fellows?.(me) ?? []) {
+    // (And of the parties allied with theirs, their squad's: core/host.js allies)
+    for (const id of [...(host.fellows?.(me) ?? []), ...(host.allies?.(me) ?? [])]) {
         const actor = host.battle.actor(id);
 
         if (actor) {

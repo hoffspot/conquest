@@ -3644,8 +3644,21 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   and to each player of the squad's other parties as the squad's (`squad`, `ping`); a mark stays
   its party's. `Host.allies` gives a player's allies, for their dots on the maps. A squad shares
   nothing else: what each has found of the maps, a dungeon's run and what falls to them stay a
-  party's. Kept in a snapshot (who's asked isn't). Nothing in the page shows or makes a squad
-  yet: that's the plan's 2-29. `NET_VERSION` 257.
+  party's. Kept in a snapshot (who's asked isn't). `NET_VERSION` 257.
+- **A squad in the page** (the scaling plan's 2-29; app/partypanel.js, app/game.js):
+  - **The party menu's Squad section**, shown when playing with others. In no squad, a party's
+    leader has **Form a squad**, and each squad there is has **Join**, **Ask to join** or
+    **Closed** as its entry has it. In one, it lists the squad's parties, the leading one
+    crowned; its leader lets in or refuses those who've asked, sets how parties join, removes a
+    party and disbands; any other party's leader has **Leave squad**.
+  - **The squad's chat**: the Chat's To has **Squad** for one in a squad. A line said to it
+    (`Hosting.chat`'s `squad`, a chat line's `squad`) goes to the sayer's party and to every
+    player of the parties allied with it, wherever they are, and is counted with their party's
+    lines. Refused of one in no squad (`squadless`). `NET_VERSION` 258.
+  - **Allies on the maps**: each ally's dot on the minimap and the maps, in the squad's colour
+    (app/mapicons.js `SQUAD_COLOUR`), apart from the party's. An ally's ping shows as a party's.
+  - **Told to a game sent views**: the summary's `squads` part (who's asked with each), and
+    where each ally is in `fellows`, as its party's are (`VIEW_VERSION` 9).
 - **The area channel** (`Hosting.chat`'s `area`; the Chat's To, **Area (this town, or this
   stretch of land)**; core/netplay.js `AREA_CHAT`; the scaling plan's 2-27). A line said to
   the area (`{ kind: "chat", text, area: true }`) goes to every player in the sayer's settlement

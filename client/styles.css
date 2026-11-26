@@ -7199,6 +7199,16 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     color: var(--gold-bright);
 }
 
+.chat-line.squad .chat-name,
+.chat-line.squad.mine .chat-name {
+    color: #7fd6e8;
+}
+
+.party-squad-entry {
+    flex: 1;
+    min-width: 0;
+}
+
 /* Hear shouts, under the Chat's line: on, or turned off */
 .chat-shouts {
     display: flex;

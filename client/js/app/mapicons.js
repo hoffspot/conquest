@@ -633,6 +633,9 @@ export function drawPing(context, x, y, { size = 22, age = 0 } = {}) {
  */
 export const PARTY_COLOURS = Object.freeze(["#b48cff", "#ff9f43", "#ff79c6", "#d6f25a"]);
 
+/** The colour of an ally on the maps: a player of another party of the player's squad (core/host.js SQUAD), none of the party's own. */
+export const SQUAD_COLOUR = "#7fd6e8";
+
 /** One of a party's colour (PARTY_COLOURS) by their place in its `members` (ids). */
 export function partyColour(members, id) {
     const k = members.indexOf(id);
