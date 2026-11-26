@@ -85,6 +85,26 @@ export const INVASION = Object.freeze({
 });
 
 /**
+ * A world's budget of invasions (the scaling plan's 2-31), where its encounters are an area's
+ * (the rule `director`: "area", a `shared` world's): however many players' time in towns brings
+ * one due, the world has one at once to every `each` players (invasionMost), and from one's end
+ * `gap` of the world's time passes before the next begins. Elsewhere each comes as its player's
+ * time has it, as ever.
+ */
+export const INVASION_BUDGET = Object.freeze({ each: 25, gap: 1800000 });
+
+/**
+ * How many invasions a budgeted world of `players` may have at once: one to every
+ * INVASION_BUDGET.each, and one at least. One, in any world there can be today (none takes more
+ * than 8 players: server/access/cap.js), which is all the host has on at once; two at once come
+ * with worlds of more.
+ */
+export const invasionMost = (players) => Math.max(1, Math.ceil(players / INVASION_BUDGET.each));
+
+/** Whether a budgeted world's next invasion may begin at `now` (ms of its time), its last having ended at `last` (null: none yet). */
+export const invasionBudgeted = (now, last = null) => last === null || now - last >= INVASION_BUDGET.gap;
+
+/**
  * How big an invasion a device can draw and keep moving, both sides together (`sizeFor`): no more
  * than its kind of device's (`most`: a computer's, a phone's or a smaller phone's, as the game
  * tells them apart, world/view.js detectQuality), nor fewer than `least`; and as many as each

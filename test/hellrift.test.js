@@ -8,7 +8,7 @@ import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { DAY, dayOf } from "../client/js/core/daytime.js";
 import { hypot } from "../client/js/core/exact.js";
-import { BRIMSTONE, dueOf, HELL_RIFT, hellFor, inRift, letterOf, RIFT_DEMONS, RIFT_GUARDS, riftDue, riftSite, riftTier, tearsOf } from "../client/js/core/hellrift.js";
+import { BRIMSTONE, dueOf, HELL_RIFT, hellFor, inRift, letterOf, RIFT_DEMONS, RIFT_GUARDS, riftDue, riftMost, RIFTS_OPEN, riftsApart, riftSite, riftTier, tearsOf } from "../client/js/core/hellrift.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { calledTier } from "../client/js/core/might.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -190,6 +190,17 @@ describe("a hell rift's day and place (core/hellrift.js)", () => {
             assert.ok(/walk/.test(text), text);
             assert.ok(!text.includes("{"), text);
         }
+    });
+});
+
+describe("how many rifts a world of many may have open (core/hellrift.js RIFTS_OPEN; the scaling plan's 2-31)", () => {
+    it("is one to every 25 players, one at least, each two kilometres from every other; one in any world there can be today", () => {
+        assert.deepEqual(RIFTS_OPEN, { each: 25, apart: 2000 });
+        assert.deepEqual([0, 1, 8, 25, 26, 50, 51, 100].map(riftMost), [1, 1, 1, 1, 2, 2, 3, 4]);
+        assert.equal(riftsApart([0, 0]), true);
+        assert.equal(riftsApart([0, 0], [[2000, 0], [0, -2500]]), true);
+        assert.equal(riftsApart([0, 0], [[2000, 0], [1200, 1200]]), false);
+        assert.equal(riftsApart([100, 100], [[100, 2099]]), false);
     });
 });
 

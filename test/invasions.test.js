@@ -41,6 +41,9 @@ let sizeFor;
 let BOMBERS;
 let bombersOf;
 let INVASION;
+let INVASION_BUDGET;
+let invasionBudgeted;
+let invasionMost;
 let REWARD;
 let clockOf;
 let criesOf;
@@ -69,7 +72,7 @@ let encode;
 let world;
 
 before(async () => {
-    ({ ALARM, BANDS, BEHEMOTH, BEHEMOTH_REWARD, BOMBERS, ENGINES, INVASION, REWARD, SIZE, bandFor, behemothReward, behemothSides, bombersOf, clockOf, criesOf, dueAfter, isBehemoth, isDue, isSize, raiderArms, raiderName, rewardOf, sidesOf, sizeFor, thanksOf } = await import("../client/js/core/invasions.js"));
+    ({ ALARM, BANDS, BEHEMOTH, BEHEMOTH_REWARD, BOMBERS, ENGINES, INVASION, INVASION_BUDGET, invasionBudgeted, invasionMost, REWARD, SIZE, bandFor, behemothReward, behemothSides, bombersOf, clockOf, criesOf, dueAfter, isBehemoth, isDue, isSize, raiderArms, raiderName, rewardOf, sidesOf, sizeFor, thanksOf } = await import("../client/js/core/invasions.js"));
     ({ RIFT } = await import("../client/js/core/creatures.js"));
     ({ DAY } = await import("../client/js/core/daytime.js"));
     ({ FORMATION, placeAt, ROLES } = await import("../client/js/core/formation.js"));
@@ -654,6 +657,48 @@ describe("an invasion in the world (core/host.js #invade)", () => {
         play(out, INVASION.first + 60000);
         assert.equal(out.host.invasions.length, 0);
         assert.deepEqual(out.player.progress.invasion, { ...clockOf(null) }, "none of it in a town");
+    });
+
+    it("is budgeted by the world where its encounters are an area's (the scaling plan's 2-31): none till half an hour after the last ended, whoever's time has one due, and it comes then; kept with the world; and unbudgeted elsewhere, as ever", () => {
+        assert.deepEqual(INVASION_BUDGET, { each: 25, gap: 1800000 });
+        assert.deepEqual([0, 1, 8, 25, 26, 100].map(invasionMost), [1, 1, 1, 1, 2, 4]);
+        assert.deepEqual([invasionBudgeted(5000), invasionBudgeted(5000, null), invasionBudgeted(1800000, 0), invasionBudgeted(1799999, 0)], [true, true, true, false]);
+
+        // A character three seconds from their first, in a world whose last invasion's just over
+        const soon = { seen: 0, clock: INVASION.first - 3000 };
+        const shared = inTown({ invasion: soon, rules: { director: "area" } });
+        const { host } = shared;
+
+        assert.equal(host.lastInvasion, null);
+        host.lastInvasion = host.battle.time;
+        host.command(HOST_PLAYER, { type: "stop" });
+        play(shared, INVASION.settleFirst + 30000);
+        assert.equal(host.invasions.length, 0, "due, and held back by the world's budget");
+        assert.ok(isDue(shared.player.progress.invasion));
+
+        // (Kept with the world, so every copy of it holds the same back)
+        assert.equal(Host.restore(world, decode(encode(host.snapshot()))).lastInvasion, host.lastInvasion);
+        assert.equal(Host.restore(world, decode(encode(inTown().host.snapshot()))).lastInvasion, null);
+
+        // Half an hour since the last: it comes
+        host.lastInvasion = host.battle.time - INVASION_BUDGET.gap;
+        play(shared, 3000, () => host.invasions.length > 0);
+        assert.equal(host.invasions.length, 1);
+
+        // Its end is where the next half hour's counted from
+        host.lastInvasion = null;
+        Object.assign(host.invasions[0], { invaders: [], defenders: [] });
+        play(shared, 2000, () => host.invasions.length === 0);
+        assert.equal(host.invasions.length, 0);
+        assert.ok(host.lastInvasion !== null && host.lastInvasion <= host.battle.time && host.lastInvasion > host.battle.time - 3000);
+
+        // A world of the player's own (its encounters each player's): whenever their time has it
+        const own = inTown({ invasion: soon });
+
+        own.host.lastInvasion = own.host.battle.time;
+        own.host.command(HOST_PLAYER, { type: "stop" });
+        play(own, INVASION.settleFirst + 30000, () => own.host.invasions.length > 0);
+        assert.equal(own.host.invasions.length, 1);
     });
 
     it("carries on a world kept while the first came at five minutes: a character six minutes in who hasn't seen it has it at ten; one already past ten, half a minute into a town", () => {
