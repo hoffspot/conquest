@@ -1197,6 +1197,42 @@ test("a party's ready check: its leader alone asks (Y, the party menu, or /ready
     await expect(host.locator('#party .member[data-id="guest-1"] .member-ready')).toHaveText("✓");
     await expect(panel.locator('.ready-row[data-id="guest-1"]')).toHaveClass(/\bready\b/);
 
+    // A squad (the plan's 2-29): the party's leader forms one from the party menu's Squad section,
+    // and both have it there, the leading party crowned; only its leader has Disband squad
+    await panel.getByRole("button", { name: "Close" }).click();
+    await host.locator("#partybutton").click();
+    await menu.getByRole("tab", { name: "Party", exact: true }).click();
+    await menu.getByRole("button", { name: "Form a squad" }).click();
+    await expect(menu.locator(".party-squad .party-squad-party")).toHaveText([new RegExp(`♛ ${ada}'s party \\(yours\\)`)], { timeout: 30000 });
+    await expect(menu.getByRole("button", { name: "Disband squad" })).toBeVisible();
+    await expect(menu.getByRole("combobox", { name: "How parties join the squad" })).toHaveValue("ask");
+    await guest.locator("#partybutton").click();
+    await theirs.getByRole("tab", { name: "Party", exact: true }).click();
+    await expect(theirs.locator(".party-squad .party-squad-party")).toHaveText([new RegExp(`♛ ${ada}'s party \\(yours\\)`)], { timeout: 30000 });
+    await expect(theirs.getByRole("button", { name: "Disband squad" })).toHaveCount(0);
+    await expect(theirs.getByRole("button", { name: "Form a squad" })).toHaveCount(0);
+
+    // Its chat: To, Squad. Bryn, of the squad's one party, has the line as the squad's
+    const toSquad = menu.getByRole("textbox", { name: "Something to say to your squad" });
+
+    await menu.getByRole("tab", { name: "Chat" }).click();
+    await menu.getByRole("combobox", { name: "Who to say it to" }).selectOption({ label: "Squad" });
+    await toSquad.fill("Hold the gate");
+    await toSquad.press("Enter");
+    await expect(menu.locator(".chat-line.squad.mine")).toHaveText(["You, to the squad: Hold the gate"], { timeout: 30000 });
+    await theirs.getByRole("tab", { name: "Chat" }).click();
+    await expect(theirs.locator(".chat-line.squad")).toHaveText([`${ada}, to the squad: Hold the gate`], { timeout: 30000 });
+    await expect(theirs.getByRole("combobox", { name: "Who to say it to" }).locator("option", { hasText: "Squad" })).toHaveCount(1);
+
+    // Disbanded (asked twice): no squad, and no Squad to say a line to
+    await menu.getByRole("tab", { name: "Party", exact: true }).click();
+    await menu.getByRole("button", { name: "Disband squad" }).click();
+    await menu.getByRole("button", { name: "Disband?" }).click();
+    await expect(menu.getByRole("button", { name: "Form a squad" })).toBeVisible({ timeout: 30000 });
+    await expect(theirs.getByRole("combobox", { name: "Who to say it to" }).locator("option", { hasText: "Squad" })).toHaveCount(0, { timeout: 30000 });
+    await menu.getByRole("button", { name: "Close" }).click();
+    await theirs.getByRole("button", { name: "Close" }).click();
+
     // (Nothing of it said in the chat as a line of the leader's: "/ready" isn't said)
     expect(await guest.evaluate(() => window.pellagos.game.chatLines?.some?.(({ text }) => text === "/ready") ?? false)).toBe(false);
     expect(await sentAgain(guest)).toBe(0);

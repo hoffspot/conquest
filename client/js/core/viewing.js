@@ -232,6 +232,7 @@ export class Viewing extends Joining {
         }
 
         this.#parties(parts.get("parties"));
+        this.#squads(parts.get("squads"));
         this.#roster(parts.get("roster"));
         this.#war(parts);
         this.#abroad(parts);
@@ -259,6 +260,17 @@ export class Viewing extends Joining {
     }
 
     // The players' parties as the summary has them, and which each player's in (the plan's 3-24)
+    // The squads as the world's summary says (core/host.js SQUAD: each with who's asked to come
+    // into it), kept as the host keeps them, for the game to read as it reads its own Host's
+    #squads(squads) {
+        const { host } = this;
+        const told = structuredClone([...(squads ?? [])].map(([, squad]) => squad));
+
+        host.squads = new Map(told.map(({ asks: _, ...squad }) => [squad.id, squad]));
+        host.squadIds = new Map([...host.squads.values()].flatMap(({ id, parties }) => parties.map((party) => [party, id])));
+        host.squadAsks = new Map(told.flatMap(({ id, asks = [] }) => asks.map(({ party, until }) => [party, { squad: id, until }])));
+    }
+
     #parties(parties) {
         const { host } = this;
 

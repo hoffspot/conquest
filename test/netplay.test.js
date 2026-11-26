@@ -1665,6 +1665,63 @@ describe("playing together (netplay.js)", () => {
         assert.equal(hosting.chat("Still here", { shout: true }).reason, "chatty");
     });
 
+    it("says a line to the squad (the scaling plan's 2-29): to the sayer's own party and to every player of the parties allied with it, wherever they are, and to no one else; refused of one in no squad", () => {
+        const { host, hosting, join, deliver } = opened();
+        const [bryn, cass, dee, eda] = ["Bryn", "Cass", "Dee", "Eda"].map((name) => join(guest(name)));
+        const heard = { host: [], bryn: [], cass: [], dee: [], eda: [] };
+        const unsaid = [];
+
+        hosting.onChat = (line) => heard.host.push(line);
+
+        for (const [who, { joining }] of [["bryn", bryn], ["cass", cass], ["dee", dee], ["eda", eda]]) {
+            joining.onChat = (line) => heard[who].push(line);
+        }
+
+        cass.joining.onUnsaid = (reason) => unsaid.push(reason);
+        assert.ok(CHAT_REFUSED.includes("squadless"));
+
+        // Ada's party with Bryn, Cass's with Dee; Eda in neither. No squad yet: refused
+        host.command(HOST_PLAYER, { type: "party", do: "invite", who: "guest-1" });
+        bryn.joining.command({ type: "party", do: "accept" });
+        cass.joining.command({ type: "party", do: "invite", who: "guest-3" });
+        deliver();
+        dee.joining.command({ type: "party", do: "accept" });
+        deliver();
+        assert.deepEqual(hosting.chat("Anyone?", { squad: true }), { ok: false, reason: "squadless" });
+        cass.joining.chat("Anyone?", { squad: true });
+        deliver();
+        assert.deepEqual(unsaid, ["squadless"]);
+        assert.deepEqual(heard, { host: [], bryn: [], cass: [], dee: [], eda: [] });
+
+        // The two allied (an open squad, joined at once)
+        assert.ok(host.command(HOST_PLAYER, { type: "squad", do: "form", entry: "open" }).ok);
+        cass.joining.command({ type: "squad", do: "join", squad: host.squadFor(HOST_PLAYER).id });
+        deliver();
+        assert.deepEqual(host.allies(HOST_PLAYER).sort(), ["guest-2", "guest-3"]);
+
+        // Dee a kilometre off, further than any shout: the squad's line reaches her all the same
+        const far = host.battle.actor("guest-3");
+
+        Object.assign(far, { x: far.x + 1000, y: far.y + 1000 });
+        assert.deepEqual(hosting.chat("To the keep", { squad: true }), { ok: true });
+        deliver();
+
+        const first = { from: HOST_PLAYER, name: "Ada", text: "To the keep", squad: true };
+
+        assert.deepEqual(heard, { host: [first], bryn: [first], cass: [first], dee: [first], eda: [] });
+        assert.deepEqual(dee.joining.chat("On our way", { squad: true }), { ok: true, pending: true });
+        deliver();
+
+        const second = { from: "guest-3", name: "Dee", text: "On our way", squad: true };
+
+        assert.deepEqual(heard, { host: [first, second], bryn: [first, second], cass: [first, second], dee: [first, second], eda: [] });
+
+        // A line to the party stays the party's
+        assert.deepEqual(hosting.chat("Just us", {}), { ok: true });
+        deliver();
+        assert.deepEqual([heard.bryn.at(-1).text, heard.bryn.at(-1).squad, heard.cass.length], ["Just us", undefined, 2]);
+    });
+
     it("sends a direct message to one player and back to the sayer alone: a party one in their party, a world one to anyone else; one not taken never sent, the sayer told whose; to no one, refused; which are taken said again as the link comes back", () => {
         const { host, hosting, join, deliver, play, catchUp, post } = opened();
         const bryn = join(guest("Bryn"));

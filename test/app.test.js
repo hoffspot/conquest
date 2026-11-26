@@ -1833,6 +1833,7 @@ describe("the bars over the others (hud.js)", () => {
         assert.deepEqual(laid(playersPage(few)), [["party", "Your party (3)", "Ada Bryn Dov"], ["near", "Nearby (1)", "Cass"], ["world", "Everyone else (1)", "Bran"]], "(one of the party near is of the party; each heading with how many are under it)");
         assert.deepEqual({ ...playersPage(few), sections: null }, { found: 5, page: 0, pages: 1, sections: null });
         assert.deepEqual(laid(playersPage([{ ...me, party: null }, few[2]])), [["party", "You (1)", "Ada"], ["near", "Nearby (1)", "Cass"]], "(in no party: You; no heading with no one under it)");
+        assert.deepEqual(laid(playersPage([...few, { id: "e", name: "Eda", near: true, ally: true, party: { yours: false } }])).slice(0, 3), [["party", "Your party (3)", "Ada Bryn Dov"], ["squad", "Your squad (1)", "Eda"], ["near", "Nearby (1)", "Cass"]], "(an ally, of a party allied with theirs, under Your squad, near or not: the plan's 2-29)");
 
         // Found by name: any part of it, any case
         assert.deepEqual(laid(playersPage(few, { search: " BR " })), [["party", "Your party (1)", "Bryn"], ["world", "Everyone else (1)", "Bran"]]);

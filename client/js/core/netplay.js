@@ -71,11 +71,13 @@
 //                                                    a word to the host and back's taken it lately,
 //                                                    ms, once it's timed one: Joining lately; the
 //                                                    host's, to show)
-//                    { kind: "chat", text, to, shout, area }   (a line to their party; `shout`: true, to
-//                                                    everyone near them, SHOUT; `area`: true,
+//                    { kind: "chat", text, to, shout, area, squad }   (a line to their party; `shout`: true,
+//                                                    to everyone near them, SHOUT; `area`: true,
 //                                                    to everyone in their settlement or cell of
-//                                                    land, AREA_CHAT; or, `to` a player's id, a
-//                                                    direct message to them)
+//                                                    land, AREA_CHAT; `squad`: true, to their
+//                                                    party and its allies, core/host.js SQUAD;
+//                                                    or, `to` a player's id, a direct message to
+//                                                    them)
 //                    { kind: "dms", party, world, shout }      (which lines they take: shouts, and direct messages from
 //                                                    their party, from anyone else in the world)
 //                    { kind: "own", own }                      (what its game keeps of its hero that
@@ -143,7 +145,7 @@ import { WARY } from "./wary.js";
  * Bumped whenever what's said changes: a game of another version can't join. (Not for what's
  * added and opted into: contribution.md, section 3.)
  */
-export const NET_VERSION = 257;
+export const NET_VERSION = 258;
 
 /**
  * The ways a world can be played with those who join it (its netcode): `lockstep`, each game
@@ -378,7 +380,7 @@ export const CHAT = Object.freeze({ most: 200, burst: 5, burstMs: 10000, kept: 5
  * Why a line wasn't said (as host.js REFUSALS names them): nothing to say, in no party, too many too
  * quickly; a direct message to no one in the world, or to one not taking that kind ("closed").
  */
-export const CHAT_REFUSED = Object.freeze(["empty", "unpartied", "chatty", "nobody", "closed", "shoutsOff", "repeated", "areaOff"]);
+export const CHAT_REFUSED = Object.freeze(["empty", "unpartied", "chatty", "nobody", "closed", "shoutsOff", "repeated", "areaOff", "squadless"]);
 
 /**
  * Which lines a player takes till they say otherwise: direct messages from their party and from
@@ -847,7 +849,7 @@ export class Session {
                 break;
             case "chat": {
                 const id = this.players.get(peer);
-                const said = id ? (message.shout === true ? this.#shout(id, message.text) : message.area === true ? this.#shout(id, message.text, { area: true }) : this.#say(id, message.text, typeof message.to === "string" ? message.to : null)) : null;
+                const said = id ? (message.shout === true ? this.#shout(id, message.text) : message.area === true ? this.#shout(id, message.text, { area: true }) : message.squad === true ? this.#say(id, message.text, null, { squad: true }) : this.#say(id, message.text, typeof message.to === "string" ? message.to : null)) : null;
 
                 if (said && !said.ok) {
                     this.hosting.post(peer, "unsaid", encode({ kind: "unsaid", reason: said.reason, ...(said.name ? { name: said.name } : {}) }));
@@ -887,8 +889,8 @@ export class Session {
      * (CHAT_REFUSED: nothing to say, in no party, too many lines too quickly, no such player, or
      * one not taking that kind of message: `name`, theirs).
      */
-    chat(text, { to = null, shout = false, area = false } = {}) {
-        return shout ? this.#shout(HOST_PLAYER, text) : area ? this.#shout(HOST_PLAYER, text, { area: true }) : this.#say(HOST_PLAYER, text, to);
+    chat(text, { to = null, shout = false, area = false, squad = false } = {}) {
+        return shout ? this.#shout(HOST_PLAYER, text) : area ? this.#shout(HOST_PLAYER, text, { area: true }) : squad ? this.#say(HOST_PLAYER, text, null, { squad: true }) : this.#say(HOST_PLAYER, text, to);
     }
 
     /** Which lines a player takes (`party`, `world`, `shout`: DMS_TAKEN), as they say (the host's own player's, as the game says). */
@@ -963,13 +965,19 @@ export class Session {
     // others sent it, the sayer too), and to no one else. Or a direct message (`to` a player's
     // id): "party" to one in the sayer's party, "world" to anyone else, to them and back to the
     // sayer alone, if they take that kind (#dms), else the sayer told whose aren't
-    #say(id, said, to = null) {
+    // (`squad`: to their party and every party allied with it, core/host.js SQUAD, the scaling
+    // plan's 2-29; refused of one whose party's in no squad, "squadless")
+    #say(id, said, to = null, { squad = false } = {}) {
         const text = chatLine(said);
         const party = this.host.partyFor(id);
         const other = to === null ? null : this.host.players.get(to);
 
         if (!text) {
             return { ok: false, reason: "empty" };
+        }
+
+        if (squad && !this.host.squadFor(id)) {
+            return { ok: false, reason: "squadless" };
         }
 
         if (to !== null && (!other || to === id)) {
@@ -997,10 +1005,10 @@ export class Session {
 
         this.said.set(id, [...lately, now]);
 
-        const line = { from: id, name: this.host.players.get(id)?.hero.name ?? "", text, ...(dm ? { to, toName: other.hero.name, dm } : {}) };
+        const line = { from: id, name: this.host.players.get(id)?.hero.name ?? "", text, ...(dm ? { to, toName: other.hero.name, dm } : {}), ...(squad ? { squad: true } : {}) };
         const sent = encode({ kind: "chat", ...line });
 
-        for (const member of dm ? [id, to] : party.members) {
+        for (const member of dm ? [id, to] : squad ? [...party.members, ...this.host.allies(id)] : party.members) {
             if (member === HOST_PLAYER) {
                 this.onChat(line);
             } else {
@@ -2424,7 +2432,7 @@ export class Joining {
                 const dm = (message.dm === "party" || message.dm === "world") && typeof message.to === "string" ? { to: message.to, toName: typeof message.toName === "string" ? message.toName : "", dm: message.dm } : {};
 
                 if (text && typeof message.from === "string") {
-                    this.onChat({ from: message.from, name: typeof message.name === "string" ? message.name : "", text, ...dm, ...(message.shout === true ? { shout: true } : {}), ...(message.area === true ? { area: true } : {}) });
+                    this.onChat({ from: message.from, name: typeof message.name === "string" ? message.name : "", text, ...dm, ...(message.shout === true ? { shout: true } : {}), ...(message.area === true ? { area: true } : {}), ...(message.squad === true ? { squad: true } : {}) });
                 }
 
                 break;
@@ -2446,14 +2454,14 @@ export class Joining {
      * to them (heard back too). Returns { ok: true, pending: true }, or, with nothing to say,
      * { ok: false, reason: "empty" }.
      */
-    chat(text, { to = null, shout = false, area = false } = {}) {
+    chat(text, { to = null, shout = false, area = false, squad = false } = {}) {
         const line = chatLine(text);
 
         if (!line) {
             return { ok: false, reason: "empty" };
         }
 
-        this.send(encode({ kind: "chat", text: line, ...(shout ? { shout: true } : area ? { area: true } : typeof to === "string" ? { to } : {}) }));
+        this.send(encode({ kind: "chat", text: line, ...(shout ? { shout: true } : area ? { area: true } : squad ? { squad: true } : typeof to === "string" ? { to } : {}) }));
 
         return { ok: true, pending: true };
     }

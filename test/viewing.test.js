@@ -478,6 +478,66 @@ describe("a replicated world's link (core/viewing.js)", () => {
         assert.equal(kept.runs.has(run.id), false);
     });
 
+    it("has the squads as its summary says, and where its allies are as it has its party (the scaling plan's 2-29)", () => {
+        const world = replicated();
+        const [ann, bea, cal, dov, eve] = ["Ann", "Bea", "Cal", "Dov", "Eve"].map((name, k) => world.come("abcde"[k], character(name)));
+
+        world.play(40);
+
+        const { host } = world;
+        const [annId, beaId, calId, dovId] = [ann, bea, cal, dov].map(({ link }) => link.me);
+        const mine = ann.link.host;
+
+        ann.link.command({ type: "party", do: "invite", who: beaId });
+        cal.link.command({ type: "party", do: "invite", who: dovId });
+        world.play(30);
+        bea.link.command({ type: "party", do: "accept" });
+        dov.link.command({ type: "party", do: "accept" });
+        world.play(30);
+        assert.equal(mine.squadFor(annId), null);
+        assert.deepEqual(mine.allies(annId), []);
+
+        // A squad formed, asked to be joined: known to every game, who's asked with it
+        ann.link.command({ type: "squad", do: "form" });
+        world.play(30);
+
+        const squad = host.squadFor(annId);
+
+        assert.ok(squad);
+        assert.deepEqual(mine.squadFor(annId), squad);
+        assert.deepEqual(eve.link.host.squadFor(beaId), squad, "a squad's anyone's to know of, to ask to join it");
+        cal.link.command({ type: "squad", do: "join", squad: squad.id });
+        world.play(30);
+        assert.equal(mine.squadAsks.get(host.partyFor(calId).id)?.squad, squad.id);
+        assert.deepEqual(mine.allies(annId), []);
+        ann.link.command({ type: "squad", do: "admit", party: host.partyFor(calId).id });
+        world.play(30);
+        assert.deepEqual(mine.squadFor(annId), host.squadFor(annId));
+        assert.deepEqual(mine.allies(annId).sort(), [calId, dovId].sort());
+        assert.deepEqual(cal.link.host.allies(calId).sort(), [annId, beaId].sort());
+        assert.equal(mine.squadAsks.size, 0);
+        assert.ok(cal.events.some((event) => event.type === "squad" && event.change === "joined"), "and its events are its players' to hear");
+
+        // An ally gone far out of sight: where they are still told, as one of the party's is
+        const there = host.battle.actor(annId);
+
+        host.battle.place(dovId, "town", [Math.floor(there.x) + 700, Math.floor(there.y) + 20]);
+        world.play(60);
+        assert.ok(!mine.battle.actor(dovId), "Dov's out of sight");
+
+        const [far, truth] = [mine.afar.get(dovId), host.battle.actor(dovId)];
+
+        assert.ok(far && Math.abs(far.x - truth.x) <= 1 && Math.abs(far.y - truth.y) <= 1, JSON.stringify(far));
+        assert.equal(eve.link.host.afar.size, 0, "no one's told where another's squad is");
+
+        // Disbanded: no squad in any game, and no allies told of
+        ann.link.command({ type: "squad", do: "disband" });
+        world.play(60);
+        assert.equal(mine.squadFor(annId), null);
+        assert.equal(mine.afar.has(dovId), false);
+        assert.equal(mine.afar.has(beaId), true);
+    });
+
     it("has the parties, everyone in the world, who's asked whom, where its party is and the war as its summary says, and asks its server what a shop needs", async () => {
         const world = replicated();
         const [ann, bea, cal] = [world.come("a", character("Ann")), world.come("b", character("Bea")), world.come("c", character("Cal"))];
