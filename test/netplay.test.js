@@ -9,18 +9,20 @@
 // at once; the link timed; and steps kept in hand, as many as the host's sendings' unevenness asks;
 // and what's said in a party heard by those in it, sent to no one else
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { freshRecord } from "../client/js/core/followers.js";
 import { newGuid } from "../client/js/core/guid.js";
-import { HOST_PLAYER, Host, OWN } from "../client/js/core/host.js";
+import { HOST_PLAYER, Host, OWN, REFUSALS } from "../client/js/core/host.js";
 import { Navigation } from "../client/js/core/navigation.js";
 import { MOTION } from "../client/js/core/motion.js";
-import { AGAIN, CHAT, chatLine, DMS_TAKEN, SHOUT, characterFrom, CHECK_EVERY, HEARD, Hosting, Joining, LATELY, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, QUIET, SELF, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
+import { AGAIN, AREA_CHAT, CHAT, CHAT_REFUSED, chatLine, DMS_TAKEN, SHOUT, characterFrom, CHECK_EVERY, HEARD, Hosting, Joining, LATELY, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, QUIET, SELF, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { selfOf } from "../client/js/core/selfstate.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
+import { areaChatFor } from "../server/reopen.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 const guest = (name, race = "human", weapon = "bow") => ({ hero: { name, shape: {}, look: {}, weapon, boots: false, race }, progress: { gold: 50 } });
@@ -1557,6 +1559,110 @@ describe("playing together (netplay.js)", () => {
         hosting.chat("And now?", { shout: true });
         deliver();
         assert.notEqual(heard.bryn.at(-1).text, "And now?");
+    });
+
+    it("says a line to the area (the scaling plan's 2-27): to every player in the sayer's settlement, however far across it, in their party or not, and to no one out of it; out in the wilds, to those on the same 256 m of land; counted with their shouts, heard by those who take shouts, and refused where a world has it off", () => {
+        const { host, hosting, join, deliver } = opened();
+        const bryn = join(guest("Bryn"));
+        const cass = join(guest("Cass"));
+        const heard = { host: [], bryn: [], cass: [] };
+        const unsaid = { bryn: [], cass: [] };
+
+        hosting.onChat = (line) => heard.host.push(line);
+
+        for (const [who, { joining }] of [["bryn", bryn], ["cass", cass]]) {
+            joining.onChat = (line) => heard[who].push(line);
+            joining.onUnsaid = (reason) => unsaid[who].push(reason);
+        }
+
+        assert.deepEqual(AREA_CHAT, { burst: SHOUT.burst, burstMs: SHOUT.burstMs });
+        assert.ok(CHAT_REFUSED.includes("areaOff"));
+        assert.ok(REFUSALS.areaOff);
+
+        const [ada, b, c] = [HOST_PLAYER, "guest-1", "guest-2"].map((id) => host.battle.actor(id));
+        const home = host.chatArea(HOST_PLAYER);
+
+        // (All three where they came in: the start town)
+        assert.match(home, /^town:/);
+        assert.deepEqual([host.chatArea("guest-1"), host.chatArea("guest-2")], [home, home]);
+
+        // Bryn across the town, further than a shout carries: her line to the area heard by all
+        // (the two a little either side of where they came in, by its middle)
+        const [mx, my] = [ada.x, ada.y];
+        const across = [[1, 0], [0, 1], [1, 1], [1, -1]].find(([dx, dy]) => {
+            const far = (SHOUT.reach + 4) / 2 / Math.hypot(dx, dy);
+
+            Object.assign(ada, { x: mx - dx * far, y: my - dy * far });
+            Object.assign(b, { x: mx + dx * far, y: my + dy * far });
+
+            return host.chatArea(HOST_PLAYER) === home && host.chatArea("guest-1") === home;
+        });
+
+        assert.ok(across, "(two places in the town further apart than a shout carries)");
+        assert.ok(Math.hypot(b.x - ada.x, b.y - ada.y) > SHOUT.reach);
+        Object.assign(c, { x: mx, y: my });
+        assert.deepEqual(bryn.joining.chat("Is the smith open?", { area: true }), { ok: true, pending: true });
+        deliver();
+
+        const first = { from: "guest-1", name: "Bryn", text: "Is the smith open?", area: true };
+
+        assert.deepEqual(heard, { host: [first], bryn: [first], cass: [first] });
+
+        // Cass out in the wilds, a kilometre off: not in the town's area, nor it in hers
+        Object.assign(c, { x: ada.x + 1000, y: ada.y + 1000 });
+
+        const wilds = host.chatArea("guest-2");
+
+        assert.match(wilds, /^cell:-?\d+,-?\d+$/);
+        assert.deepEqual(hosting.chat("Aye, till dusk", { area: true }), { ok: true });
+        cass.joining.chat("Anyone out here?", { area: true });
+        deliver();
+        assert.deepEqual(heard.bryn.at(-1), { from: HOST_PLAYER, name: "Ada", text: "Aye, till dusk", area: true });
+        assert.deepEqual(heard.cass.map(({ text }) => text), ["Is the smith open?", "Anyone out here?"], "(her own, heard back; not the town's)");
+        assert.equal(heard.host.at(-1).text, "Aye, till dusk");
+
+        // Bryn out to the same stretch of land as Cass: heard there; a cell over, not
+        Object.assign(b, { x: c.x + 5, y: c.y });
+        assert.equal(host.chatArea("guest-1"), wilds);
+        cass.joining.chat("There you are", { area: true });
+        deliver();
+        assert.equal(heard.bryn.at(-1).text, "There you are");
+        b.x += 256;
+        assert.notEqual(host.chatArea("guest-1"), wilds);
+        cass.joining.chat("Gone again?", { area: true });
+        deliver();
+        assert.equal(heard.bryn.at(-1).text, "There you are");
+
+        // Counted with shouts: the same line again, and a fourth of either in ten seconds
+        assert.deepEqual(hosting.chat("Aye, till dusk", { area: true }), { ok: false, reason: "repeated" });
+        assert.deepEqual(hosting.chat("Two", { shout: true }), { ok: true });
+        assert.deepEqual(hosting.chat("Three", { area: true }), { ok: true });
+        assert.deepEqual(hosting.chat("Four", { area: true }), { ok: false, reason: "chatty" });
+
+        // One who's turned shouts off: sent none of the area's, and can't say to it
+        Object.assign(b, { x: c.x + 5, y: c.y });
+        bryn.joining.takeDms({ shout: false });
+        deliver();
+
+        const told = heard.bryn.length;
+
+        // (Cass's fourth in a while would be refused: a new speaker's count is her own)
+        bryn.joining.chat("Hello?", { area: true });
+        deliver();
+        assert.deepEqual(unsaid.bryn, ["shoutsOff"]);
+        assert.equal(heard.bryn.length, told);
+
+        // A world with the channel off (a public one, till its chat's filtered): refused
+        hosting.session.areaChat = false;
+        assert.deepEqual(hosting.chat("Anyone?", { area: true }), { ok: false, reason: "areaOff" });
+        bryn.joining.takeDms({ shout: true });
+        bryn.joining.chat("Anyone?", { area: true });
+        deliver();
+        assert.deepEqual(unsaid.bryn, ["shoutsOff", "areaOff"]);
+        assert.deepEqual([areaChatFor({}), areaChatFor({ public: false }), areaChatFor({ public: true })], [true, true, false]);
+        assert.ok(readFileSync(new URL("../server/world-worker.js", import.meta.url), "utf8").includes("hosting.session.areaChat = areaChatFor(settings);"));
+        // (And a shout's still a shout there)
+        assert.equal(hosting.chat("Still here", { shout: true }).reason, "chatty");
     });
 
     it("sends a direct message to one player and back to the sayer alone: a party one in their party, a world one to anyone else; one not taken never sent, the sayer told whose; to no one, refused; which are taken said again as the link comes back", () => {

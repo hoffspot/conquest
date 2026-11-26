@@ -7193,7 +7193,9 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 
 /* A shout, heard by everyone near (app/partypanel.js #chat; core/netplay.js SHOUT): amber */
 .chat-line.shout .chat-name,
-.chat-line.shout.mine .chat-name {
+.chat-line.shout.mine .chat-name,
+.chat-line.area .chat-name,
+.chat-line.area.mine .chat-name {
     color: var(--gold-bright);
 }
 

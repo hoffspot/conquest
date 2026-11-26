@@ -195,7 +195,7 @@ import { JournalPanel, bearing, keepMessage, regardOf } from "./journal.js";
 import { ReaderPanel } from "./reader.js";
 import { Journey } from "./journey.js";
 import { SpellbookPanel } from "./spellbook.js";
-import { PartyPanel, PLAYERS_PAGE, SHOUT_TO } from "./partypanel.js";
+import { AREA_TO, PartyPanel, PLAYERS_PAGE, SHOUT_TO } from "./partypanel.js";
 import { medalWords } from "../core/credit.js";
 import { PackPanel } from "./pack.js";
 import { Governor } from "./governor.js";
@@ -12555,12 +12555,12 @@ export class Game {
         }
 
         // (Saying to someone who's gone, or blocked since: to the party again)
-        if (this.chatTo && this.chatTo !== SHOUT_TO && (!this.worldview.players.has(this.chatTo) || this.isBlocked(this.chatTo))) {
+        if (this.chatTo && this.chatTo !== SHOUT_TO && this.chatTo !== AREA_TO && (!this.worldview.players.has(this.chatTo) || this.isBlocked(this.chatTo))) {
             this.chatTo = null;
         }
 
         // (Shouting, with shouts turned off since: to the party again)
-        if (this.chatTo === SHOUT_TO && !this.dmsTaken.shout) {
+        if ((this.chatTo === SHOUT_TO || this.chatTo === AREA_TO) && !this.dmsTaken.shout) {
             this.chatTo = null;
         }
 
@@ -12583,8 +12583,11 @@ export class Game {
      * A line said in the player's party (core/netplay.js: heard as it's sent on to those in it,
      * their own lines too): into the chat; another's with a chime, and counted unread till it's seen.
      */
-    chatHeard({ from, name, text, to = null, toName = "", dm = null, shout = false }) {
+    chatHeard({ from, name, text, to = null, toName = "", dm = null, shout = false, area = false }) {
         const mine = from === this.me;
+
+        // (A line to the area, core/netplay.js AREA_CHAT: taken and let go of as a shout is)
+        shout ||= area;
 
         // (A direct message, or a shout, from someone the player's blocked: let go of, unheard;
         // they're not told. And a shout that came as shouts were being turned off)
@@ -12593,7 +12596,7 @@ export class Game {
         }
 
         // (A direct message by whom it's with: the one it's to, or from)
-        const line = dm ? { name: mine ? toName : name, text, mine, dm, with: mine ? to : from } : { name: mine ? "You" : name, text, mine, ...(shout ? { shout: true } : {}) };
+        const line = dm ? { name: mine ? toName : name, text, mine, dm, with: mine ? to : from } : { name: mine ? "You" : name, text, mine, ...(area ? { area: true } : shout ? { shout: true } : {}) };
         const reading = this.partyPanel?.open && this.partyPanel.tab === "chat";
 
         this.#chatLine(line);
@@ -12607,7 +12610,7 @@ export class Game {
 
         // (And a moment on screen, just above the Action Bar, unless the chat's open to read)
         if (this.chatOnScreen && !reading) {
-            this.hud.chatLine({ who: dm ? `${mine ? "To" : "From"} ${line.name}` : shout ? (mine ? "You shout" : `${line.name} shouts`) : line.name, text, mine, dm: Boolean(dm) });
+            this.hud.chatLine({ who: dm ? `${mine ? "To" : "From"} ${line.name}` : area ? (mine ? "You, to the area" : `${line.name}, to the area`) : shout ? (mine ? "You shout" : `${line.name} shouts`) : line.name, text, mine, dm: Boolean(dm) });
         }
     }
 
@@ -12826,8 +12829,9 @@ export class Game {
         }
 
         const shout = this.chatTo === SHOUT_TO;
-        const to = shout ? null : this.chatTo;
-        const said = !shout && !to && !this.worldview.partyFor(this.me) ? { ok: false, reason: "unpartied" } : this.hosting ? this.hosting.chat(text, { to, shout }) : this.remote ? this.remote.chat(text, { to, shout }) : { ok: false, reason: "unpartied" };
+        const area = this.chatTo === AREA_TO;
+        const to = shout || area ? null : this.chatTo;
+        const said = !shout && !area && !to && !this.worldview.partyFor(this.me) ? { ok: false, reason: "unpartied" } : this.hosting ? this.hosting.chat(text, { to, shout, area }) : this.remote ? this.remote.chat(text, { to, shout, area }) : { ok: false, reason: "unpartied" };
 
         if (said.ok) {
             this.sound?.play("tap");

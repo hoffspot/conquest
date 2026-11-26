@@ -36,6 +36,13 @@ export function rulesFor(meta) {
 export const runsCappedFor = (settings) => (settings?.netcode ?? "lockstep") !== "replicated";
 
 /**
+ * Whether a world's chat has its area channel (core/netplay.js AREA_CHAT, Session `areaChat`):
+ * any but a public one, till a public world's typed chat is filtered and can be reported (the
+ * scaling plan's 6B-5 and 6B-6: this is where those turn it on).
+ */
+export const areaChatFor = (settings) => settings?.public !== true;
+
+/**
  * The rules of its preset a world's settings relax (storage/worlds.js): `freeFollowers`, every
  * follower a player can lead, in a crowd and in a town's buildings, whatever its preset has;
  * `sharedDungeons`, each dungeon's one run everyone's, not a run for each party.
