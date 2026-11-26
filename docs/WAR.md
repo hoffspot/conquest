@@ -3628,6 +3628,24 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   out and turns them off. A blocked player's shouts are let go of as their messages are. It's the
   host's `Session` that sends them, so they're the same played by lockstep and by views. What two
   games say to each other changed (`NET_VERSION` 240).
+- **Squads** (core/host.js `SQUAD`, the `squad` command; the scaling plan's 2-28). Parties
+  allied: five at the most, led by one of them, whose leader speaks for it. Every squad command
+  is a party's leader's, for their party (`unpartied`, `leader` otherwise):
+  - `form` makes one, theirs to lead, with how parties come into it (`entry`): `open`, `ask`
+    (unless said) or `closed`.
+  - `join` (`squad`: its id) joins an open one at once; asks of one that's by asking, its leader
+    told (`asked`), and let in or not by `admit` or `refuse` (`party`) within a minute
+    (`SQUAD.askMs`); and is refused of a closed one (`squadClosed`) or a full one (`squadFull`).
+  - `leave` takes a party out. If it led the squad, the party longest in it leads. A party that's
+    no more (one left in it) is out of its squad too. A squad with no party left is no more.
+  - `remove` (`party`), `entry` (`entry`) and `disband` are the squad's leader's (`squadLeader`).
+  Everyone in a squad is told each change (a `squad` event: `joined`, `left`, `removed`,
+  `disbanded`, `leader`, `entry`). **Allies share pings**: a ping's told to its party as ever,
+  and to each player of the squad's other parties as the squad's (`squad`, `ping`); a mark stays
+  its party's. `Host.allies` gives a player's allies, for their dots on the maps. A squad shares
+  nothing else: what each has found of the maps, a dungeon's run and what falls to them stay a
+  party's. Kept in a snapshot (who's asked isn't). Nothing in the page shows or makes a squad
+  yet: that's the plan's 2-29. `NET_VERSION` 257.
 - **The area channel** (`Hosting.chat`'s `area`; the Chat's To, **Area (this town, or this
   stretch of land)**; core/netplay.js `AREA_CHAT`; the scaling plan's 2-27). A line said to
   the area (`{ kind: "chat", text, area: true }`) goes to every player in the sayer's settlement
