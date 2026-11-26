@@ -1428,7 +1428,7 @@ test("a shout from the Chat's To: heard by Bryn near, in no party, a moment on t
     // Bryn turns Hear shouts off: no Shout in their To, kept, the host told; the next isn't sent
     const hears = theirs.getByRole("checkbox", { name: "Hear shouts from players nearby" });
 
-    await expect(theirs.getByRole("combobox", { name: "Who to say it to" }).locator("option")).toHaveText(["Party", "Shout (nearby)", ada]);
+    await expect(theirs.getByRole("combobox", { name: "Who to say it to" }).locator("option")).toHaveText(["Party", "Shout (nearby)", "Area (this town, or this stretch of land)", ada]);
     await hears.uncheck();
     await expect(theirs.getByRole("combobox", { name: "Who to say it to" }).locator("option")).toHaveText(["Party", ada]);
     expect(await guest.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")).hearShouts)).toBe(false);
@@ -1442,6 +1442,17 @@ test("a shout from the Chat's To: heard by Bryn near, in no party, a moment on t
     await expect.poll(() => host.evaluate(() => window.pellagos.game.hosting.session.dms.get("guest-1")?.shout), { timeout: 30000 }).toBe(true);
     await shout("And now?");
     await expect(theirs.locator(".chat-line.shout")).toHaveText([`${ada} shouts: Anyone about?`, `${ada} shouts: And now?`], { timeout: 30000 });
+
+    // To the area (the plan's 2-27): To, Area. Bryn, in the same town, has it, as a line of its own
+    const toArea = menu.getByRole("textbox", { name: "Something to say to everyone in this town, or on this stretch of land" });
+
+    // (Counted with the shouts: three of either in ten seconds, so those just shouted let by)
+    await host.waitForTimeout(10500);
+    await to.selectOption({ label: "Area (this town, or this stretch of land)" });
+    await toArea.fill("Market's open");
+    await toArea.press("Enter");
+    await expect(menu.locator(".chat-line.area.mine")).toHaveText(["You, to the area: Market's open"], { timeout: 30000 });
+    await expect(theirs.locator(".chat-line.area")).toHaveText([`${ada}, to the area: Market's open`], { timeout: 30000 });
 
     // Bryn further off than a shout carries, in the host's world: not heard
     await host.evaluate(() => {

@@ -3628,6 +3628,18 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   out and turns them off. A blocked player's shouts are let go of as their messages are. It's the
   host's `Session` that sends them, so they're the same played by lockstep and by views. What two
   games say to each other changed (`NET_VERSION` 240).
+- **The area channel** (`Hosting.chat`'s `area`; the Chat's To, **Area (this town, or this
+  stretch of land)**; core/netplay.js `AREA_CHAT`; the scaling plan's 2-27). A line said to
+  the area (`{ kind: "chat", text, area: true }`) goes to every player in the sayer's settlement
+  (among its houses or in its fields; in one of its buildings), or, out of any, on the same
+  256 m cell of land (`Host.chatArea`: the director's cell, core/director.js `AREA`; in a place
+  gone into out there, the cell of its way in), in their party or not, however far across it;
+  and back to the sayer (`{ kind: "chat", from, name, text, area: true }`). It's counted with a
+  player's shouts (three of either in 10 seconds, the same line not again), and it goes by the
+  same switch: one who's turned **Hear shouts** off is sent none of the area's and can't say to
+  it (`shoutsOff`). A world can have it off (`Session.areaChat`, `areaOff`): a public world's is,
+  till its typed chat is filtered and can be reported (`areaChatFor`, server/reopen.js; the
+  plan's 6B-5 and 6B-6), though no world can be public yet. `NET_VERSION` 256.
 - **Blocked** (the party menu's Players tab; Game options, **Blocked players**). Whom a player's
   blocked is theirs alone, never told the host or anyone: their game lets go of a blocked
   player's direct messages as they come, and of their party invites (as **Refuse party invites**

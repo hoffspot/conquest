@@ -59,7 +59,7 @@ import { RUNNER, WorldRunner } from "../client/js/core/runner.js";
 import { decode } from "../client/js/core/wire.js";
 import { Ahead } from "./ahead.js";
 import { Keeper } from "./keeper.js";
-import { openWorld, runsCappedFor } from "./reopen.js";
+import { areaChatFor, openWorld, runsCappedFor } from "./reopen.js";
 import { MOST_HEROES } from "./storage/heroes.js";
 import { StoredWorld, WORLD_SETTINGS } from "./storage/worlds.js";
 import { WorldMetrics } from "./world-metrics.js";
@@ -195,6 +195,9 @@ const replicate = (mode) => {
 hosting.session.netcode = settings.netcode ?? "lockstep";
 // (And whether its dungeon runs are capped: only where every game plays the whole world)
 host.runsCapped = runsCappedFor(settings);
+// (And its chat's area channel: off in a public world till its typed chat's filtered and can be
+// reported, the scaling plan's 2-27, 6B-5 and 6B-6)
+hosting.session.areaChat = areaChatFor(settings);
 
 replicate(workerData.replication);
 

@@ -1341,6 +1341,7 @@ export const REFUSALS = Object.freeze({
     nobody: "They're not in the world now.",
     shoutsOff: "You've turned shouts off: turn Hear shouts on in the Chat to shout.",
     repeated: "You've just shouted that.",
+    areaOff: "The area channel is off in this world.",
     closed: "They aren't taking direct messages.",
     leader: "Only the party's leader can do that.",
     member: "They're not in your party.",
@@ -7969,6 +7970,35 @@ export class Host {
     // The town or city a player's in (INVASION.kinds), out in the world within its edge (or
     // INVASION.within beyond it), or in one of its buildings: { id, kind, people, name, middle,
     // edge } (#peopledAt), or null
+    /**
+     * Where a player is, as the chat's `area` channel has it (core/netplay.js AREA_CHAT; the
+     * scaling plan's 2-27): the settlement they're in (among its houses or in its fields; in one
+     * of its buildings, at its door), `town:${its id}`; else the cell of land they stand on (the
+     * director's, core/director.js AREA `cell`: 256 m; in a place gone into out there, at its
+     * way in), `cell:${x},${y}`. Null for one who isn't anywhere.
+     */
+    chatArea(playerId) {
+        const player = this.players.get(playerId);
+        const at = player && this.world.plan ? this.#whereIs(player) : null;
+
+        if (!at) {
+            return null;
+        }
+
+        this.settlementPlaces ??= this.world.plan.places.filter(({ kind }) => SETTLEMENT_KINDS[kind]);
+
+        for (const place of this.settlementPlaces) {
+            const middle = this.#middleOf(place);
+
+            // (Its houses and the fields round them)
+            if (hypot(at[0] - middle[0], at[1] - middle[1]) <= SETTLEMENT_KINDS[place.kind].radius + SETTLEMENT_KINDS[place.kind].fields) {
+                return `town:${place.id}`;
+            }
+        }
+
+        return `cell:${Math.floor(at[0] / AREA.cell)},${Math.floor(at[1] / AREA.cell)}`;
+    }
+
     #townOf(player) {
         const at = this.world.plan ? this.#whereIs(player) : null;
 

@@ -2653,7 +2653,10 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   *Parties*, Shouts): the line's heard by every player within 60 m, in the party or not, each
   such line in gold, "Cai shouts: ...", the player's own "You shout: ...", and it needs no party. Under the line to type, **Hear
   shouts from players nearby** (`PartyPanel` `shoutsSwitch`, `hearShouts`; on to start with)
-  turns them off: none are shown, and To has no Shout. With **Party chat on screen** (Game options' Chat and players,
+  turns them off: none are shown, and To has no Shout. To has **Area (this town, or this stretch
+  of land)** beside Shout (docs/WAR.md *Parties*, The area channel): heard by every player in the
+  same settlement, or on the same 256 m of land out of one, "Cai, to the area: ...", in gold as a
+  shout is, and off with the same switch. With **Party chat on screen** (Game options' Chat and players,
   `chatOnScreen`, on to start with), each line said, the party's or a direct message, shows a
   moment just above the Action Bar too (where it rises in a fight), small, three at most,
   the newest at the foot, faded after six seconds (hud.js `chatLine`, `CHAT_FEED`), unless the

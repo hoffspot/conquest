@@ -46,6 +46,9 @@ export const DISMISS_SURE_MS = 3000;
 /** Whom the Chat's line goes to when it's shouted (core/netplay.js SHOUT): everyone near, not a player's id. */
 export const SHOUT_TO = "*shout";
 
+/** Whom the Chat's line goes to when it's said to the area (core/netplay.js AREA_CHAT): everyone in the player's settlement, or on their stretch of land. */
+export const AREA_TO = "*area";
+
 /** The Players tab: how many players a page of it shows, and how near (m, on the player's map) counts as nearby. */
 export const PLAYERS_PAGE = Object.freeze({ size: 25, near: 150 });
 
@@ -461,6 +464,7 @@ export class PartyPanel {
     #chat({ lines, unread, canSay, to = null, targets = [], shouts = null }) {
         const unseen = unreadLabel(unread);
         const shouting = to === SHOUT_TO && shouts === true;
+        const toArea = to === AREA_TO && shouts === true;
         const toName = targets.find(({ id }) => id === to)?.name ?? null;
 
         this.chatBadge.textContent = unseen;
@@ -470,8 +474,8 @@ export class PartyPanel {
         this.chatNote.hidden = canSay;
         this.input.disabled = !canSay;
         this.sendButton.disabled = !canSay;
-        this.input.placeholder = shouting ? "Shout to everyone nearby" : toName ? `Say something to ${toName}` : "Say something to your party";
-        this.input.setAttribute("aria-label", shouting ? "Something to shout to everyone nearby" : toName ? `Something to say to ${toName}` : "Something to say to your party");
+        this.input.placeholder = shouting ? "Shout to everyone nearby" : toArea ? "Say something to everyone in this area" : toName ? `Say something to ${toName}` : "Say something to your party";
+        this.input.setAttribute("aria-label", shouting ? "Something to shout to everyone nearby" : toArea ? "Something to say to everyone in this town, or on this stretch of land" : toName ? `Something to say to ${toName}` : "Something to say to your party");
         this.shoutsSwitch.hidden = shouts === null;
         this.shoutsBox.checked = shouts !== false;
 
@@ -482,12 +486,12 @@ export class PartyPanel {
             this.targetsShown = shown;
             this.toPicker.replaceChildren(
                 Object.assign(document.createElement("option"), { value: "", textContent: "Party" }),
-                ...(shouts ? [Object.assign(document.createElement("option"), { value: SHOUT_TO, textContent: "Shout (nearby)" })] : []),
+                ...(shouts ? [Object.assign(document.createElement("option"), { value: SHOUT_TO, textContent: "Shout (nearby)" }), Object.assign(document.createElement("option"), { value: AREA_TO, textContent: "Area (this town, or this stretch of land)" })] : []),
                 ...targets.map(({ id, name, party }) => Object.assign(document.createElement("option"), { value: id, textContent: party ? `${name} (party)` : name })),
             );
         }
 
-        this.toPicker.value = shouting ? SHOUT_TO : toName ? to : "";
+        this.toPicker.value = shouting ? SHOUT_TO : toArea ? AREA_TO : toName ? to : "";
         this.toPicker.hidden = !targets.length && !shouts;
 
         for (const button of this.quick.children) {
@@ -506,11 +510,11 @@ export class PartyPanel {
         this.shownLine = newest;
         log.replaceChildren(
             ...(lines.length
-                ? lines.map(({ name, text, mine = false, system = false, dm = null, shout = false }) => {
-                      const line = element("li", `chat-line${mine ? " mine" : ""}${system ? " system" : ""}${dm ? " dm" : ""}${shout ? " shout" : ""}`);
+                ? lines.map(({ name, text, mine = false, system = false, dm = null, shout = false, area = false }) => {
+                      const line = element("li", `chat-line${mine ? " mine" : ""}${system ? " system" : ""}${dm ? " dm" : ""}${shout ? " shout" : ""}${area ? " area" : ""}`);
 
                       if (!system) {
-                          line.append(element("span", "chat-name", dm ? `${mine ? "To" : "From"} ${name}` : shout ? (mine ? "You shout" : `${name} shouts`) : name), ": ");
+                          line.append(element("span", "chat-name", dm ? `${mine ? "To" : "From"} ${name}` : shout ? (mine ? "You shout" : `${name} shouts`) : area ? (mine ? "You, to the area" : `${name}, to the area`) : name), ": ");
                       }
 
                       line.append(element("span", "chat-text", text));
