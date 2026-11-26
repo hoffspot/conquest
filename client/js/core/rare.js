@@ -70,7 +70,18 @@ export const RARE = Object.freeze({
     returns: 30 * MINUTE,
     each: 8,
     apart: 1500,
+    // (And how long a thread's change to the world lasts there, none of them for good, and how
+    // long after a thread's done it's the world's to begin again: three world days. The plan's
+    // 2-26)
+    lapse: 3 * DAY.length,
 });
+
+/**
+ * How long a change to the world lasts (CHANGES: ms, or null for good): its own `lasts`; and
+ * where a thread comes round again (`each`: core/host.js RULES `rares` "character"), RARE `lapse`
+ * for one that says none, so none is for good.
+ */
+export const changeLasts = (change, each = false) => change.lasts ?? (each ? RARE.lapse : null);
 
 /**
  * How many rare encounters may be out at once in a world of `players`, where a unique is each
@@ -1083,6 +1094,10 @@ export class Legends {
         // (What each player's done that's marked them in this world, by player: { [id]: [mark,
         // ...] }: "order", the Order of the Bell crossed, its courts against them and their party)
         this.marks = structuredClone(json.marks ?? {});
+        // (Which steps of which threads each player's been rewarded for, where a thread comes
+        // round again, RARE `lapse`: { [thread]: { [player]: [step, ...] } }, kept as the thread
+        // is begun again, so none's rewarded for a step twice)
+        this.paid = structuredClone(json.paid ?? {});
     }
 
     /** Mark a player in this world (`what`: "order"...). Whether they weren't so already. */
@@ -1122,6 +1137,7 @@ export class Legends {
             opened: [...this.opened],
             vaults: this.vaults,
             marks: this.marks,
+            ...(Object.keys(this.paid).length ? { paid: this.paid } : {}),
         };
     }
 
@@ -1474,17 +1490,72 @@ export class Legends {
         thread.foes = null;
         thread.done = thread.step >= THREADS[id].steps.length;
 
+        // (When it was done: what its coming round again is counted from, `lapsed`)
+        if (thread.done) {
+            thread.ended = this.played;
+        }
+
         return { thread: id, step, def, next: this.stepOf(id) };
     }
 
-    /** A change to the world (CHANGES) made now: lasting its `lasts` ms, or for good; those past let go. The change. */
-    change(change) {
-        const { lasts = null, ...rest } = change;
+    /**
+     * A change to the world (CHANGES) made now: lasting its `lasts` ms, or for good; or, where a
+     * thread comes round again (`each`), RARE `lapse` if it says no shorter, and never for good
+     * (changeLasts). Those past let go. The change.
+     */
+    change(change, { each = false } = {}) {
+        const rest = { ...change };
+        const lasts = changeLasts(change, each);
+
+        delete rest.lasts;
         const made = { ...rest, from: this.played, until: lasts === null ? null : this.played + lasts };
 
         this.changes = [...this.changes.filter((each) => lasting(each, this.played)), made];
 
         return made;
+    }
+
+    /**
+     * Whether a player's to be rewarded for a thread's step (`step`: its index), where a thread
+     * comes round again: yes the first time, and kept so; never again for that step, however
+     * often the thread's begun.
+     */
+    pay(id, player, step) {
+        const had = ((this.paid[id] ??= {})[player] ??= []);
+
+        if (had.includes(step)) {
+            return false;
+        }
+
+        had.push(step);
+
+        return true;
+    }
+
+    /** The threads done RARE `lapse` ago or more: the world's to begin again (`reopen`). */
+    lapsed() {
+        return Object.values(this.threads).filter((thread) => thread.done && this.played - (thread.ended ?? thread.began ?? 0) >= RARE.lapse).map(({ id }) => id);
+    }
+
+    /**
+     * A thread done let go of, to be begun again as it first was (by its rumour, or its card):
+     * its record, and the locks it had opened shut again (LOCKS). Who's been rewarded for its
+     * steps is kept (`paid`). Whether it was there.
+     */
+    reopen(id) {
+        if (!this.#threadOf(id)?.done) {
+            return false;
+        }
+
+        delete this.threads[id];
+
+        for (const lock of [...this.opened]) {
+            if (LOCKS[lock]?.thread === id) {
+                this.opened.delete(lock);
+            }
+        }
+
+        return true;
     }
 
     /**

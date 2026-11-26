@@ -12869,6 +12869,7 @@ export class Host {
         this.#rareFollow();
         this.#threadFollow();
         this.#vaultsAbout();
+        this.#threadsLapse();
 
         // (Fresh tracks old, left far behind, or their pack all gone: let go)
         for (const [id, tracks] of [...this.fresh]) {
@@ -14246,7 +14247,9 @@ export class Host {
 
         for (const one of ids) {
             const player = this.players.get(one);
-            const given = player && done.def.reward ? this.#legendReward(player, done.def.reward) : null;
+            // (Where a thread comes round again, RARE `lapse`: each step's reward a player's once)
+            const due = this.rules.rares !== "character" || !done.def.reward || this.legends.pay(id, one, done.step);
+            const given = player && due && done.def.reward ? this.#legendReward(player, done.def.reward) : null;
 
             if (given && (given.gold || given.item || given.had || given.writing)) {
                 this.#event("thread", { change: "given", id: one, thread: id, step: done.step, gold: given.gold, item: given.item, had: given.had, writing: given.writing });
@@ -14266,6 +14269,21 @@ export class Host {
         }
 
         return done;
+    }
+
+    // The threads done long enough ago begun again, where a unique's each character's to overcome
+    // (RULES `rares` "character"; rare.js RARE `lapse`: three world days): each let go of, its
+    // rumour to be told and its card dealt as at first, to those who haven't done it. Told
+    #threadsLapse() {
+        if (this.rules.rares !== "character") {
+            return;
+        }
+
+        for (const id of this.legends.lapsed()) {
+            if (this.legends.reopen(id)) {
+                this.#event("thread", { change: "reopened", thread: id });
+            }
+        }
     }
 
     // The world changed by a thread's step (rare.js CHANGES), in `town` (the settlement it was at,
@@ -14289,7 +14307,7 @@ export class Host {
             const site = sites.reduce((best, one) => (!best || hypot(one.at[0] - at[0], one.at[1] - at[1]) < hypot(best.at[0] - at[0], best.at[1] - at[1]) ? one : best), null);
 
             if (site) {
-                this.legends.change({ kind: "reveal", thread: id, site: site.id, at: [...site.at], lasts: change.lasts ?? null });
+                this.legends.change({ kind: "reveal", thread: id, site: site.id, at: [...site.at], lasts: change.lasts ?? null }, { each: this.rules.rares === "character" });
             }
 
             return;
@@ -14299,7 +14317,7 @@ export class Host {
             return;
         }
 
-        const made = this.legends.change({ ...structuredClone(change), thread: id, town });
+        const made = this.legends.change({ ...structuredClone(change), thread: id, town }, { each: this.rules.rares === "character" });
 
         if (made.kind === "festival") {
             this.#event("thread", { change: "festival", thread: id, town, name: made.name, until: made.until });

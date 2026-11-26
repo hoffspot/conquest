@@ -966,6 +966,14 @@ debug mode's sample.
   again, in any world, as ever. A world that had it done before the rule was its has it again.
   One is out at a time for every eight players (`rareMost`): one, in any world there can be
   today.
+- **And there a thread comes round again** (the scaling plan's 2-26). None of a thread's changes
+  to the world is for good: each lasts three world days, three hours of play, unless it says a
+  shorter time (`RARE.lapse`, `changeLasts`). A thread in hand or done is the world's one:
+  whoever hears of it joins it and doesn't begin another. Three world days after it's done it's
+  let go (`Legends.lapsed`, `reopen`; a `thread` event, `reopened`): its rumour's told again,
+  its card's dealt again to those who haven't overcome it, and the way in it had opened is shut
+  again. Each step's reward is a player's once, however often the thread's begun (`Legends.pay`).
+  A thread let go is gone from every player's journal.
 - **Each player's own clock** (`Legends` `clocks`, `RARE.wilds`): the time they've spent out in the
   wilds (out of the settlements) since their last rare card, or since they first came out in the
   world. From `least` on, at each of the director's cards dealt them, a chance of the rare one

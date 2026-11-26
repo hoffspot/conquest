@@ -15,7 +15,8 @@ import { HOST_PLAYER, Host, presetRules, REFUSALS, RULE_CHOICES, RULES, RUNS, SN
 import { buildWorld } from "../client/js/core/overworld.js";
 import { Progress } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
-import { CAMP, campOf, cardOf, CHANGES, DEBUG_CARDS, gatesHold, GUILD_KINDS, hourOf, keeperOf, Legends, LOCKS, lockSite, makeUnique, openerOf, priceTimes, RARE, RARE_CARDS, rareMost, SAMPLE, SAMPLE_DEEP, SAMPLE_KIN, SHAPES, siteDoor, STEPS, TAKE_BACK, threadTalk, threadTracks, threadWares, threadWords, THREADS, UNIQUES, VAULT, VENUES } from "../client/js/core/rare.js";
+import { DAY as DAY_MS } from "../client/js/core/daytime.js";
+import { CAMP, campOf, cardOf, changeLasts, CHANGES, DEBUG_CARDS, gatesHold, GUILD_KINDS, hourOf, keeperOf, Legends, LOCKS, lockSite, makeUnique, openerOf, priceTimes, RARE, RARE_CARDS, rareMost, SAMPLE, SAMPLE_DEEP, SAMPLE_KIN, SHAPES, siteDoor, STEPS, TAKE_BACK, threadTalk, threadTracks, threadWares, threadWords, THREADS, UNIQUES, VAULT, VENUES } from "../client/js/core/rare.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { squaresOf } from "../client/js/core/grid.js";
 import { Conversation, TREES } from "../client/js/core/dialogue.js";
@@ -170,6 +171,67 @@ describe("rare encounters (rare.js)", () => {
 
         // (Kept: the same after a round trip)
         assert.deepEqual(new Legends(JSON.parse(JSON.stringify(legends)), { cards: { a: CARDS.a } }).recurs, legends.recurs);
+    });
+
+    it("has no change of any thread's for good where a thread comes round again (the scaling plan's 2-26): each lasts three world days if it says no shorter; a thread done that long is the world's to begin again, its locks shut, and no step's reward anyone's twice", () => {
+        assert.equal(RARE.lapse, 3 * DAY_MS.length);
+
+        // (The data: every change a thread makes, as it begins or at a step)
+        const changes = Object.values(THREADS).flatMap(({ id, begins, steps }) => [...(begins ? [[id, begins]] : []), ...steps.filter(({ change }) => change).map(({ change }) => [id, change])]);
+
+        assert.ok(changes.length >= 4);
+
+        for (const [id, change] of changes) {
+            const lasts = changeLasts(change, true);
+
+            assert.ok(Number.isFinite(lasts) && lasts > 0 && lasts <= RARE.lapse, `${id}'s ${change.kind}: ${lasts}`);
+            assert.equal(changeLasts(change), change.lasts ?? null, "(as ever where a thread's the world's once)");
+        }
+
+        assert.ok(changes.some(([, change]) => change.lasts === undefined), "(some for good, in a world of friends)");
+
+        const legends = new Legends(null, { cards: {} });
+        const made = legends.change({ kind: "reveal", site: "ruins", lasts: null }, { each: true });
+
+        assert.equal(made.until, RARE.lapse);
+        assert.equal(legends.change({ kind: "festival", name: "a feast", lasts: 1000 }, { each: true }).until, 1000, "(its own, shorter)");
+        assert.equal(legends.change({ kind: "reveal", site: "ruins" }).until, null);
+
+        // (A thread followed to its end, and come round again)
+        const steps = THREADS.sampleTrail.steps.length;
+
+        assert.ok(legends.begin("sampleTrail", { at: [0, 0], ids: ["ada"] }));
+        legends.opened.add("sampleDoor");
+        assert.equal(LOCKS.sampleDoor.thread, "sampleTrail");
+
+        for (let k = 0; k < steps; k++) {
+            legends.pass(1000);
+            assert.ok(legends.advance("sampleTrail", { ids: ["ada"] }));
+        }
+
+        const thread = legends.threads.sampleTrail;
+
+        assert.deepEqual([thread.done, thread.ended], [true, legends.played]);
+        assert.equal(legends.begin("sampleTrail", { at: [0, 0] }), null, "(joined, not begun again, while it's done)");
+        assert.equal(legends.reopen("nothing"), false);
+        legends.pass(RARE.lapse - 1);
+        assert.deepEqual(legends.lapsed(), []);
+        legends.pass(1);
+        assert.deepEqual(legends.lapsed(), ["sampleTrail"]);
+        assert.deepEqual([legends.pay("sampleTrail", "ada", 0), legends.pay("sampleTrail", "ada", 0), legends.pay("sampleTrail", "bram", 0), legends.pay("sampleTrail", "ada", 1)], [true, false, true, true]);
+        assert.equal(legends.reopen("sampleTrail"), true);
+        assert.equal(legends.threads.sampleTrail, undefined);
+        assert.equal(legends.opened.has("sampleDoor"), false, "its lock shut again");
+        assert.equal(legends.pay("sampleTrail", "ada", 0), false, "(kept through its beginning again)");
+        assert.ok(legends.begin("sampleTrail", { at: [5, 5], ids: ["cy"] }));
+        assert.equal(legends.threads.sampleTrail.step, 0);
+
+        // (One not done isn't let go)
+        assert.equal(legends.reopen("sampleTrail"), false);
+
+        // (Kept: who's been rewarded, after a round trip)
+        assert.deepEqual(new Legends(JSON.parse(JSON.stringify(legends)), { cards: {} }).paid, legends.paid);
+        assert.ok(!("paid" in new Legends(null, { cards: {} }).toJSON()));
     });
 
     it("passes a card over while its gates don't hold, and deals it anyway once they've passed it over enough", () => {
@@ -657,6 +719,71 @@ describe("rare encounters in play (host.js)", () => {
         for (const id of [HOST_PLAYER, "bram"]) {
             assert.equal(host.players.get(id).progress.pack.filter((stack) => stack?.unique).length, 1, `${id}: one, not two`);
         }
+    });
+
+    it("lets a thread done three world days ago go in a world shared by strangers, to be begun again; its place step's reward given a player once, the change it makes there lasting three days (the plan's 2-26)", () => {
+        const { host, ada, bram } = hosted({ rules: { rares: "character" } });
+        const told = (events) => events.filter(({ type }) => type === "thread");
+        // The sample dealt before Ada and felled by her: its thread begun; then its place gone to
+        const begunAndGoneTo = () => {
+            host.legends.last = -Infinity;
+            host.command(HOST_PLAYER, { type: "rare" });
+
+            const foe = host.battle.actor(host.legends.active.ids[0]);
+
+            put(ada, [Math.floor(foe.x) - 2, Math.floor(foe.y)]);
+            put(bram, [Math.floor(foe.x) - 3, Math.floor(foe.y) + 1]);
+            Object.assign(foe, { hp: 1 });
+            Object.assign(ada, { power: { melee: 1e4, ranged: 1e4 } });
+            host.command(HOST_PLAYER, { type: "engage", target: foe.id });
+
+            const events = run(host, 8000);
+            const thread = host.legends.threads.sampleTrail;
+
+            put(ada, [Math.floor(thread.place[0]), Math.floor(thread.place[1])]);
+
+            return told([...events, ...run(host, 3000)]);
+        };
+
+        const first = begunAndGoneTo();
+        const thread = host.legends.threads.sampleTrail;
+
+        assert.ok(first.some(({ change }) => change === "begun"));
+        assert.equal(thread.step, 1, "its place step done");
+        assert.ok(first.some(({ change, id, step, gold }) => change === "given" && id === HOST_PLAYER && step === 0 && gold > 0));
+
+        // (What that step changed in the world: not for good here)
+        const changed = host.legends.changes.filter((change) => change.thread === "sampleTrail");
+
+        assert.ok(changed.length > 0);
+        assert.ok(changed.every(({ from, until }) => Number.isFinite(until) && until - from <= RARE.lapse));
+
+        // (Done, as if the rest of its steps were: and three world days gone by)
+        Object.assign(thread, { step: THREADS.sampleTrail.steps.length, done: true, ended: host.legends.played, place: null, town: null });
+        run(host, 1500);
+        assert.ok(host.legends.threads.sampleTrail, "(still the world's, done)");
+        host.legends.pass(RARE.lapse);
+
+        const lapsed = told(run(host, 1500));
+
+        assert.ok(lapsed.some(({ change, thread: id }) => change === "reopened" && id === "sampleTrail"));
+        assert.equal(host.legends.threads.sampleTrail, undefined);
+
+        // (Begun again, its place gone to again by the same two: no step's reward theirs twice)
+        const again = begunAndGoneTo();
+
+        assert.ok(again.some(({ change }) => change === "begun"));
+        assert.equal(host.legends.threads.sampleTrail.step, 1);
+        assert.ok(!again.some(({ change, step }) => change === "given" && step === 0), again.map(({ change }) => change).join());
+
+        // (Not in a world of friends: nothing's let go there)
+        const friends = hosted().host;
+
+        friends.legends.begin("sampleTrail", { at: [0, 0] });
+        Object.assign(friends.legends.threads.sampleTrail, { step: THREADS.sampleTrail.steps.length, done: true, ended: 0 });
+        friends.legends.pass(RARE.lapse * 2);
+        run(friends, 1500);
+        assert.ok(friends.legends.threads.sampleTrail);
     });
 
     it("leaves one no one took up once everyone's far, its foe let go, its spot not used again; and keeps owed a reward for one who left before it was given", () => {
