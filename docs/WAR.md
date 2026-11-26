@@ -3659,6 +3659,24 @@ party*). Players play together as a party of up to four (`PARTY.most`):
     (app/mapicons.js `SQUAD_COLOUR`), apart from the party's. An ally's ping shows as a party's.
   - **Told to a game sent views**: the summary's `squads` part (who's asked with each), and
     where each ally is in `fellows`, as its party's are (`VIEW_VERSION` 9).
+- **Musters** (core/host.js `GATHERING`, `Host.gatheringFor`; the scaling plan's 2-30). At an
+  invasion or an open hell rift the host offers an open squad to every party there: a muster.
+  - **Offered** to a player on the land within 300 m (`GATHERING.reach`) of the town invaded
+    (till the invasion's over) or of the rift's heart: the nearest, if there's more than one.
+  - **Joined** by a party's leader with the squad command `gather`: the muster there with room,
+    or a new one begun (open, marked with what it gathers at: a squad's `gathering`). Five
+    parties fill one, and the next to gather begins another. Its id joins it too, as any open
+    squad's, but only from there (`ungathered` otherwise).
+  - **No one's to change**: its entry, a party put out and disbanding are refused
+    (`squadGathering`). Any party can leave.
+  - **Over** when the invasion is, or the rift's ended: its parties are told (the `squad`
+    event's `disbanded`, with `ended`: what it gathered at) and go their own ways. A squad of
+    the players' own making is untouched.
+  - **In the page**: coming within reach, the player's told once ("A muster gathers for the
+    defence of Stonewick"), and the party menu's Squad section has it, with **Join the muster**
+    for a party's leader. In one, the section says it's a muster and has only **Leave squad**.
+  A muster's unit is a party, as a squad's: a player in no party can't join one.
+  `NET_VERSION` 259; `VIEW_VERSION` 10 (a squad's `gathering`).
 - **The area channel** (`Hosting.chat`'s `area`; the Chat's To, **Area (this town, or this
   stretch of land)**; core/netplay.js `AREA_CHAT`; the scaling plan's 2-27). A line said to
   the area (`{ kind: "chat", text, area: true }`) goes to every player in the sayer's settlement

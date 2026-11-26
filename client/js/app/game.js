@@ -195,7 +195,7 @@ import { JournalPanel, bearing, keepMessage, regardOf } from "./journal.js";
 import { ReaderPanel } from "./reader.js";
 import { Journey } from "./journey.js";
 import { SpellbookPanel } from "./spellbook.js";
-import { AREA_TO, PartyPanel, PLAYERS_PAGE, SHOUT_TO, SQUAD_TO } from "./partypanel.js";
+import { AREA_TO, musterWords, PartyPanel, PLAYERS_PAGE, SHOUT_TO, SQUAD_TO } from "./partypanel.js";
 import { medalWords } from "../core/credit.js";
 import { PackPanel } from "./pack.js";
 import { Governor } from "./governor.js";
@@ -7426,6 +7426,9 @@ export class Game {
         // in the world, one inside a building or down in a dungeon where its door is; inside, only
         // those on the same floor)
         const party = this.partyView().filter((member) => member.map === this.mapId || this.mapId === "town");
+
+        this.#musterNoticed();
+
         const partied = new Set(party.map(({ id }) => id));
         // (Where the player's drawn, and how far from them it shows: all of a map inside; out in
         // the world, half its span, and a little more for what's gone on since it was last drawn)
@@ -13108,6 +13111,30 @@ export class Game {
     // The squad as the party menu shows it (app/partypanel.js #squad): the player's own, its
     // parties each by its leader's name, and who's asked to come into it; or, in none, the
     // squads there are in the world. Null alone in the world
+    // A muster to join where the player stands (core/host.js GATHERING), said once as they come
+    // within its reach, playing with others and in no squad: looked for every two seconds
+    #musterNoticed() {
+        if (this.musterLooked !== undefined && Math.abs(this.clock - this.musterLooked) < 2) {
+            return;
+        }
+
+        this.musterLooked = this.clock;
+
+        const view = this.worldview;
+        const muster = view.players.size > 1 && !view.squadFor?.(this.me) ? (view.gatheringFor?.(this.me) ?? null) : null;
+
+        if (muster && muster.at !== this.musterSaid) {
+            this.hud.message(`A muster gathers ${musterWords(muster)}: ${view.partyFor(this.me)?.leader === this.me ? "join it from the party menu" : "a party's leader can join it from the party menu"}.`, 5);
+            this.sound?.play("chatHeard");
+
+            if (this.partyPanel?.open) {
+                this.#showParty();
+            }
+        }
+
+        this.musterSaid = muster?.at ?? this.musterSaid ?? null;
+    }
+
     #squadShown() {
         const view = this.worldview;
         const party = view.partyFor(this.me);
@@ -13127,12 +13154,16 @@ export class Game {
                 ? {
                       id: mine.id,
                       entry: mine.entry,
+                      // (A muster: the host's, open till what it gathered at is over)
+                      muster: Boolean(mine.gathering),
                       leads: mine.leader === party?.id && party?.leader === this.me,
                       parties: mine.parties.map((id) => ({ id, name: nameOf(partyOf(id)?.leader), size: partyOf(id)?.members.length ?? 0, own: id === party?.id, leader: id === mine.leader })),
                       asks: asks.filter(([, asked]) => asked.squad === mine.id).map(([id]) => ({ party: id, name: nameOf(partyOf(id)?.leader) })),
                   }
                 : null,
-            others: mine ? [] : squads.map((squad) => ({ id: squad.id, name: nameOf(partyOf(squad.leader)?.leader), size: squad.parties.length, entry: squad.entry, asked: Boolean(party) && asks.some(([id, asked]) => id === party.id && asked.squad === squad.id), full: squad.parties.length >= 5 })),
+            // (The muster to join where they stand, if any: its words)
+            muster: mine ? null : ((gathering) => (gathering ? { at: gathering.at, words: musterWords(gathering) } : null))(view.gatheringFor?.(this.me) ?? null),
+            others: mine ? [] : squads.filter((squad) => !squad.gathering).map((squad) => ({ id: squad.id, name: nameOf(partyOf(squad.leader)?.leader), size: squad.parties.length, entry: squad.entry, asked: Boolean(party) && asks.some(([id, asked]) => id === party.id && asked.squad === squad.id), full: squad.parties.length >= 5 })),
         };
     }
 
@@ -13386,7 +13417,7 @@ export class Game {
             joined: own ? "Your party's in the squad." : `${event.name || "Another"}'s party has joined the squad.`,
             left: own ? "Your party's left the squad." : "A party's left the squad.",
             removed: own ? "Your party's been put out of the squad." : "A party's been put out of the squad.",
-            disbanded: event.party === undefined ? "The squad's disbanded." : own ? "Your party's no more: it's out of the squad." : "A party of the squad is no more.",
+            disbanded: event.ended !== undefined ? "The muster's over: its parties go their own ways." : event.party === undefined ? "The squad's disbanded." : own ? "Your party's no more: it's out of the squad." : "A party of the squad is no more.",
             leader: own ? "Your party leads the squad now." : "Another party leads the squad now.",
             asked: `${event.name || "A party"}'s party asks to join your squad: let them in, or not, in the party menu.`,
         }[event.change];

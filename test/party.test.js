@@ -11,7 +11,7 @@ import { describe, it } from "node:test";
 import { CREATURES } from "../client/js/core/creatures.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { decode, encode } from "../client/js/core/wire.js";
-import { HOST_PLAYER, Host, PARTY, READY, REFUSALS, SQUAD } from "../client/js/core/host.js";
+import { GATHERING, HOST_PLAYER, Host, PARTY, READY, REFUSALS, SQUAD } from "../client/js/core/host.js";
 import { nearestFree, squareKey, squaresOf } from "../client/js/core/grid.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { placesOf } from "../client/js/core/places.js";
@@ -748,5 +748,114 @@ describe("squads of parties (host.js SQUAD, the squad command; the scaling plan'
         assert.equal(host.squads.size, 0);
         assert.equal(host.squadFor("cal"), null);
         assert.ok(squad(host, "cal", "form").ok);
+    });
+
+    it("is offered open at a hell rift or an invasion as a muster (the scaling plan's 2-30): joined by any party's leader within reach, the first beginning it; no one's to close, put a party out of or disband; another begun when it's full; and no more once what it gathered at is over", () => {
+        const host = four();
+        const ada = host.battle.actor(HOST_PLAYER);
+
+        assert.deepEqual(GATHERING, { reach: 300 });
+        assert.ok(REFUSALS.ungathered && REFUSALS.squadGathering);
+
+        // Nothing about: no muster to join
+        assert.equal(host.gatheringFor(HOST_PLAYER), null);
+        assert.equal(squad(host, HOST_PLAYER, "gather").reason, "ungathered");
+
+        // A rift opened 120 m off (the host's own, for trying it): a muster there for all of them
+        assert.ok(host.command(HOST_PLAYER, { type: "hellrift" }).ok);
+
+        const rift = host.hellRifts.open.id;
+
+        assert.deepEqual(host.gatheringFor(HOST_PLAYER), { at: rift, kind: "rift", name: null });
+        assert.deepEqual(host.gatheringFor("cal"), { at: rift, kind: "rift", name: null });
+
+        // (An invasion nearer is the one offered, till it's over; one out of reach never)
+        host.invasions.push({ id: "invasion-x", name: "Stonewick", middle: [ada.x + 50, ada.y], over: null });
+        assert.deepEqual(host.gatheringFor(HOST_PLAYER), { at: "invasion-x", kind: "invasion", name: "Stonewick" });
+        host.invasions[0].over = host.battle.time;
+        assert.equal(host.gatheringFor(HOST_PLAYER).at, rift);
+        Object.assign(host.invasions[0], { over: null, middle: [ada.x + GATHERING.reach + 200, ada.y] });
+        assert.equal(host.gatheringFor(HOST_PLAYER).at, rift);
+        host.invasions.pop();
+
+        // The first to gather begins it: open, and marked with what it gathers at
+        assert.equal(squad(host, "bea", "gather").reason, "leader");
+        assert.ok(squad(host, HOST_PLAYER, "gather").ok);
+
+        const muster = host.squadFor(HOST_PLAYER);
+
+        assert.deepEqual(muster, { id: "squad-1", leader: partyOf(host, HOST_PLAYER), parties: [partyOf(host, HOST_PLAYER)], entry: "open", gathering: rift });
+        assert.equal(squad(host, HOST_PLAYER, "gather").reason, "squadded");
+        assert.ok(squad(host, "cal", "gather").ok);
+        assert.equal(host.squadFor("dov"), muster, "(the one there, not another)");
+        assert.deepEqual(host.allies(HOST_PLAYER), ["cal", "dov"]);
+
+        // Not its first party's to close, to put anyone out of or to disband; anyone's to leave
+        assert.equal(squad(host, HOST_PLAYER, "entry", { entry: "closed" }).reason, "squadGathering");
+        assert.equal(squad(host, HOST_PLAYER, "remove", { party: partyOf(host, "cal") }).reason, "squadGathering");
+        assert.equal(squad(host, HOST_PLAYER, "disband").reason, "squadGathering");
+        assert.ok(squad(host, "cal", "leave").ok);
+        assert.ok(squad(host, "cal", "join", { squad: muster.id }).ok, "(joined as any open squad is, from there)");
+
+        // One far from it: no muster, by gathering or by its id
+        const eve = host.battle.actor("eve");
+        const [ex, ey] = [eve.x, eve.y];
+
+        Object.assign(eve, { x: ex + 1000, y: ey + 1000 });
+        assert.equal(host.gatheringFor("eve"), null);
+        assert.equal(squad(host, "eve", "gather").reason, "ungathered");
+        assert.equal(squad(host, "eve", "join", { squad: muster.id }).reason, "ungathered");
+        Object.assign(eve, { x: ex, y: ey });
+
+        // Kept with the world, as any squad
+        const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
+
+        assert.equal(again.squadFor("cal")?.gathering, rift);
+
+        // Full (five parties; three stand-ins): the next to gather begins another at the same rift
+        muster.parties.push("stand-in-1", "stand-in-2", "stand-in-3");
+        assert.ok(squad(host, "eve", "gather").ok);
+
+        const second = host.squadFor("eve");
+
+        assert.notEqual(second.id, muster.id);
+        assert.deepEqual([second.gathering, second.entry, second.parties], [rift, "open", [partyOf(host, "eve")]]);
+        assert.ok(squad(host, "gus", "gather").ok);
+        assert.equal(host.squadFor("gus"), second);
+        muster.parties.splice(2);
+        drained(host);
+        assert.equal(host.squads.size, 2, "(while the rift's open, they stand)");
+
+        // The rift ended: both musters no more, everyone of them told what's over
+        host.hellRifts.open.until = host.battle.time;
+
+        const events = [];
+
+        for (let k = 0; k < 600 && host.squads.size; k++) {
+            events.push(...drained(host));
+        }
+
+        assert.equal(host.hellRifts.open, null);
+        assert.equal(host.squads.size, 0);
+        assert.equal(host.squadFor(HOST_PLAYER), null);
+        assert.deepEqual(host.allies("eve"), []);
+
+        const over = events.filter(({ type, change }) => type === "squad" && change === "disbanded");
+
+        assert.deepEqual(over.map(({ id }) => id).sort(), [...IDS].sort());
+        assert.ok(over.every(({ ended }) => ended === rift));
+
+        // A squad of their own making is untouched by a rift's end
+        assert.ok(squad(host, HOST_PLAYER, "form").ok);
+        assert.ok(host.command(HOST_PLAYER, { type: "hellrift" }).ok);
+        host.hellRifts.open.until = host.battle.time;
+
+        for (let k = 0; k < 600 && host.hellRifts.open; k++) {
+            drained(host);
+        }
+
+        assert.equal(host.hellRifts.open, null);
+        assert.equal(host.squadFor(HOST_PLAYER)?.gathering, undefined);
+        assert.ok(host.squadFor(HOST_PLAYER));
     });
 });

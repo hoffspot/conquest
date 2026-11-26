@@ -536,6 +536,25 @@ describe("a replicated world's link (core/viewing.js)", () => {
         assert.equal(mine.squadFor(annId), null);
         assert.equal(mine.afar.has(dovId), false);
         assert.equal(mine.afar.has(beaId), true);
+
+        // A muster (the plan's 2-30): a told game knows of the one where its player stands, as its
+        // server does, and has the squad made of it marked with what it gathered at
+        host.battle.place(dovId, "town", [Math.floor(there.x) + 4, Math.floor(there.y) + 4]);
+        // (A rift torn open 120 m before Ann, as the debug overlay does for a world's owner)
+        host.players.get(annId).role = "owner";
+        host.rules = { ...host.rules, debug: "owner" };
+        assert.ok(host.command(annId, { type: "hellrift" }).ok);
+
+        const rift = host.hellRifts.open.id;
+
+        world.play(60);
+        assert.deepEqual(host.gatheringFor(annId), { at: rift, kind: "rift", name: null });
+        assert.deepEqual(mine.gatheringFor(annId), host.gatheringFor(annId));
+        ann.link.command({ type: "squad", do: "gather" });
+        world.play(60);
+        assert.equal(host.squadFor(annId)?.gathering, rift);
+        assert.equal(mine.squadFor(annId)?.gathering, rift);
+        assert.equal(eve.link.host.squadFor(annId)?.gathering, rift);
     });
 
     it("has the parties, everyone in the world, who's asked whom, where its party is and the war as its summary says, and asks its server what a shop needs", async () => {

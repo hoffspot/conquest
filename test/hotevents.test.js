@@ -36,7 +36,7 @@ describe("the events a fight's mostly made of, as bytes (core/hotevents.js)", ()
             assert.ok(fields.length <= 16 && fields.every(([, type]) => ["time", "who", "word", "num", "any"].includes(type)));
         }
 
-        assert.equal(VIEW_VERSION, 9, "9 the squads, a part of the summary, and where a player's allies are, among their `fellows` (the plan's 2-29); 5 with these; 6 the legends each player's own (core/summary.js loreOf); 7 a player's duel (the summary's `duels`); 8 a party's run of a dungeon said with its dungeon and lane (the summary's `dungeons`, a run's `run`)");
+        assert.equal(VIEW_VERSION, 10, "10 a muster's `gathering`, on a squad in the summary's `squads` (the plan's 2-30); 9 the squads, a part of the summary, and where a player's allies are, among their `fellows` (the plan's 2-29); 5 with these; 6 the legends each player's own (core/summary.js loreOf); 7 a player's duel (the summary's `duels`); 8 a party's run of a dungeon said with its dungeon and lane (the summary's `dungeons`, a run's `run`)");
     });
 
     it("reads back every kind as it was told, as the battle tells them, in a tenth of the bytes", () => {

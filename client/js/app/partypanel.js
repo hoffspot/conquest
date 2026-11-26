@@ -55,6 +55,11 @@ export const SQUAD_TO = "*squad";
 /** How a squad takes parties in (core/host.js SQUAD `entries`), as its leader chooses and others read it. */
 export const SQUAD_ENTRIES = Object.freeze({ open: "Open to any party", ask: "By asking", closed: "Closed" });
 
+/** Where a muster gathers (core/host.js GATHERING: { kind, name }), as it's said: "for the defence of Stonewick", "at the hell rift". */
+export function musterWords({ kind, name = null }) {
+    return kind === "invasion" ? `for the defence of ${name ?? "the town"}` : "at the hell rift";
+}
+
 /** The Players tab: how many players a page of it shows, and how near (m, on the player's map) counts as nearby. */
 export const PLAYERS_PAGE = Object.freeze({ size: 25, near: 150 });
 
@@ -655,7 +660,7 @@ export class PartyPanel {
             return button;
         };
         const rows = [];
-        const { mine, others = [], captain = false } = squad;
+        const { mine, others = [], captain = false, muster = null } = squad;
 
         if (mine) {
             for (const { id, name, size, own, leader } of mine.parties) {
@@ -668,7 +673,7 @@ export class PartyPanel {
 
                 if (own && captain) {
                     actions.append(this.#sure("Leave squad", "Leave?", () => this.onSquad("leave")));
-                } else if (!own && mine.leads) {
+                } else if (!own && mine.leads && !mine.muster) {
                     actions.append(this.#sure("Remove", "Remove?", () => this.onSquad("remove", { party: id })));
                 }
 
@@ -686,7 +691,9 @@ export class PartyPanel {
                 rows.push(row);
             }
 
-            if (mine.leads) {
+            if (mine.muster) {
+                rows.push(element("li", "journal-empty party-squad-mustered", "A muster: open to every party there, and over when the fight is. Allies see each other on the maps and share pings and the squad's chat; what each party finds and its loot stay its own."));
+            } else if (mine.leads) {
                 const row = element("li", "party-player party-squad-lead");
                 const picker = Object.assign(document.createElement("select"), { className: "party-squad-entry" });
                 const actions = element("div", "party-actions");
@@ -702,6 +709,20 @@ export class PartyPanel {
                 rows.push(element("li", "journal-empty", `${SQUAD_ENTRIES[mine.entry] ?? ""}. Allies see each other on the maps and share pings and the squad's chat; what each party finds, its dungeon runs and its loot stay its own.`));
             }
         } else {
+            // (A muster where they stand: its leader joins it; anyone's told of it)
+            if (muster) {
+                const row = element("li", "party-player party-squad-muster");
+
+                row.dataset.muster = muster.at;
+                row.append(element("span", "party-name", `A muster gathers ${muster.words}`), element("span", "party-kind", "Open to every party there till the fight's over."));
+
+                if (captain) {
+                    row.append(act("Join the muster", "gather", {}, "party-squad-gather"));
+                }
+
+                rows.push(row);
+            }
+
             for (const { id, name, size, entry, asked, full } of others) {
                 const row = element("li", "party-player party-squad-other");
                 const join = act(asked ? "Asked" : entry === "open" ? "Join" : entry === "ask" ? "Ask to join" : "Closed", "join", { squad: id }, "party-squad-join");

@@ -2660,7 +2660,9 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   page), To has **Squad** too: the line goes to the party and to every player of the parties
   allied with it, wherever they are, "Cai, to the squad: ...", in the squad's pale blue; allies'
   dots are on the minimap and the maps in that blue, and the Party tab's **Squad** section forms,
-  joins, leads and leaves one. With **Party chat on screen** (Game options' Chat and players,
+  joins, leads and leaves one. At a town invaded or a hell rift it offers a **muster** too
+  (docs/WAR.md *Parties*, Musters): an open squad of whoever's come, joined with **Join the
+  muster** and over when the fight is. With **Party chat on screen** (Game options' Chat and players,
   `chatOnScreen`, on to start with), each line said, the party's or a direct message, shows a
   moment just above the Action Bar too (where it rises in a fight), small, three at most,
   the newest at the foot, faded after six seconds (hud.js `chatLine`, `CHAT_FEED`), unless the
