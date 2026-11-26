@@ -431,6 +431,16 @@ export const PARTY = Object.freeze({ most: 4, reach: 40, askMs: 30000 });
 export const SQUAD = Object.freeze({ most: 5, askMs: 60000, entries: Object.freeze(["open", "ask", "closed"]) });
 
 /**
+ * A muster (the scaling plan's 2-30): an open squad the host offers to every party at an invasion
+ * or a hell rift, for as long as it lasts. Offered to those on the land within `reach` m of the
+ * town invaded or the rift's heart (Host.gatheringFor); joined by the squad command "gather", the
+ * first to do so beginning it; no one's to close, to put a party out of or to disband; and no
+ * more once the invasion's over or the rift's ended. (Named a gathering in the code: MUSTER is a
+ * town's soldiers'.)
+ */
+export const GATHERING = Object.freeze({ reach: 300 });
+
+/**
  * A party's ready check (#partyCommand "readyCheck"): how long the rest have to answer whether
  * they're ready (ms), how long what each said stays marked on their icons after it's over (ms:
  * app/game.js), and how long a countdown its leader starts can be (seconds).
@@ -1362,6 +1372,8 @@ export const REFUSALS = Object.freeze({
     squadAsked: "Your party's asked already: wait for its leader's answer.",
     squadUnasked: "That party hasn't asked, or isn't in the squad.",
     squadLeader: "Only the squad's leader can do that.",
+    ungathered: "There's no muster near: one gathers at a town invaded or a hell rift.",
+    squadGathering: "A muster's open to every party there till the fight's over: it's no one's to change.",
     member: "They're not in your party.",
     readying: "A ready check's going already.",
     noReadyCheck: "There's no ready check going.",
@@ -12937,6 +12949,7 @@ export class Host {
         this.#threadFollow();
         this.#vaultsAbout();
         this.#threadsLapse();
+        this.#gatheringsEnd();
 
         // (Fresh tracks old, left far behind, or their pack all gone: let go)
         for (const [id, tracks] of [...this.fresh]) {
@@ -17956,6 +17969,46 @@ export class Host {
         return (this.squadFor(playerId)?.parties ?? []).filter((party) => party !== own).flatMap((party) => this.parties.get(party)?.members ?? []);
     }
 
+    /**
+     * The muster a player could join where they stand (GATHERING): { at (the invasion's or the
+     * rift's id), kind ("invasion" or "rift"), name (the town's, or null) } for the nearest
+     * invasion not yet over or open rift within GATHERING.reach of them on the land, or null.
+     */
+    gatheringFor(playerId) {
+        const actor = this.battle.actor(playerId);
+
+        if (!actor || actor.map !== "town") {
+            return null;
+        }
+
+        const open = this.hellRifts?.open ?? null;
+        const about = [
+            ...(this.invasions ?? []).filter(({ over }) => over === null || over === undefined).map(({ id, name, middle }) => ({ at: id, kind: "invasion", name: name ?? null, spot: middle })),
+            ...(open ? [{ at: open.id, kind: "rift", name: null, spot: open.at }] : []),
+        ]
+            .map(({ spot, ...gathering }) => ({ gathering, far: hypot(actor.x - spot[0], actor.y - spot[1]) }))
+            .filter(({ far }) => far <= GATHERING.reach)
+            .sort((a, b) => a.far - b.far || (a.gathering.at < b.gathering.at ? -1 : 1));
+
+        return about[0]?.gathering ?? null;
+    }
+
+    // The musters whose invasion's over or whose rift's ended: no more, their parties told (a
+    // "squad" event, "disbanded", `ended`: what it gathered at)
+    #gatheringsEnd() {
+        if (!this.squads.size) {
+            return;
+        }
+
+        const live = new Set([...this.invasions.filter(({ over }) => over === null).map(({ id }) => id), ...(this.hellRifts.open ? [this.hellRifts.open.id] : [])]);
+
+        for (const squad of [...this.squads.values()]) {
+            if (squad.gathering && !live.has(squad.gathering)) {
+                this.#squadOver(squad, { ended: squad.gathering });
+            }
+        }
+    }
+
     // Every player of a squad's parties told something of it (a "squad" event each)
     #tellSquad(squad, what) {
         for (const party of squad.parties) {
@@ -18003,8 +18056,8 @@ export class Host {
 
     // A squad no more: its parties told, each free of it, and whoever had asked to come into it
     // forgotten
-    #squadOver(squad) {
-        this.#tellSquad(squad, { change: "disbanded" });
+    #squadOver(squad, why = {}) {
+        this.#tellSquad(squad, { change: "disbanded", ...why });
 
         for (const party of squad.parties) {
             this.squadIds.delete(party);
@@ -18023,7 +18076,9 @@ export class Host {
     // asking unless said), theirs to lead; "join" one (`squad`: its id) that's open, or ask to
     // come into one that's by asking, its leader told; "admit" or "refuse" a party that's asked
     // (`party`), the squad's leader's; "leave"; and, the squad's leader's, "remove" a party
-    // (`party`), set its "entry" (`entry`), or "disband" it
+    // (`party`), set its "entry" (`entry`), or "disband" it. And "gather": join the muster where
+    // they stand (GATHERING), the first to do so beginning it, open; a muster's not to be closed,
+    // have a party put out of it or be disbanded, and is joined only from where it gathers
     #squadCommand(player, { do: what, squad: squadId = null, party: partyId = null, entry = null }) {
         const party = this.partyFor(player.id);
 
@@ -18073,6 +18128,10 @@ export class Host {
                     return refuse("squadNone");
                 }
 
+                if (other.gathering && this.gatheringFor(player.id)?.at !== other.gathering) {
+                    return refuse("ungathered");
+                }
+
                 if (other.parties.length >= SQUAD.most) {
                     return refuse("squadFull");
                 }
@@ -18097,6 +18156,26 @@ export class Host {
                 // (Its leader told who's asking; those asking told it's asked)
                 this.#event("squad", { id: this.parties.get(other.leader)?.leader, squad: other.id, change: "asked", party: party.id, name: player.hero.name, until });
                 this.#tellParty(party, { change: "squadAsked", squad: other.id, until });
+
+                return OK;
+            }
+            case "gather": {
+                const gathering = this.gatheringFor(player.id);
+
+                if (squad) {
+                    return refuse("squadded");
+                }
+
+                if (!gathering) {
+                    return refuse("ungathered");
+                }
+
+                // (The muster there with room, the longest standing; or a new one, theirs to begin)
+                const there = [...this.squads.values()].find((other) => other.gathering === gathering.at && other.parties.length < SQUAD.most);
+                const joined = there ?? { id: `squad-${this.nextSquad++}`, leader: party.id, parties: [], entry: "open", gathering: gathering.at };
+
+                this.squads.set(joined.id, joined);
+                this.#squadJoined(joined, party);
 
                 return OK;
             }
@@ -18137,6 +18216,10 @@ export class Host {
 
                 return OK;
             case "remove":
+                if (squad?.gathering) {
+                    return refuse("squadGathering");
+                }
+
                 if (!leads) {
                     return refuse(squad ? "squadLeader" : "squadless");
                 }
@@ -18149,6 +18232,10 @@ export class Host {
 
                 return OK;
             case "entry":
+                if (squad?.gathering) {
+                    return refuse("squadGathering");
+                }
+
                 if (!leads) {
                     return refuse(squad ? "squadLeader" : "squadless");
                 }
@@ -18162,6 +18249,10 @@ export class Host {
 
                 return OK;
             case "disband":
+                if (squad?.gathering) {
+                    return refuse("squadGathering");
+                }
+
                 if (!leads) {
                     return refuse(squad ? "squadLeader" : "squadless");
                 }

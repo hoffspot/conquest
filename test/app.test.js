@@ -6,7 +6,7 @@ import { LOOKS } from "../client/js/characters/peoples.js";
 import { formatBytes, Loader } from "../client/js/app/loader.js";
 import { ICONS, ITEM_ICONS } from "../client/js/app/icons.js";
 import { messagePlace, PARTY_ICON, partyFit, PLATE_SIZE, plateScale } from "../client/js/app/hud.js";
-import { memberKind, PLAYERS_PAGE, playersPage, playerStatus, QUICK_PHRASES, timeLeft, unreadLabel } from "../client/js/app/partypanel.js";
+import { memberKind, musterWords, PLAYERS_PAGE, playersPage, playerStatus, QUICK_PHRASES, timeLeft, unreadLabel } from "../client/js/app/partypanel.js";
 import { buildingsOf, compassTurn, interiorColours, mapColours, Minimap, paintPatch, paintingPatch, treesOf } from "../client/js/app/minimap.js";
 import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, flicked, flickReach, FLIP, iconOf, offensive, pickerEntries, PLACES, QUICK, QUICK_SHOWN, QUICK_TWO, readWheels, ROLES, rolesOf, sectorPath, wheelPlace, WHEELS, whomFor } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
@@ -1833,6 +1833,7 @@ describe("the bars over the others (hud.js)", () => {
         assert.deepEqual(laid(playersPage(few)), [["party", "Your party (3)", "Ada Bryn Dov"], ["near", "Nearby (1)", "Cass"], ["world", "Everyone else (1)", "Bran"]], "(one of the party near is of the party; each heading with how many are under it)");
         assert.deepEqual({ ...playersPage(few), sections: null }, { found: 5, page: 0, pages: 1, sections: null });
         assert.deepEqual(laid(playersPage([{ ...me, party: null }, few[2]])), [["party", "You (1)", "Ada"], ["near", "Nearby (1)", "Cass"]], "(in no party: You; no heading with no one under it)");
+        assert.deepEqual([musterWords({ kind: "invasion", name: "Stonewick" }), musterWords({ kind: "rift" })], ["for the defence of Stonewick", "at the hell rift"], "(where a muster gathers, as it's said: the plan's 2-30)");
         assert.deepEqual(laid(playersPage([...few, { id: "e", name: "Eda", near: true, ally: true, party: { yours: false } }])).slice(0, 3), [["party", "Your party (3)", "Ada Bryn Dov"], ["squad", "Your squad (1)", "Eda"], ["near", "Nearby (1)", "Cass"]], "(an ally, of a party allied with theirs, under Your squad, near or not: the plan's 2-29)");
 
         // Found by name: any part of it, any case
