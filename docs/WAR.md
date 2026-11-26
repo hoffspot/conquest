@@ -2654,6 +2654,14 @@ in three, the Behemoth of the Rift (below).
   raiders).
 - **One at a time** in a world. The players in the town it comes to are all in it: for each of them
   it's counted (`seen`) and their next due from then.
+- **A world's budget of them** (core/invasions.js `INVASION_BUDGET`, `invasionBudgeted`; the
+  scaling plan's 2-31). Where a world's encounters are an area's (the rule `director`: `"area"`, a
+  `shared` world's), every player's time in towns would bring one after another. So the world
+  has none till half an hour (`gap`) after its last ended (`Host.lastInvasion`, kept in a
+  snapshot when there's been one), whoever's time has one due; it comes then. In any other
+  world each comes as its player's time has it. A world of many may have one at once to every
+  25 players (`invasionMost`): one, in any world there can be today, which is all the host has
+  on at once. `NET_VERSION` 260.
 
 **How big** (`SIZE`, `sizeFor`; app/budget.js): as big as the smallest that the devices of the
 players in its town can draw at 30 frames a second or more, or 120 with none of them told (`size`).

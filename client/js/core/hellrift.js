@@ -105,6 +105,23 @@ export function dueOf(seed, day) {
 }
 
 /**
+ * How many hell rifts a world of many may have open at once, and how far apart (the scaling
+ * plan's 2-31): one to every `each` players, each `apart` m at least from every other.
+ */
+export const RIFTS_OPEN = Object.freeze({ each: 25, apart: 2000 });
+
+/**
+ * How many rifts a world of `players` may have open at once: one to every RIFTS_OPEN.each, and
+ * one at least. One, in any world there can be today (none takes more than 8 players:
+ * server/access/cap.js), which is all the host keeps open (`hellRifts.open`); two at once,
+ * RIFTS_OPEN.apart from each other (riftsApart), come with worlds of more.
+ */
+export const riftMost = (players) => Math.max(1, Math.ceil(players / RIFTS_OPEN.each));
+
+/** Whether a rift's heart at `at` ([x, y] m) is far enough from every other open rift's (`others`: their hearts). */
+export const riftsApart = (at, others = []) => others.every((other) => hypot(at[0] - other[0], at[1] - other[1]) >= RIFTS_OPEN.apart);
+
+/**
  * Whether a rift's due to open now (`elapsed`: ms the world's played, its war's clock), and which
  * day's it is: { day } if it's due and that day's hasn't been (`last`: the last day one opened or
  * was given up), else null.

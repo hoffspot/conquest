@@ -1791,7 +1791,10 @@ to follow one through.
 
 Once a day of the world, a hells' cult tears a rift open out in the wilds, and for half an hour
 the land about it is thick with demons (`core/hellrift.js`, `core/host.js` `#hellRifts`; drawn by
-`world/hellrift3d.js`). It's the world's: one at a time, the same for everyone in it.
+`world/hellrift3d.js`). It's the world's: one at a time, the same for everyone in it. (A world of
+many may have one open to every 25 players, two kilometres apart: `RIFTS_OPEN`, `riftMost`,
+`riftsApart`, the scaling plan's 2-31. That's one in any world there can be today, none taking
+more than 8 players, and one is all the host keeps open.)
 
 - **When.** Each day of the world it's due at a time that day has (`dueOf`: between 4 and 26
   minutes past midnight, the world's own clock), none in a world's first 40 minutes

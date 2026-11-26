@@ -48,7 +48,7 @@ import { DEN, DENS, denOf, densOf, denTier } from "./dens.js";
 import { GIFT_BOONS, giftId, sanctuaryAt, SHRINE, shrineOf } from "./shrines.js";
 import { FULL_MOON, moonRoad, nightOf, phaseOfNight, RING, ringNear, ringOf, TRIAL, trialOf } from "./rings.js";
 import { BRIMSTONE, HELL_RIFT, inRift, RIFT_GUARDS, riftDemon, riftDue, riftSite, riftTier, tearsOf } from "./hellrift.js";
-import { bandFor, BANDS, behemothReward, behemothSides, BEHEMOTH, bombersOf, COAST, dueAfter, ENGINES, INVASION, isBehemoth, isDue, isSize, raiderArms, raiderName, REWARD, rewardOf, sidesOf } from "./invasions.js";
+import { bandFor, BANDS, behemothReward, behemothSides, BEHEMOTH, bombersOf, COAST, dueAfter, ENGINES, INVASION, invasionBudgeted, isBehemoth, isDue, isSize, raiderArms, raiderName, REWARD, rewardOf, sidesOf } from "./invasions.js";
 import { burntCount, burntIn, housesToBurn, wholeAt } from "./burnt.js";
 import { waysOut, wayToward } from "./settlements.js";
 import { cellIndex, WATER } from "./worldplan/terrain.js";
@@ -2002,6 +2002,9 @@ export class Host {
          * by the party's id); and the parties that have asked to come into one (`squadAsks`, by
          * the party's id: { squad, until }).
          */
+        // (When the world's last invasion ended, ms of its time, or null: its budget of them,
+        // core/invasions.js INVASION_BUDGET, the scaling plan's 2-31)
+        this.lastInvasion = null;
         this.squads = new Map();
         this.squadIds = new Map();
         this.squadAsks = new Map();
@@ -3804,6 +3807,7 @@ export class Host {
             nextParty: this.nextParty,
             // (The squads, SQUAD: none kept of a world with none; who's asked isn't kept)
             ...(this.squads.size ? { squads: copy([...this.squads.values()]) } : {}),
+            ...(this.lastInvasion !== null ? { lastInvasion: this.lastInvasion } : {}),
             ...(this.nextSquad > 1 ? { nextSquad: this.nextSquad } : {}),
             // (Duels, kept only where there are any: a world kept before them has none)
             ...(this.duelAsks.size ? { duelAsks: copy([...this.duelAsks.entries()]) } : {}),
@@ -4054,6 +4058,7 @@ export class Host {
         host.noDuels = new Set(snapshot.noDuels ?? []);
         host.nextParty = snapshot.nextParty ?? 1;
         host.squads = new Map((snapshot.squads ?? []).map((squad) => [squad.id, structuredClone(squad)]));
+        host.lastInvasion = Number.isFinite(snapshot.lastInvasion) ? snapshot.lastInvasion : null;
         host.squadIds = new Map([...host.squads.values()].flatMap(({ id, parties }) => parties.map((party) => [party, id])));
         host.squadAsks = new Map();
         host.nextSquad = snapshot.nextSquad ?? 1;
@@ -7972,7 +7977,8 @@ export class Host {
     // INVASION.tick of the battle's time, the time in the town they're in too; not while they're
     // away, being sent out or resting. An invasion due for any of them (isDue: their first ten
     // minutes in, the next half an hour to an hour after; never in their first few minutes in a
-    // town), and none on, one comes to their town (#invade); and those on are watched
+    // town), and none on, one comes to their town (#invade); and those on are watched. Where the
+    // world's encounters are an area's (the rule `director`), by the world's budget of them too
     #invasions(ms) {
         if (this.invasions.length) {
             this.#invasionsOn();
@@ -7989,6 +7995,9 @@ export class Host {
             return;
         }
 
+        // (The world's budget of them, where its encounters are an area's: none till
+        // INVASION_BUDGET.gap after the last ended, whoever's time has one due; it comes then)
+        const budgeted = this.rules.director !== "area" || invasionBudgeted(now, this.lastInvasion);
         let due = null;
 
         for (const player of this.players.values()) {
@@ -8008,7 +8017,7 @@ export class Host {
 
             clock.here += passed;
             clock.clock += passed;
-            due ??= !this.invasions.length && isDue(clock) && this.#invadable(town, player) ? town : null;
+            due ??= !this.invasions.length && budgeted && isDue(clock) && this.#invadable(town, player) ? town : null;
         }
 
         if (due) {
@@ -8752,6 +8761,7 @@ export class Host {
                 }
 
                 this.invasions.splice(this.invasions.indexOf(invasion), 1);
+                this.lastInvasion = now;
                 this.#event("invasion", { change: "over", id: invasion.id, place: invasion.place });
             }
         }
