@@ -421,6 +421,16 @@ export const SUMMONING_MS = 30000;
 export const PARTY = Object.freeze({ most: 4, reach: 40, askMs: 30000 });
 
 /**
+ * A squad (generated/multiplayer_scaling_plan.md 2-28): parties allied, `most` of them at the
+ * most (five: twenty players), led by one of them, whose leader speaks for it. How a party comes
+ * into one is its `entry` (`entries`): "open", any party's leader joins it; "ask", they ask, and
+ * its leader lets them in or not within `askMs`; "closed", no one. Allies share their pings, and
+ * where each of them is (`allies`: their dots on the maps); never what each has found of the
+ * maps, a dungeon's run, or what falls to them: those are a party's.
+ */
+export const SQUAD = Object.freeze({ most: 5, askMs: 60000, entries: Object.freeze(["open", "ask", "closed"]) });
+
+/**
  * A party's ready check (#partyCommand "readyCheck"): how long the rest have to answer whether
  * they're ready (ms), how long what each said stays marked on their icons after it's over (ms:
  * app/game.js), and how long a countdown its leader starts can be (seconds).
@@ -1344,6 +1354,14 @@ export const REFUSALS = Object.freeze({
     areaOff: "The area channel is off in this world.",
     closed: "They aren't taking direct messages.",
     leader: "Only the party's leader can do that.",
+    squadded: "Your party's in a squad already.",
+    squadless: "Your party's in no squad.",
+    squadNone: "There's no such squad.",
+    squadFull: "The squad's full: five parties at most.",
+    squadClosed: "That squad's taking no more parties.",
+    squadAsked: "Your party's asked already: wait for its leader's answer.",
+    squadUnasked: "That party hasn't asked, or isn't in the squad.",
+    squadLeader: "Only the squad's leader can do that.",
     member: "They're not in your party.",
     readying: "A ready check's going already.",
     noReadyCheck: "There's no ready check going.",
@@ -1966,6 +1984,16 @@ export class Host {
         this.partyIds = new Map();
         this.invites = new Map();
         this.nextParty = 1;
+        /**
+         * The squads (SQUAD), by id: { id, leader (the party that leads it), parties (their ids,
+         * the longest in it first), entry (SQUAD `entries`) }; which each party's in (`squadIds`,
+         * by the party's id); and the parties that have asked to come into one (`squadAsks`, by
+         * the party's id: { squad, until }).
+         */
+        this.squads = new Map();
+        this.squadIds = new Map();
+        this.squadAsks = new Map();
+        this.nextSquad = 1;
         /**
          * The dungeons' runs where each party has its own (RULES `instances` "party"; RUNS), by
          * the run's id (runSite): { id, site (the dungeon's), owner (whose it is: a party's id,
@@ -2704,6 +2732,8 @@ export class Host {
                 return this.#answer(player, Boolean(command.come));
             case "party":
                 return this.#partyCommand(player, command);
+            case "squad":
+                return this.#squadCommand(player, command);
             case "duel":
                 return this.#duelCommand(player, command);
             case "treasure":
@@ -3760,6 +3790,9 @@ export class Host {
             parties: copy([...this.parties.values()]),
             invites: copy([...this.invites.entries()]),
             nextParty: this.nextParty,
+            // (The squads, SQUAD: none kept of a world with none; who's asked isn't kept)
+            ...(this.squads.size ? { squads: copy([...this.squads.values()]) } : {}),
+            ...(this.nextSquad > 1 ? { nextSquad: this.nextSquad } : {}),
             // (Duels, kept only where there are any: a world kept before them has none)
             ...(this.duelAsks.size ? { duelAsks: copy([...this.duelAsks.entries()]) } : {}),
             ...(this.duels.size ? { duels: copy([...this.duels.entries()]) } : {}),
@@ -4008,6 +4041,10 @@ export class Host {
         host.duels = new Map(structuredClone(snapshot.duels ?? []));
         host.noDuels = new Set(snapshot.noDuels ?? []);
         host.nextParty = snapshot.nextParty ?? 1;
+        host.squads = new Map((snapshot.squads ?? []).map((squad) => [squad.id, structuredClone(squad)]));
+        host.squadIds = new Map([...host.squads.values()].flatMap(({ id, parties }) => parties.map((party) => [party, id])));
+        host.squadAsks = new Map();
+        host.nextSquad = snapshot.nextSquad ?? 1;
         host.hired = new Set(snapshot.hired ?? []);
         host.wild = new Map(structuredClone(snapshot.wild ?? []));
         host.packs = new Map(structuredClone(snapshot.packs ?? []));
@@ -17907,6 +17944,236 @@ export class Host {
         return (this.partyFor(playerId)?.members ?? []).filter((id) => id !== playerId);
     }
 
+    /** The squad a player's party is in (SQUAD: { id, leader, parties, entry }), or null. */
+    squadFor(playerId) {
+        return this.squads.get(this.squadIds.get(this.partyIds.get(playerId))) ?? null;
+    }
+
+    /** The players of the other parties in a player's squad (their allies), by party as they came into it; none, in none. */
+    allies(playerId) {
+        const own = this.partyIds.get(playerId);
+
+        return (this.squadFor(playerId)?.parties ?? []).filter((party) => party !== own).flatMap((party) => this.parties.get(party)?.members ?? []);
+    }
+
+    // Every player of a squad's parties told something of it (a "squad" event each)
+    #tellSquad(squad, what) {
+        for (const party of squad.parties) {
+            for (const id of this.parties.get(party)?.members ?? []) {
+                this.#event("squad", { id, squad: squad.id, ...what });
+            }
+        }
+    }
+
+    // A party into a squad: told to all of it, the newcomers too
+    #squadJoined(squad, party) {
+        squad.parties.push(party.id);
+        this.squadIds.set(party.id, squad.id);
+        this.squadAsks.delete(party.id);
+        this.#tellSquad(squad, { change: "joined", party: party.id, name: this.players.get(party.leader)?.hero.name ?? "" });
+    }
+
+    // A party out of its squad (`why`: "left", "removed" by its leader, or "disbanded", the party
+    // itself no more), all of it told, those leaving too: led by the party longest in it after
+    // them if they led it; and no squad left with no party in it
+    #squadLeft(partyId, why) {
+        const squad = this.squads.get(this.squadIds.get(partyId));
+
+        this.squadAsks.delete(partyId);
+
+        if (!squad) {
+            return;
+        }
+
+        this.#tellSquad(squad, { change: why, party: partyId });
+        squad.parties = squad.parties.filter((id) => id !== partyId);
+        this.squadIds.delete(partyId);
+
+        if (!squad.parties.length) {
+            this.#squadOver(squad);
+
+            return;
+        }
+
+        if (squad.leader === partyId) {
+            [squad.leader] = squad.parties;
+            this.#tellSquad(squad, { change: "leader", party: squad.leader });
+        }
+    }
+
+    // A squad no more: its parties told, each free of it, and whoever had asked to come into it
+    // forgotten
+    #squadOver(squad) {
+        this.#tellSquad(squad, { change: "disbanded" });
+
+        for (const party of squad.parties) {
+            this.squadIds.delete(party);
+        }
+
+        for (const [party, asked] of [...this.squadAsks]) {
+            if (asked.squad === squad.id) {
+                this.squadAsks.delete(party);
+            }
+        }
+
+        this.squads.delete(squad.id);
+    }
+
+    // The squad commands (SQUAD), a party's leader's for their party: "form" one (its `entry`, by
+    // asking unless said), theirs to lead; "join" one (`squad`: its id) that's open, or ask to
+    // come into one that's by asking, its leader told; "admit" or "refuse" a party that's asked
+    // (`party`), the squad's leader's; "leave"; and, the squad's leader's, "remove" a party
+    // (`party`), set its "entry" (`entry`), or "disband" it
+    #squadCommand(player, { do: what, squad: squadId = null, party: partyId = null, entry = null }) {
+        const party = this.partyFor(player.id);
+
+        if (!party) {
+            return refuse("unpartied");
+        }
+
+        if (party.leader !== player.id) {
+            return refuse("leader");
+        }
+
+        const squad = this.squads.get(this.squadIds.get(party.id)) ?? null;
+        const leads = squad?.leader === party.id;
+
+        // (Those who asked longer ago than SQUAD.askMs: not asking any more)
+        for (const [asker, asked] of [...this.squadAsks]) {
+            if (asked.until <= this.battle.time) {
+                this.squadAsks.delete(asker);
+            }
+        }
+
+        switch (what) {
+            case "form": {
+                if (squad) {
+                    return refuse("squadded");
+                }
+
+                if (entry !== null && !SQUAD.entries.includes(entry)) {
+                    return refuse("command");
+                }
+
+                const formed = { id: `squad-${this.nextSquad++}`, leader: party.id, parties: [], entry: entry ?? "ask" };
+
+                this.squads.set(formed.id, formed);
+                this.#squadJoined(formed, party);
+
+                return OK;
+            }
+            case "join": {
+                const other = typeof squadId === "string" ? this.squads.get(squadId) : null;
+
+                if (squad) {
+                    return refuse("squadded");
+                }
+
+                if (!other) {
+                    return refuse("squadNone");
+                }
+
+                if (other.parties.length >= SQUAD.most) {
+                    return refuse("squadFull");
+                }
+
+                if (other.entry === "closed") {
+                    return refuse("squadClosed");
+                }
+
+                if (other.entry === "open") {
+                    this.#squadJoined(other, party);
+
+                    return OK;
+                }
+
+                if (this.squadAsks.has(party.id)) {
+                    return refuse("squadAsked");
+                }
+
+                const until = this.battle.time + SQUAD.askMs;
+
+                this.squadAsks.set(party.id, { squad: other.id, until });
+                // (Its leader told who's asking; those asking told it's asked)
+                this.#event("squad", { id: this.parties.get(other.leader)?.leader, squad: other.id, change: "asked", party: party.id, name: player.hero.name, until });
+                this.#tellParty(party, { change: "squadAsked", squad: other.id, until });
+
+                return OK;
+            }
+            case "admit":
+            case "refuse": {
+                const asked = typeof partyId === "string" ? this.squadAsks.get(partyId) : null;
+                const asking = asked ? this.parties.get(partyId) : null;
+
+                if (!leads) {
+                    return refuse(squad ? "squadLeader" : "squadless");
+                }
+
+                if (!asking || asked.squad !== squad.id) {
+                    return refuse("squadUnasked");
+                }
+
+                if (what === "refuse") {
+                    this.squadAsks.delete(partyId);
+                    this.#tellParty(asking, { change: "squadRefused", squad: squad.id });
+
+                    return OK;
+                }
+
+                if (squad.parties.length >= SQUAD.most) {
+                    return refuse("squadFull");
+                }
+
+                this.#squadJoined(squad, asking);
+
+                return OK;
+            }
+            case "leave":
+                if (!squad) {
+                    return refuse("squadless");
+                }
+
+                this.#squadLeft(party.id, "left");
+
+                return OK;
+            case "remove":
+                if (!leads) {
+                    return refuse(squad ? "squadLeader" : "squadless");
+                }
+
+                if (typeof partyId !== "string" || partyId === party.id || !squad.parties.includes(partyId)) {
+                    return refuse("squadUnasked");
+                }
+
+                this.#squadLeft(partyId, "removed");
+
+                return OK;
+            case "entry":
+                if (!leads) {
+                    return refuse(squad ? "squadLeader" : "squadless");
+                }
+
+                if (!SQUAD.entries.includes(entry)) {
+                    return refuse("command");
+                }
+
+                squad.entry = entry;
+                this.#tellSquad(squad, { change: "entry", entry });
+
+                return OK;
+            case "disband":
+                if (!leads) {
+                    return refuse(squad ? "squadLeader" : "squadless");
+                }
+
+                this.#squadOver(squad);
+
+                return OK;
+            default:
+                return refuse("command");
+        }
+    }
+
     /** Who's asked a player to their party, and till when ({ from, until }), or null. */
     invitation(playerId) {
         return this.invites.get(playerId) ?? null;
@@ -18048,6 +18315,13 @@ export class Host {
 
                 this.#tellParty(party, { change: what, who: player.id, name: player.hero.name, at: [at[0], at[1]], ...(what === "mark" ? { icon, words: markerWords(words) } : {}) });
 
+                // (A ping, its squad's too: each ally told where, SQUAD)
+                if (what === "ping") {
+                    for (const id of this.allies(player.id)) {
+                        this.#event("squad", { id, squad: this.squadIds.get(party.id), change: "ping", who: player.id, name: player.hero.name, at: [at[0], at[1]] });
+                    }
+                }
+
                 return OK;
             case "readyCheck":
             case "countdown": {
@@ -18155,6 +18429,8 @@ export class Host {
             }
 
             this.parties.delete(party.id);
+            // (And out of its squad, a party no more)
+            this.#squadLeft(party.id, "disbanded");
 
             return;
         }

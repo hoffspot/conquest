@@ -179,6 +179,7 @@ export const SCOPES = Object.freeze({
     spared: "near must",
     spell: "near may",
     spoils: "near must",
+    squad: "one must",
     squadsOut: "place must",
     standard: "near must",
     standing: "one must",

@@ -55,6 +55,7 @@ export const COMMAND_SHAPES = Object.freeze({
     cast: { fields: { spell: required(word) } },
     summoned: {},
     party: { fields: { do: required(word), words: text } },
+    squad: { fields: { do: required(word) } },
     duel: { fields: { do: required(word) } },
     treasure: {},
     read: {},

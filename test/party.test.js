@@ -11,7 +11,7 @@ import { describe, it } from "node:test";
 import { CREATURES } from "../client/js/core/creatures.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { decode, encode } from "../client/js/core/wire.js";
-import { HOST_PLAYER, Host, PARTY, READY } from "../client/js/core/host.js";
+import { HOST_PLAYER, Host, PARTY, READY, REFUSALS, SQUAD } from "../client/js/core/host.js";
 import { nearestFree, squareKey, squaresOf } from "../client/js/core/grid.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { placesOf } from "../client/js/core/places.js";
@@ -551,5 +551,202 @@ describe("parties of players (host.js PARTY, the party command)", () => {
 
         assert.deepEqual(again.partyFor("guest"), host.partyFor("guest"));
         assert.equal(again.battle.hostile(again.battle.actor(HOST_PLAYER), again.battle.actor("guest")), false);
+    });
+});
+
+describe("squads of parties (host.js SQUAD, the squad command; the scaling plan's 2-28)", () => {
+    const IDS = [HOST_PLAYER, "bea", "cal", "dov", "eve", "fay", "gus", "hal"];
+    const squad = (host, id, what, rest = {}) => host.command(id, { type: "squad", do: what, ...rest });
+    const drained = (host) => host.advance(STEP_MS);
+    const told = (events, id) => events.filter(({ type, id: whose }) => type === "squad" && whose === id).map(({ change }) => change);
+
+    // A world of eight in four parties of two, each led by the first of its pair: Ada and Bea,
+    // Cal and Dov, Eve and Fay, Gus and Hal
+    function four() {
+        const host = new Host(buildWorld({ seed: 2 }), { populate: false });
+
+        for (const id of IDS) {
+            host.join({ id, hero: { ...HERO, name: id === HOST_PLAYER ? "Ada" : id } });
+        }
+
+        for (let k = 0; k < IDS.length; k += 2) {
+            assert.ok(host.command(IDS[k], { type: "party", do: "invite", who: IDS[k + 1] }).ok);
+            assert.ok(host.command(IDS[k + 1], { type: "party", do: "accept" }).ok);
+        }
+
+        drained(host);
+
+        return host;
+    }
+
+    const partyOf = (host, id) => host.partyFor(id).id;
+
+    it("is formed by a party's leader, theirs to lead; another party joins one that's open, asks of one that's by asking (let in or not by its leader, or the asking lapsed), and can't join one that's closed", () => {
+        const host = four();
+
+        assert.deepEqual(SQUAD, { most: 5, askMs: 60000, entries: ["open", "ask", "closed"] });
+
+        for (const reason of ["squadded", "squadless", "squadNone", "squadFull", "squadClosed", "squadAsked", "squadUnasked", "squadLeader"]) {
+            assert.ok(REFUSALS[reason], reason);
+        }
+
+        // (Only a party's leader, of a party)
+        host.join({ id: "ida", hero: { ...HERO, name: "ida" } });
+        assert.equal(squad(host, "ida", "form").reason, "unpartied");
+        host.leave("ida");
+        assert.equal(squad(host, "bea", "form").reason, "leader");
+        assert.equal(squad(host, HOST_PLAYER, "leave").reason, "squadless");
+        assert.equal(squad(host, HOST_PLAYER, "form", { entry: "sometimes" }).reason, "command");
+        assert.equal(host.squadFor(HOST_PLAYER), null);
+        assert.deepEqual(host.allies(HOST_PLAYER), []);
+
+        // Formed: by asking unless said, led by the party that formed it
+        assert.ok(squad(host, HOST_PLAYER, "form").ok);
+
+        const mine = host.squadFor("bea");
+
+        assert.deepEqual(mine, { id: "squad-1", leader: partyOf(host, HOST_PLAYER), parties: [partyOf(host, HOST_PLAYER)], entry: "ask" });
+        assert.deepEqual(told(drained(host), "bea"), ["joined"]);
+        assert.equal(squad(host, HOST_PLAYER, "form").reason, "squadded");
+
+        // By asking: Cal's party asks, Ada told; let in
+        assert.equal(squad(host, "cal", "join", { squad: "nowhere" }).reason, "squadNone");
+        assert.ok(squad(host, "cal", "join", { squad: mine.id }).ok);
+        assert.equal(squad(host, "cal", "join", { squad: mine.id }).reason, "squadAsked");
+        assert.equal(host.squadFor("cal"), null, "(not in till let in)");
+
+        const asked = drained(host);
+
+        assert.deepEqual(told(asked, HOST_PLAYER), ["asked"]);
+        assert.deepEqual(asked.filter(({ type, change }) => type === "party" && change === "squadAsked").map(({ id }) => id).sort(), ["cal", "dov"]);
+        assert.equal(squad(host, "cal", "admit", { party: partyOf(host, "cal") }).reason, "squadless", "(not theirs to say)");
+        assert.equal(squad(host, HOST_PLAYER, "admit", { party: partyOf(host, "eve") }).reason, "squadUnasked");
+        assert.ok(squad(host, HOST_PLAYER, "admit", { party: partyOf(host, "cal") }).ok);
+        assert.deepEqual(host.squadFor("dov").parties, [partyOf(host, HOST_PLAYER), partyOf(host, "cal")]);
+        assert.deepEqual(IDS.slice(0, 4).map((id) => told(drained(host), id)), [["joined"], [], [], []], "(each told once: drained)");
+
+        // (Allies: the players of the other parties, never one's own)
+        assert.deepEqual(host.allies(HOST_PLAYER), ["cal", "dov"]);
+        assert.deepEqual(host.allies("dov"), [HOST_PLAYER, "bea"]);
+        assert.deepEqual(host.fellows("dov"), ["cal"], "(a party's still its own)");
+
+        // Refused; and an asking lapsed, never answered
+        assert.ok(squad(host, "eve", "join", { squad: mine.id }).ok);
+        assert.ok(squad(host, HOST_PLAYER, "refuse", { party: partyOf(host, "eve") }).ok);
+        assert.ok(drained(host).some(({ type, change, id }) => type === "party" && change === "squadRefused" && id === "fay"));
+        assert.equal(host.squadFor("eve"), null);
+        assert.ok(squad(host, "eve", "join", { squad: mine.id }).ok);
+
+        for (let t = 0; t <= SQUAD.askMs; t += 5000) {
+            run(host, 5000);
+        }
+
+        assert.equal(squad(host, HOST_PLAYER, "admit", { party: partyOf(host, "eve") }).reason, "squadUnasked", "(lapsed)");
+
+        // Open: joined at once. Closed: not at all. Only its leader sets which
+        assert.equal(squad(host, "cal", "entry", { entry: "open" }).reason, "squadLeader");
+        assert.ok(squad(host, HOST_PLAYER, "entry", { entry: "open" }).ok);
+        assert.ok(squad(host, "eve", "join", { squad: mine.id }).ok);
+        assert.deepEqual(host.squadFor("fay").parties.length, 3);
+        assert.ok(squad(host, HOST_PLAYER, "entry", { entry: "closed" }).ok);
+        assert.equal(squad(host, "gus", "join", { squad: mine.id }).reason, "squadClosed");
+    });
+
+    it("holds five parties at most; shares a ping with every ally, and nothing else of a party's; kept in a snapshot", () => {
+        const host = four();
+
+        assert.ok(squad(host, HOST_PLAYER, "form", { entry: "open" }).ok);
+        assert.ok(squad(host, "cal", "join", { squad: "squad-1" }).ok);
+        drained(host);
+
+        // A ping: Ada's party told as ever, her allies each told it's the squad's; a mark is her party's alone
+        const at = [host.battle.actor(HOST_PLAYER).x, host.battle.actor(HOST_PLAYER).y];
+
+        assert.ok(host.command(HOST_PLAYER, { type: "party", do: "ping", at }).ok);
+        host.command(HOST_PLAYER, { type: "party", do: "mark", at, icon: "skull", words: "Here" });
+
+        const pinged = drained(host);
+
+        assert.deepEqual(pinged.filter(({ type, change }) => type === "party" && change === "ping").map(({ id }) => id).sort(), [HOST_PLAYER, "bea"].sort());
+        assert.deepEqual(pinged.filter(({ type, change }) => type === "squad" && change === "ping").map(({ id, who, at: where, squad: of }) => [id, who, where, of]), [["cal", HOST_PLAYER, at, "squad-1"], ["dov", HOST_PLAYER, at, "squad-1"]]);
+        assert.ok(!pinged.some(({ type, change }) => type === "squad" && change === "mark"));
+        assert.ok(!pinged.some(({ type, id }) => type === "squad" && ["eve", "fay", "gus", "hal"].includes(id)), "(no one out of it)");
+
+        // (What each has found of the maps isn't pooled across a squad)
+        host.players.get("cal").explored.enter("home:tavern");
+        assert.equal(host.players.get(HOST_PLAYER).explored.entered.has("home:tavern"), false);
+
+        // Kept
+        const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
+
+        assert.deepEqual(again.squadFor("dov"), host.squadFor("dov"));
+        assert.deepEqual(again.allies("dov"), [HOST_PLAYER, "bea"]);
+        assert.equal(again.nextSquad, 2);
+        assert.ok(!("squads" in new Host(buildWorld({ seed: 2 }), { populate: false }).snapshot()));
+
+        // Five at most (three more of its parties, as if there were players for them)
+        assert.ok(squad(host, "eve", "join", { squad: "squad-1" }).ok);
+
+        for (const id of ["party-x", "party-y"]) {
+            host.parties.set(id, { id, leader: "nobody", members: [] });
+            host.squadFor(HOST_PLAYER).parties.push(id);
+            host.squadIds.set(id, "squad-1");
+        }
+
+        assert.equal(host.squadFor(HOST_PLAYER).parties.length, SQUAD.most);
+        assert.equal(squad(host, "gus", "join", { squad: "squad-1" }).reason, "squadFull");
+    });
+
+    it("is left by a party, the longest in it leading if its leader's left; a party put out by its leader; a party that's no more out of it; and disbanded by its leader, or with its last party", () => {
+        const host = four();
+        const [a, c, e, g] = [HOST_PLAYER, "cal", "eve", "gus"].map((id) => partyOf(host, id));
+
+        assert.ok(squad(host, HOST_PLAYER, "form", { entry: "open" }).ok);
+
+        for (const id of ["cal", "eve", "gus"]) {
+            assert.ok(squad(host, id, "join", { squad: "squad-1" }).ok);
+        }
+
+        drained(host);
+        assert.deepEqual(host.squadFor("hal").parties, [a, c, e, g]);
+
+        // Put out by its leader: not by another, nor itself
+        assert.equal(squad(host, "cal", "remove", { party: g }).reason, "squadLeader");
+        assert.equal(squad(host, HOST_PLAYER, "remove", { party: a }).reason, "squadUnasked");
+        assert.ok(squad(host, HOST_PLAYER, "remove", { party: g }).ok);
+        assert.deepEqual(told(drained(host), "hal"), ["removed"]);
+        assert.equal(host.squadFor("gus"), null);
+        assert.deepEqual(host.allies("gus"), []);
+
+        // Its leader's party leaves: the longest in it leads
+        assert.ok(squad(host, HOST_PLAYER, "leave").ok);
+
+        const left = drained(host);
+
+        assert.deepEqual(told(left, "bea"), ["left"]);
+        assert.deepEqual(told(left, "dov"), ["left", "leader"]);
+        assert.deepEqual(host.squadFor("cal"), { id: "squad-1", leader: c, parties: [c, e], entry: "open" });
+
+        // A party that's no more (one of its two gone from the world): out of its squad
+        host.leave("fay");
+        assert.equal(host.partyFor("eve"), null);
+        assert.deepEqual(host.squadFor("cal").parties, [c]);
+        assert.ok(drained(host).some(({ type, change, id, party: which }) => type === "squad" && change === "disbanded" && id === "cal" && which === e));
+
+        // Its last party leaves: no squad
+        assert.ok(squad(host, "cal", "leave").ok);
+        assert.equal(host.squads.size, 0);
+        assert.deepEqual(told(drained(host), "dov"), ["left"], "(they've left it: no one's left in it to tell it's over)");
+
+        // Disbanded by its leader: everyone in it told, each party free to form or join another
+        assert.ok(squad(host, HOST_PLAYER, "form", { entry: "open" }).ok);
+        assert.ok(squad(host, "cal", "join", { squad: "squad-2" }).ok);
+        drained(host);
+        assert.equal(squad(host, "cal", "disband").reason, "squadLeader");
+        assert.ok(squad(host, HOST_PLAYER, "disband").ok);
+        assert.deepEqual([HOST_PLAYER, "bea", "cal", "dov"].map((id) => told(drained(host), id)), [["disbanded"], [], [], []]);
+        assert.equal(host.squads.size, 0);
+        assert.equal(host.squadFor("cal"), null);
+        assert.ok(squad(host, "cal", "form").ok);
     });
 });
