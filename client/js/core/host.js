@@ -605,7 +605,7 @@ export const RULE_CHOICES = Object.freeze({
     director: Object.freeze({ of: Object.freeze(["player", "area"]), shared: "area", slice: "2-18", built: true }),
     instances: Object.freeze({ of: Object.freeze(["site", "party"]), shared: "party", slice: "2-21", built: true }),
     rares: Object.freeze({ of: Object.freeze(["world", "character"]), shared: "character", slice: "2-25", built: true }),
-    stock: Object.freeze({ of: Object.freeze(["shared", "personal"]), shared: "personal", slice: "2-33", built: false }),
+    stock: Object.freeze({ of: Object.freeze(["shared", "personal"]), shared: "personal", slice: "2-33", built: true }),
 });
 
 /**
@@ -5584,9 +5584,12 @@ export class Host {
      * What a shop with a daily stock (progress.js SHOPS `daily`) kept by one of the folk (`keeper`:
      * their id) has in today, as it is now: { key (its stockKey), day, wares: [{ id, quality,
      * count, left, people? }] (its shelves, then a crafter's materials), special (the thing it is,
-     * made), specialLeft (whether it's still to be had) }; or null, for anyone else.
+     * made), specialLeft (whether it's still to be had) }; or null, for anyone else. Where what a
+     * shop's sold is each character's own (the rule `stock`: "personal", the scaling plan's
+     * 2-33), as it is for `playerId`: what they've bought of it today, and no one else (with no
+     * player, its shelves untouched).
      */
-    stockOf(keeper) {
+    stockOf(keeper, playerId = null) {
         const folk = this.folk.get(keeper);
         const shop = folk?.shop ?? SHOPKEEPERS[folk?.role ?? this.battle.actor(keeper)?.role];
 
@@ -5598,7 +5601,7 @@ export class Host {
         const day = dayOf(elapsedOf(this.war));
         const { wares: shelved, special, materials } = dailyStock(shop, { seed: this.world.seed ?? 1, key, day, people: folk?.people ?? "human" });
         const daily = [...shelved, ...materials];
-        const kept = this.stocks.get(key);
+        const kept = this.stocks.get(this.#soldKey(key, playerId));
         const today = kept?.day === day ? kept : { sold: {}, special: false };
         // (And what a thread's put on its shelves: core/rare.js CHANGES `stock`)
         const shelves = [...daily, ...this.threadWaresOf(keeper).filter((ware) => !daily.some((each) => wareKey(each) === wareKey(ware)))];
@@ -5606,10 +5609,28 @@ export class Host {
         return { key, day, shop, wares: shelves.map((ware) => ({ ...ware, left: ware.count - (today.sold[wareKey(ware)] ?? 0) })), special, specialLeft: Boolean(special) && !today.special };
     }
 
-    // Something sold from a shop's daily stock (or its special), kept as sold for the rest of the day
-    #sold({ key, day }, ware) {
+    // What a shop's sold is kept by (`stocks`): the shop (its stockKey), what it's sold gone for
+    // everyone; or, where it's each character's own (the rule `stock`: "personal"), the shop and
+    // the player, `${shop}#${player}` (no player: a key nothing's kept by)
+    #soldKey(key, playerId) {
+        return this.rules.stock === "personal" ? `${key}#${playerId ?? ""}` : key;
+    }
+
+    // Something sold from a shop's daily stock (or its special), kept as sold for the rest of the
+    // day: for everyone, or for the player who bought it (#soldKey). Where it's kept for each,
+    // what's kept of days gone by is let go as something's sold (each player's, of each shop)
+    #sold({ key: shop, day }, ware, playerId) {
+        const key = this.#soldKey(shop, playerId);
         const kept = this.stocks.get(key);
         const today = kept?.day === day ? kept : { day, sold: {}, special: false };
+
+        if (this.rules.stock === "personal") {
+            for (const [other, { day: when }] of [...this.stocks]) {
+                if (when < day) {
+                    this.stocks.delete(other);
+                }
+            }
+        }
 
         if (ware) {
             today.sold[wareKey(ware)] = (today.sold[wareKey(ware)] ?? 0) + 1;
@@ -5622,7 +5643,7 @@ export class Host {
 
     // Something bought from a shop: what it has (a blacksmith's as well made as the buyer is
     // mighty), or in today (a shop with a daily stock: while there's any left, for everyone who
-    // plays together), or its daily special (`special`: the one thing, once), for what it asks
+    // plays together, or for them alone where the rule `stock` has it each character's own), or its daily special (`special`: the one thing, once), for what it asks
     #buy(player, actor, { item, from, special = false }) {
         const trading = this.#shopkeeper(actor, from);
 
@@ -5630,7 +5651,7 @@ export class Host {
             return refuse("far");
         }
 
-        const stock = this.stockOf(trading.keeper.id);
+        const stock = this.stockOf(trading.keeper.id, player.id);
         const same = (ware) => ware.id === item?.id && (ware.quality ?? "common") === (item?.quality ?? "common");
         const ware = special ? stock?.special : stock ? stock.wares.find(same) : [...wares(trading.shop, trading.people, { tier: mightTier(this.mightFor(player.id)) }), ...this.threadWaresOf(trading.keeper.id)].find(same);
 
@@ -5660,7 +5681,7 @@ export class Host {
         }
 
         if (stock) {
-            this.#sold(stock, special ? null : ware);
+            this.#sold(stock, special ? null : ware, player.id);
         }
 
         player.progress.gold -= price;

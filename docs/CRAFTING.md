@@ -630,7 +630,8 @@ The four new crafters are shops as the specialists are (stage 4):
   smith's, the specialists' who make (not the alchemist's), the masters' and the four new: each
   common, under "Materials for crafting" (`WARE_KINDS` `material`). A blacksmith's as many as are
   asked for, as all its wares are; a shop with a daily stock 10 to 20 of each every day
-  (`MATERIAL_COUNT`), for everyone who plays together, worked out after its other wares and its
+  (`MATERIAL_COUNT`), for everyone who plays together (or for each character, where a world's
+  rule `stock` is `"personal"`: docs/SERVER.md, *A world's preset*), worked out after its other wares and its
   special, so they're as they'd be without them (`dailyStock`'s `materials`; host.js `stockOf`
   puts them on its shelves after the rest).
 - **What they buy** (`LINES`, `buys`): what they make (`bows`, `leathers`, `clothes`, a jeweller's

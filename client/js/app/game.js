@@ -14758,7 +14758,7 @@ export class Game {
         const asked = (this.shopAsked = (this.shopAsked ?? 0) + 1);
 
         this.shopping = null;
-        after(this.worldview.shop(keeper), (stocked) => {
+        after(this.worldview.shop(keeper, this.me), (stocked) => {
             if (this.shopAsked !== asked) {
                 return;
             }

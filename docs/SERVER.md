@@ -874,7 +874,10 @@ players of peoples at war are enemies (`pvp`), whose a foe's spoils are
 a dungeon for each party (`instances`), a unique met by each character (`rares`), and a shop's
 stock for each (`stock`). Each is a rule kept with the world (`RULES`, `RULE_CHOICES` in
 `client/js/core/host.js`), and each is as it is today until the slice of the plan that builds its
-other way turns it on. Seven are built. `rares`: on a `shared` world a unique rare encounter is
+other way turns it on. All eight are built. `stock`: on a `shared` world what a shop with a
+daily stock has sold is gone for the character who bought it and no one else, its special
+each one's to buy once, where a `company` world's shelves empty for everyone (core/host.js
+`stockOf(keeper, playerId)`, `#soldKey`; the plan's `2-33`; `NET_VERSION` 262). `rares`: on a `shared` world a unique rare encounter is
 each character's to overcome and stays in the world for the next to come, where a `company`
 world has each once (docs/WILDS.md, *Rare encounters*). `instances`: on a `shared` world each party has a run of
 its own of each dungeon, hell and Bellhaven's keep, and one in no party has their own
