@@ -704,6 +704,50 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         await until(() => server.registry.lifeOf(made.json.world).life === "stored", "set aside");
     });
 
+    it("keeps a player to the quick chat's phrases where the server's Nanny Mode says (6B-16): told to the world as they come in, said in its players lists, their typed line refused and a phrase said; and lifted at once when the setting's turned off, with no restart", async () => {
+        const made = await server.call("POST", "/worlds", { auth: `Key ${server.adminKey}`, body: { name: "Nannywick", race: "human", seed: 6 } });
+        const entered = await server.call("POST", "/enter", { body: { world: made.json.world, key: made.json.playerKey, net: NET_VERSION } });
+        const listed = async () => (await server.manage.players(made.json.world)).find((one) => one.here);
+        const chats = () => game.messages.filter((message) => message.kind === "chat").map(({ text, quick }) => [text, quick ?? null]);
+        const unsaid = () => game.messages.filter((message) => message.kind === "unsaid").map(({ reason }) => reason);
+
+        // (Every world's, and no country looked up yet: everyone's is unknown, so everyone's in it)
+        await server.manage.changeSettings({ nanny: "all" });
+
+        const game = await play(server, made.json.world, entered.json.session);
+
+        await until(async () => (await listed())?.nanny === true, "the players list to say so", ENTERING);
+        assert.equal((await server.manage.details(made.json.world)).players[0].nanny, true);
+        assert.equal([...server.play.places.values()].find((place) => place.world === made.json.world).nanny, true);
+
+        // A typed shout: refused. A phrase: said
+        game.say({ kind: "chat", text: "Is anyone about?", shout: true });
+        await until(() => unsaid().length === 1, "the refusal", ENTERING);
+        assert.deepEqual(unsaid(), ["nanny"]);
+        assert.deepEqual(chats(), []);
+        game.say({ kind: "chat", text: "", quick: 13, shout: true });
+        await until(() => chats().length === 1, "the phrase", ENTERING);
+        assert.deepEqual(chats(), [["Hello!", 13]]);
+
+        // In public worlds alone: this one isn't, so they're out of it, the world told as it runs
+        await server.manage.changeSettings({ nanny: "public" });
+        await until(async () => (await listed())?.nanny === false, "the players list to say they're out of it", ENTERING);
+        game.say({ kind: "chat", text: "Is anyone about now?", shout: true });
+        await until(() => chats().length === 2, "the typed line", ENTERING);
+        assert.deepEqual(chats().at(-1), ["Is anyone about now?", null]);
+        assert.deepEqual(unsaid(), ["nanny"]);
+
+        // On again for every world, then off: in, and out
+        await server.manage.changeSettings({ nanny: "all" });
+        await until(async () => (await listed())?.nanny === true, "the players list to say so again", ENTERING);
+        await server.manage.changeSettings({ nanny: "all", nannyUnknown: false });
+        await until(async () => (await listed())?.nanny === false, "unknown countries let be", ENTERING);
+        await server.manage.changeSettings({ nanny: "off", nannyUnknown: true });
+        assert.equal(game.closed, null);
+        game.close();
+        await until(() => server.registry.lifeOf(made.json.world).life === "stored", "set aside");
+    });
+
     it("sends a game that asks its frames beside lockstep, as bytes, where the server's views are dark: one a step, read as frames; none to a game that doesn't ask, nor to one whose socket speaks no bytes", async () => {
         const made = await server.call("POST", "/worlds", { auth: `Key ${server.adminKey}`, body: { name: "Shadewick", race: "human", seed: 7 } });
         const enter = async () => (await server.call("POST", "/enter", { body: { world: made.json.world, key: made.json.ownerKey, net: NET_VERSION } })).json;

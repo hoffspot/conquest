@@ -22,7 +22,9 @@
 // It plays under the id `<player>.<slot>`, so that if the server stops without its players
 // leaving, each can still be put back in their slot when the world's next opened.
 //
-//   supervisor -> worker   { type: "enter", peer, player, role }   someone come in by a key
+//   supervisor -> worker   { type: "enter", peer, player, role, nanny }   someone come in by a key (nanny: kept
+//                                                                  to the quick chat's phrases, access/nanny.js)
+//                          { type: "nanny", peer, on }             one of them kept to them from now, or not
 //                          { type: "data", peer, text }            what their game said
 //                          { type: "drop", peer } / "back"         their link dropped, or came back
 //                          { type: "leave", peer }                 they've gone
@@ -209,7 +211,7 @@ const ground = host.world.maps.town;
 const navigation = navigatorOf(ground);
 const stepBegins = () => metrics.late.begin(host.battle.time, ground.chunksMade, navigation.baked, Navigation.floorTiles);
 
-/** Those who've come in, by peer: { player, role, slot, linked, ready, hidden, held, since, character }. */
+/** Those who've come in, by peer: { player, role, nanny, slot, linked, ready, hidden, held, since, character }. */
 const peers = new Map();
 
 // Heroes being kept, one after another
@@ -225,6 +227,17 @@ hosting.welcomes = welcomes();
 // another player's by a copy of their character)
 hosting.byCharacter = false;
 hosting.roleOf = (peer) => peers.get(peer)?.role ?? "player";
+// (Who's kept to the quick chat's phrases, as the supervisor says of each as they come in and
+// whenever it changes: access/nanny.js, core/netplay.js Session `restricted`)
+hosting.restricted = (id) => {
+    for (const one of peers.values()) {
+        if (one.nanny && hosting.players.get(one.peer) === id) {
+            return true;
+        }
+    }
+
+    return false;
+};
 hosting.idOf = (peer) => {
     const one = peers.get(peer);
 
@@ -464,11 +477,11 @@ function look() {
 function report() {
     reported = clock();
 
-    const players = [...peers.values()].map(({ peer, player, slot, linked, ready, hidden }) => {
+    const players = [...peers.values()].map(({ peer, player, slot, linked, ready, hidden, nanny }) => {
         const id = hosting.players.get(peer) ?? null;
         const playing = id === null ? null : host.players.get(id);
 
-        return { peer, player, slot, id, name: playing?.hero?.name ?? null, race: playing?.hero?.race ?? null, away: Boolean(playing?.away), linked, ready, hidden };
+        return { peer, player, slot, id, name: playing?.hero?.name ?? null, race: playing?.hero?.race ?? null, away: Boolean(playing?.away), linked, ready, hidden, nanny: nanny === true };
     });
     const memory = process.memoryUsage();
     const cpu = process.threadCpuUsage?.() ?? null;
@@ -572,8 +585,14 @@ setTimeout(tick, WORKER.tick);
 parentPort.on("message", async (message) => {
     switch (message.type) {
         case "enter":
-            peers.set(message.peer, { peer: message.peer, player: message.player, role: message.role, slot: null, linked: true, ready: false, hidden: false, held: false, since: clock(), character: null, asked: false });
+            peers.set(message.peer, { peer: message.peer, player: message.player, role: message.role, nanny: message.nanny === true, slot: null, linked: true, ready: false, hidden: false, held: false, since: clock(), character: null, asked: false });
             look();
+            break;
+        case "nanny":
+            if (peers.has(message.peer)) {
+                peers.get(message.peer).nanny = message.on === true;
+            }
+
             break;
         case "data":
             await heard(message.peer, message.text);

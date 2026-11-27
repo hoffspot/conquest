@@ -953,6 +953,37 @@ Turned off while such a world's being played, everyone in it is sent out at once
 and the world's saved as it stands: that's the kill switch. It's changed on the management page and takes effect at once, with no
 update and no restart: every running world is told as it's changed. Neither setting raises how many a world takes.
 
+### Nanny Mode
+
+A player in **Nanny Mode** sends and sees the quick chat's phrases only (docs/WAR.md *Parties*,
+Kept to the quick phrases); everything else about the game is theirs as it is anyone's.
+`server/access/nanny.js` says who's in it as they come into a world (`nannyFor`), from four
+settings (the scaling plan's 6B-16):
+
+- **Nanny Mode** (`nanny`): `off` (as it ships: nobody), `public` (in public worlds) or `all`
+  (in every world of the server).
+- **Its countries** (`nannyCountries`): each with a two-letter code, the age its rules protect up
+  to (`threshold`), a reason, a source and when it was last reviewed. As shipped: the United
+  Kingdom at 16, Brazil at 18 and Indonesia at 16 (`NANNY_COUNTRIES`). The management page shows
+  the list; it's changed in the settings file, and is to be reviewed every 90 days. These are
+  readings of the rules from summaries, not legal advice.
+- **Unknown countries** (`nannyUnknown`, on as it ships): a connection whose country can't be
+  told is in it too, at the oldest age listed. A missing answer must not be the way out.
+- **Hold days** (`nannyHoldDays`, 30): how long one seen from a listed country stays in it after.
+
+**Leave it off for now.** Nothing looks a connection's country up yet (the plan's 6B-19 and
+6B-20), so with it on every connection's country is unknown and, with unknown countries in it,
+everyone is. Nothing lifts it yet either: that takes a passed age check at or over the
+country's age (6B-22), never an age someone says they are. The hold needs a record of the
+player the server doesn't keep yet (6B-1, 6B-21); `nannyFor` reads both records if it's given
+them.
+
+The server works it out as a player comes in and tells the world's thread with their entry
+(`{ type: "enter", ..., nanny }`), and again for whoever's in a world when a Nanny Mode setting
+changes or a world's made public or not (`{ type: "nanny", peer, on }`): no restart. The world
+asks it of every chat line (core/netplay.js Session `restricted`). Each player's flag is in a
+world's players lists (`nanny`), for the management page.
+
 ## Crash reports
 
 When a player's game falls over in a world here (a phone running out of memory, say) and they come

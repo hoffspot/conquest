@@ -1067,6 +1067,13 @@ function choice(key, setting, value, disabled = false) {
 }
 
 // What a settings form holds for a setting, as its schema's kind has it
+// A setting that's a list (the server's `nannyCountries`): shown, each entry a line, not changed here
+function listed(key, setting, value) {
+    const lines = (Array.isArray(value) ? value : []).map((entry) => h("li", {}, Object.values(entry).join(" · ")));
+
+    return h("div", { class: "field", "data-setting": key }, h("p", {}, setting.about), lines.length ? h("ul", { class: "muted small" }, lines) : h("p", { class: "muted small" }, "None listed."));
+}
+
 function valueOf(form, key, setting) {
     const control = form.elements[key];
 
@@ -1812,6 +1819,8 @@ async function renderSettings() {
                 ? check(key, setting.about, settings[key])
                 : setting.kind === "choice"
                 ? choice(key, setting, settings[key])
+                : setting.kind === "list"
+                ? listed(key, setting, settings[key])
                 : field(
                       `${setting.about} (${setting.min} to ${setting.max})`,
                       h("input", { type: "number", name: key, min: String(setting.min), max: String(setting.max), step: setting.kind === "integer" ? "1" : "0.5", value: String(settings[key]) }),
@@ -1829,6 +1838,11 @@ async function renderSettings() {
         const changes = {};
 
         for (const [key, setting] of Object.entries(schema)) {
+            // (A list is shown, and changed in the settings file)
+            if (setting.kind === "list") {
+                continue;
+            }
+
             const value = valueOf(form, key, setting);
 
             if (value !== settings[key]) {
