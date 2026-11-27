@@ -16,6 +16,7 @@ import { buys, gradeOf, HAGGLE_CAP, ITEMS, priceOf, Progress, QUALITIES, SELL_SH
 import { CRAFTERS } from "../client/js/core/recipes.js";
 import { dailyStock, MATERIAL_COUNT, SPECIAL_MARKUP, shopPrice, stockKey, wareAt } from "../client/js/core/stock.js";
 import { decode, encode } from "../client/js/core/wire.js";
+import { answerOf, LocalView } from "../client/js/core/worldview.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 const DAILY = Object.keys(SHOPS).filter((shop) => SHOPS[shop].daily);
@@ -460,6 +461,89 @@ describe("buying from a daily stock (host.js stockOf)", () => {
         assert.equal(tomorrow.day, stock.day + 1);
         assert.notDeepEqual(tomorrow.wares.map(({ id, quality }) => [id, quality]), stock.wares.map(({ id, quality }) => [id, quality]));
         assert.ok(tomorrow.wares.every(({ left, count }) => left === count));
+    });
+
+    it("keeps what's sold for each character where a world's rule has it so (the scaling plan's 2-33): one buyer's shelves emptied, the other's full, the special each one's to buy once; kept with the world; and gone for everyone elsewhere, as ever", () => {
+        // Two buyers at one shop, in a world of each rule
+        const two = (rules) => {
+            const host = new Host(buildWorld({ seed: 2 }), { populate: false, ...(rules ? { rules } : {}) });
+
+            for (const id of [HOST_PLAYER, "bryn"]) {
+                host.join({ id, hero: { ...HERO, name: id === HOST_PLAYER ? "Ada" : "Bryn" }, progress: { gold: 100000, gear: { mainHand: { id: HERO.weapon } } } });
+            }
+
+            host.populate();
+
+            const keeper = host.battle.actor(host.world.folk.find(({ role }) => role === "barkeep").id);
+
+            host.folk.get(keeper.id).shop = "masterArmorer";
+            put(host.battle.actor(HOST_PLAYER), keeper.map, [keeper.square[0], keeper.square[1] + 1]);
+            put(host.battle.actor("bryn"), keeper.map, [keeper.square[0] + 1, keeper.square[1]]);
+
+            return { host, keeper };
+        };
+        const { host, keeper } = two({ stock: "personal" });
+        const ware = host.stockOf(keeper.id, HOST_PLAYER).wares[0];
+        const item = { id: ware.id, quality: ware.quality };
+        const buy = (who, what = { item }) => host.command(who, { type: "buy", ...what, from: keeper.id });
+        const left = (who) => host.stockOf(keeper.id, who).wares[0].left;
+
+        assert.equal(host.rules.stock, "personal");
+
+        // Ada buys all there is of it: none left for her, all of it still there for Bryn
+        for (let k = 0; k < ware.count; k++) {
+            assert.deepEqual(buy(HOST_PLAYER), { ok: true });
+        }
+
+        assert.deepEqual([left(HOST_PLAYER), left("bryn")], [0, ware.count]);
+        assert.deepEqual(buy(HOST_PLAYER), { ok: false, reason: "soldOut" });
+        assert.deepEqual(buy("bryn"), { ok: true });
+        assert.deepEqual([left(HOST_PLAYER), left("bryn")], [0, ware.count - 1]);
+        assert.equal(host.stockOf(keeper.id).wares[0].left, ware.count, "(asked for no one: its shelves as they were stocked)");
+
+        // The special: each one's to buy once
+        assert.deepEqual(buy(HOST_PLAYER, { special: true }), { ok: true });
+        assert.deepEqual([host.stockOf(keeper.id, HOST_PLAYER).specialLeft, host.stockOf(keeper.id, "bryn").specialLeft], [false, true]);
+        assert.deepEqual(buy(HOST_PLAYER, { special: true }), { ok: false, reason: "soldOut" });
+        assert.deepEqual(buy("bryn", { special: true }), { ok: true });
+        assert.deepEqual(buy("bryn", { special: true }), { ok: false, reason: "soldOut" });
+
+        // What a game's told of the shop is its own player's (core/worldview.js)
+        assert.equal(answerOf(host, HOST_PLAYER, { what: "shop", keeper: keeper.id }).stock.wares[0].left, 0);
+        assert.equal(answerOf(host, "bryn", { what: "shop", keeper: keeper.id }).stock.wares[0].left, ware.count - 1);
+        assert.equal(new LocalView(host).shop(keeper.id, "bryn").stock().wares[0].left, ware.count - 1);
+
+        // Kept with the world, each one's
+        const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
+
+        again.folk.get(keeper.id).shop = "masterArmorer";
+        assert.deepEqual(again.stockOf(keeper.id, HOST_PLAYER), host.stockOf(keeper.id, HOST_PLAYER));
+        assert.deepEqual(again.stockOf(keeper.id, "bryn"), host.stockOf(keeper.id, "bryn"));
+
+        // The next day: all of it there for both, and nothing kept of the day before
+        host.war.turn += 60;
+        host.advance(STEP_MS);
+
+        const next = host.stockOf(keeper.id, HOST_PLAYER);
+
+        assert.ok(next.wares.every(({ left: there, count }) => there === count) && next.specialLeft);
+        assert.deepEqual(host.command("bryn", { type: "buy", item: { id: next.wares[0].id, quality: next.wares[0].quality }, from: keeper.id }), { ok: true });
+        assert.deepEqual([...host.stocks.values()].map(({ day }) => day), [next.day], "(yesterday's let go)");
+
+        // A world as ever (what's sold gone for everyone): Ada's buying empties Bryn's shelves too
+        const shared = two();
+        const first = shared.host.stockOf(shared.keeper.id).wares[0];
+
+        assert.equal(shared.host.rules.stock, "shared");
+
+        for (let k = 0; k < first.count; k++) {
+            assert.deepEqual(shared.host.command(HOST_PLAYER, { type: "buy", item: { id: first.id, quality: first.quality }, from: shared.keeper.id }), { ok: true });
+        }
+
+        assert.equal(shared.host.stockOf(shared.keeper.id, "bryn").wares[0].left, 0);
+        assert.deepEqual(shared.host.command("bryn", { type: "buy", item: { id: first.id, quality: first.quality }, from: shared.keeper.id }), { ok: false, reason: "soldOut" });
+        assert.deepEqual(shared.host.command("bryn", { type: "buy", special: true, from: shared.keeper.id }), { ok: true });
+        assert.deepEqual(shared.host.command(HOST_PLAYER, { type: "buy", special: true, from: shared.keeper.id }), { ok: false, reason: "soldOut" });
     });
 
     it("sells its daily special once, as it is, rolls and all, for a quarter more", () => {

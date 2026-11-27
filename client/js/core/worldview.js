@@ -52,7 +52,7 @@ export class LocalView {
             stranger: host.strangerOf(id),
             hire: hirable ? host.hireOffer(me, id) : null,
             messenger: host.messengerSaysOf(id) ?? null,
-            stock: host.stockOf(id),
+            stock: host.stockOf(id, me),
             times: host.shopTimes(id),
             hired: (folkId) => Boolean(host.hired?.has(folkId)),
             menders: () => host.mendingOf(me).map((mending) => host.recallOffer(me, mending)).filter(Boolean),
@@ -60,11 +60,11 @@ export class LocalView {
         };
     }
 
-    /** A shop (its keeper's id): read whenever asked, { stock() (its daily stock, or null), times() (its prices' factor), threadWares() (what a thread adds to its wares) }. */
-    shop(keeper) {
+    /** A shop (its keeper's id), for a player (`me`: where what's sold is each character's own, the rule `stock`): read whenever asked, { stock() (its daily stock, or null), times() (its prices' factor), threadWares() (what a thread adds to its wares) }. */
+    shop(keeper, me = null) {
         const host = this.host;
 
-        return { stock: () => host.stockOf(keeper), times: () => host.shopTimes(keeper), threadWares: () => host.threadWaresOf(keeper) };
+        return { stock: () => host.stockOf(keeper, me), times: () => host.shopTimes(keeper), threadWares: () => host.threadWaresOf(keeper) };
     }
 
     /** The open trade a player's in (core/host.js trades), or null. */
@@ -130,7 +130,7 @@ export function answerOf(host, me, asked) {
         }
 
         if (asked?.what === "shop" && typeof asked.keeper === "string" && host.battle.actor(asked.keeper)) {
-            const shop = view.shop(asked.keeper);
+            const shop = view.shop(asked.keeper, me);
 
             return { stock: shop.stock() ?? null, times: shop.times() ?? 1, threadWares: shop.threadWares() ?? null };
         }
