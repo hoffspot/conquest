@@ -3652,6 +3652,19 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   a world tell a phrase chosen from words typed (Nanny Mode's channel, 2-37). The table's
   closed: no slots for a place or a name, no numbers, 16 characters at the most, and an id is
   its phrase's for good. Additive, with no `NET_VERSION` bump: the words still travel.
+- **Kept to the quick phrases** (core/netplay.js Session `restricted`; the scaling plan's 2-37,
+  Nanny Mode's hook). Whoever runs a world can say which players are kept to the quick chat's
+  phrases (`hosting.restricted = (id) => ...`; nobody, unless it's said, so every world plays
+  as before). It goes both ways:
+  - One who's restricted can't say a typed line, to their party, a player, those near, the area
+    or the squad: refused (`nanny`: "You can say the quick phrases only here").
+  - A typed line is sent to no one who's restricted, on any channel. It's said to the rest, and
+    its sayer is told how many it was kept from (`Hosting.chat` returns `missed`; a guest's game
+    is sent `{ kind: "missed", count }`, `Joining.onMissed`): "One player wasn't sent that."
+  - A phrase chosen goes both ways as ever.
+  Nothing sets the hook yet: who's restricted, and why, is the public worlds' to say (the plan's
+  `6B-16` on). Additive, with no `NET_VERSION` bump: a game that doesn't know `missed` or
+  `nanny` lets them go.
 - **Squads** (core/host.js `SQUAD`, the `squad` command; the scaling plan's 2-28). Parties
   allied: five at the most, led by one of them, whose leader speaks for it. Every squad command
   is a party's leader's, for their party (`unpartied`, `leader` otherwise):

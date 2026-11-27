@@ -47,6 +47,7 @@ export const REMOTE = Object.freeze({
         onWay: "A way the world found for someone (id, way), as it's heard, before it's played; or null for none",
         onChat: "A line said in the player's party, or a direct message",
         onUnsaid: "Why a line of the player's wasn't said",
+        onMissed: "How many a typed line of the player's was kept from (those kept to the quick phrases)",
     }),
 });
 

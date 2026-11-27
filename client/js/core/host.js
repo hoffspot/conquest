@@ -1373,6 +1373,7 @@ export const REFUSALS = Object.freeze({
     repeated: "You've just shouted that.",
     areaOff: "The area channel is off in this world.",
     noPhrase: "That's no phrase this world knows.",
+    nanny: "You can say the quick phrases only here: nothing typed.",
     closed: "They aren't taking direct messages.",
     leader: "Only the party's leader can do that.",
     squadded: "Your party's in a squad already.",

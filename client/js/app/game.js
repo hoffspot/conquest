@@ -1852,6 +1852,7 @@ export class Game {
         if (remote) {
             remote.onChat = (line) => this.chatHeard(line);
             remote.onUnsaid = (reason, said) => this.#unsaid(reason, said);
+            remote.onMissed = (count) => this.#missed(count);
         }
 
         /**
@@ -12850,9 +12851,19 @@ export class Game {
 
         if (said.ok) {
             this.sound?.play("tap");
+
+            if (said.missed) {
+                this.#missed(said.missed);
+            }
         } else {
             this.#unsaid(said.reason, said);
         }
+    }
+
+    // A typed line of the player's kept from some it was for: they're kept to the quick chat's
+    // phrases (core/netplay.js Session `restricted`)
+    #missed(count) {
+        this.hud.message(`${count === 1 ? "One player wasn't" : `${count} players weren't`} sent that: they take the quick phrases only.`, 3);
     }
 
     // A line of the player's not said (core/netplay.js CHAT_REFUSED), and why (nothing to say:
