@@ -113,6 +113,9 @@
 //                    { kind: "missed", count }                  (a typed line of theirs kept from so
 //                                                    many it was for: those kept to the quick
 //                                                    chat's phrases, Session `restricted`)
+//                    { kind: "nannied", ids, mine }             (who's kept to the quick chat's
+//                                                    phrases, Nanny Mode, and why they are, if
+//                                                    they are: Session tellNannied, nannyWhy)
 //                    { kind: "unsaid", reason, name }          (one of theirs not said: CHAT_REFUSED;
 //                                                    `name`, whose direct messages are closed)
 //                    { kind: "kicked", reason }                (sent out of the world: "afk", away too long;
@@ -399,6 +402,31 @@ export const DMS_TAKEN = Object.freeze({ party: true, world: true, shout: true }
  * last within it ("repeated"). A player who's turned shouts off (DMS_TAKEN `shout`: their game's
  * Hear shouts) is sent none, and can't shout themselves ("shoutsOff").
  */
+/**
+ * Nanny Mode as a world tells its games of it (Session tellNannied; the scaling plan's 6B-17): at
+ * most so many kept to the quick chat's phrases named in one telling, and the reasons one can be
+ * told they're kept for: the country they seem to connect from ("country"), one seen from such a
+ * country lately ("held"), a country that couldn't be told ("unknown"), their own choice
+ * ("chosen").
+ */
+export const NANNIED_MOST = 64;
+export const NANNY_WHYS = Object.freeze(["country", "held", "unknown", "chosen"]);
+
+/**
+ * Why a player's kept to the quick chat's phrases, as it's told and heard: { why (one of
+ * NANNY_WHYS, or null: not said), code (the country, two capitals, or null), threshold (the age
+ * its rules name, or null) }, from anything given.
+ */
+export function nannyWhy(given) {
+    const { why = null, code = null, threshold = null } = isObject(given) ? given : {};
+
+    return {
+        why: NANNY_WHYS.includes(why) ? why : null,
+        code: typeof code === "string" && /^[A-Z]{2}$/.test(code) ? code : null,
+        threshold: Number.isInteger(threshold) && threshold > 0 && threshold < 100 ? threshold : null,
+    };
+}
+
 export const SHOUT = Object.freeze({ reach: 60, burst: 3, burstMs: 10000 });
 
 /**
@@ -734,6 +762,42 @@ export class Session {
          * quickchat.js, a line's `quick`) goes both ways as ever.
          */
         this.restricted = () => false;
+
+        /**
+         * Nanny Mode told to the games (the plan's 6B-17): why a player's kept to the phrases, as
+         * they alone are told (`restrictedWhy(id)`: { why, code, threshold }, nannyWhy; null,
+         * nothing known); the host's own player told who's kept (`onNannied({ ids, mine })`); and
+         * whether anyone's been told of anyone (`nanniedTold`: nothing's sent till someone's kept).
+         */
+        this.restrictedWhy = () => null;
+        this.onNannied = () => {};
+        this.nanniedTold = false;
+    }
+
+    /**
+     * Every game told who's kept to the quick chat's phrases (`restricted`), and each of those why
+     * (`restrictedWhy`): a "nannied" message, { ids, mine } (`mine` null to anyone not kept). Told
+     * as someone comes in or leaves, and by whoever runs the world when who's kept changes. Says
+     * nothing while nobody's kept and nobody's been told of anyone.
+     */
+    tellNannied() {
+        const ids = [...this.host.players.keys()].filter((id) => this.restricted(id)).slice(0, NANNIED_MOST);
+
+        if (!ids.length && !this.nanniedTold) {
+            return;
+        }
+
+        const mineOf = (id) => (ids.includes(id) ? nannyWhy(this.restrictedWhy(id)) : null);
+
+        this.nanniedTold = ids.length > 0;
+
+        if (this.host.players.has(HOST_PLAYER)) {
+            this.onNannied({ ids, mine: mineOf(HOST_PLAYER) });
+        }
+
+        for (const [peer, id] of this.players) {
+            this.hosting.post(peer, "nannied", encode({ kind: "nannied", ids, mine: mineOf(id) }));
+        }
     }
 
     /** What sends the world itself to those who've joined (the Hosting's other part). */
@@ -1224,6 +1288,11 @@ export class Session {
         for (const [peer, { id }] of entering) {
             this.onJoin(id, peer);
         }
+
+        // (And who's kept to the quick chat's phrases, if anyone is: tellNannied)
+        if (entering.length) {
+            this.tellNannied();
+        }
     }
 
     /**
@@ -1668,6 +1737,7 @@ export class Session {
 
         this.hosting.flush();
         this.onLeave(id, peer, character && { ...character, place, vitals });
+        this.tellNannied();
     }
 
     /** Everyone who'd joined, or was waiting to, out of the world. */
@@ -2160,7 +2230,7 @@ export class Hosting {
 
 // Each of a hosting's parts' own, as the hosting's own: read and set there as they always were
 for (const [part, keys] of [
-    ["session", ["clock", "players", "rtts", "done", "toldSelf", "heardAt", "quieted", "seq", "nextGuest", "allowance", "dropped", "hidden", "paused", "onJoin", "onLeave", "onKick", "most", "welcomes", "waiting", "ground", "loading", "placed", "idOf", "byCharacter", "characterOf", "onReady", "onAway", "onHold", "roleOf", "netcode", "onChat", "said", "dms", "restricted"]],
+    ["session", ["clock", "players", "rtts", "done", "toldSelf", "heardAt", "quieted", "seq", "nextGuest", "allowance", "dropped", "hidden", "paused", "onJoin", "onLeave", "onKick", "most", "welcomes", "waiting", "ground", "loading", "placed", "idOf", "byCharacter", "characterOf", "onReady", "onAway", "onHold", "roleOf", "netcode", "onChat", "said", "dms", "restricted", "restrictedWhy", "onNannied", "nanniedTold"]],
     ["feed", ["ops", "steps", "checkDue", "motionDue", "sendsPlaces", "asked", "worlds", "sparing", "taken"]],
 ]) {
     for (const key of keys) {
@@ -2178,7 +2248,7 @@ for (const [part, keys] of [
 
 // And what each does that whoever runs the world asks of it
 for (const [part, names] of [
-    ["session", ["hear", "chat", "takeDms", "admit", "coming", "pause", "still", "kick", "gone", "slowest", "present"]],
+    ["session", ["hear", "chat", "takeDms", "admit", "coming", "pause", "still", "kick", "gone", "slowest", "present", "tellNannied"]],
     ["feed", ["turned", "resync"]],
 ]) {
     for (const name of names) {
@@ -2352,6 +2422,15 @@ export class Joining {
 
         /** Told a typed line of theirs was kept from so many it was for (`count`: they're kept to the quick chat's phrases). */
         this.onMissed = () => {};
+
+        /**
+         * Nanny Mode as the world's told it (Session tellNannied): who's kept to the quick chat's
+         * phrases (`nannied`, ids), and why this player is (`nanny`: { why, code, threshold }; null,
+         * they aren't). Kept, a typed line that reaches them is let go of here too, unshown.
+         */
+        this.nannied = new Set();
+        this.nanny = null;
+        this.onNannied = () => {};
     }
 
     /**
@@ -2482,9 +2561,24 @@ export class Joining {
                 const text = chatLine(message.text);
                 const dm = (message.dm === "party" || message.dm === "world") && typeof message.to === "string" ? { to: message.to, toName: typeof message.toName === "string" ? message.toName : "", dm: message.dm } : {};
 
-                if (text && typeof message.from === "string") {
-                    this.onChat({ from: message.from, name: typeof message.name === "string" ? message.name : "", text, ...dm, ...(message.shout === true ? { shout: true } : {}), ...(message.area === true ? { area: true } : {}), ...(message.squad === true ? { squad: true } : {}), ...(quickText(message.quick) !== null ? { quick: message.quick } : {}) });
+                // (Kept to the quick chat's phrases: a typed line's let go of, unshown, whoever
+                // sent it on; a phrase is shown as the table has it)
+                if (this.nanny && quickText(message.quick) === null) {
+                    break;
                 }
+
+                if (text && typeof message.from === "string") {
+                    this.onChat({ from: message.from, name: typeof message.name === "string" ? message.name : "", text: this.nanny ? quickText(message.quick) : text, ...dm, ...(message.shout === true ? { shout: true } : {}), ...(message.area === true ? { area: true } : {}), ...(message.squad === true ? { squad: true } : {}), ...(quickText(message.quick) !== null ? { quick: message.quick } : {}) });
+                }
+
+                break;
+            }
+            case "nannied": {
+                const ids = Array.isArray(message.ids) ? message.ids.filter((id) => typeof id === "string").slice(0, NANNIED_MOST) : [];
+
+                this.nannied = new Set(ids);
+                this.nanny = message.mine === null || message.mine === undefined ? null : nannyWhy(message.mine);
+                this.onNannied({ ids, mine: this.nanny });
 
                 break;
             }

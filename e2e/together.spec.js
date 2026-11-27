@@ -1660,6 +1660,155 @@ test("a direct message from the Players tab: To Bryn in the host's chat, From th
     await guestContext.close();
 });
 
+test("Nanny Mode in the chat panel (the scaling plan's 6B-17): nothing of it drawn till someone's in it; Bryn kept to the quick phrases by the host's world, the host's typed shout never reaches Bryn and the host's told, a phrase does; Bryn has the notice, why and how it's lifted, and phrases in place of the input; Bryn's name carries the icon and its label, and where they are isn't told; lifted, it's all gone", async ({ ownBrowser: browser }) => {
+    const hostContext = await browser.newContext();
+    const guestContext = await browser.newContext();
+    const host = await hostContext.newPage();
+    const guest = await guestContext.newPage();
+
+    await cheaply(host, guest);
+
+    for (const page of [host, guest]) {
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    await guest.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), BRYN);
+    await host.goto("/?play&seed=2");
+    await playing(host, null, LONGER);
+    await undrawn(host);
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+    const ada = await host.evaluate(() => window.pellagos.game.host.players.get("player").hero.name);
+
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+    await guest.goto(`/?join=${code}`);
+    await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
+    await playing(guest, null, LONGER);
+    await undrawn(guest);
+    await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
+
+    const LABEL = "Nanny Mode: quick phrases only";
+    const menu = host.getByRole("dialog", { name: "Party" });
+    const theirs = guest.getByRole("dialog", { name: "Party" });
+    const to = menu.getByRole("combobox", { name: "Who to say it to" });
+    const shouting = menu.getByRole("textbox", { name: "Something to shout to everyone nearby" });
+    const row = menu.locator('.party-everyone-list .party-player[data-id="guest-1"]');
+
+    // Nobody in it: nothing of it drawn, in either game
+    await host.locator("#partybutton").click();
+    await menu.getByRole("tab", { name: "Players" }).click();
+    await expect(row.locator(".party-where")).not.toHaveText("");
+    await expect(menu.locator(".nanny-icon:visible")).toHaveCount(0);
+    await menu.getByRole("tab", { name: "Chat" }).click();
+    await expect(menu.locator(".chat-nanny, .chat-nanny-what, .chat-nanny-note, .chat-phrases")).toHaveCount(4);
+    await expect(menu.locator(".chat-nanny:visible, .chat-nanny-what:visible, .chat-nanny-note:visible, .chat-phrases:visible")).toHaveCount(0);
+    await guest.locator("#partybutton").click();
+    await theirs.getByRole("tab", { name: "Chat" }).click();
+    await expect(theirs.locator(".chat-nanny")).toBeHidden();
+    await expect(theirs.locator(".chat-input")).toBeVisible();
+
+    // Bryn kept to the quick phrases, by a test's setting of the host's world (as a server's
+    // world says of one connecting from a listed country: server/access/nanny.js)
+    await host.evaluate(() => {
+        const { hosting } = window.pellagos.game;
+
+        hosting.restricted = (id) => id === "guest-1";
+        hosting.restrictedWhy = () => ({ why: "country", code: "GB", threshold: 16 });
+        hosting.tellNannied();
+    });
+
+    // Bryn: the notice, why, and how it's lifted; no input, every phrase in its place
+    const notice = theirs.locator(".chat-nanny");
+
+    await expect(notice).toBeVisible({ timeout: 30000 });
+    await expect(notice).toContainText("Nanny Mode is on. You can send and see quick phrases only.");
+    await expect(notice.locator(".chat-nanny-why")).toHaveText("The rules where you seem to be connecting from (United Kingdom) limit typed chat with players you don't know until your age has been checked.");
+    await expect(notice.locator(".chat-nanny-off")).toHaveText("Age checks aren't set up on this server yet, so Nanny Mode can't be turned off here for now.");
+    await expect(theirs.locator(".chat-input")).toBeHidden();
+    await expect(theirs.locator(".chat-send")).toBeHidden();
+    await expect(theirs.locator(".chat-phrases .chat-phrase")).toHaveCount(18);
+    await expect(theirs.locator(".chat-phrases")).toBeVisible();
+    await expect(theirs.locator(".chat-nanny-what")).toBeVisible();
+
+    // (And its row under Game options, Chat and players)
+    expect(await guest.locator("#nannyrow").evaluate((one) => one.hidden)).toBe(false);
+    expect(await host.locator("#nannyrow").evaluate((one) => one.hidden)).toBe(true);
+
+    // The host: Bryn's name with the icon, which carries its label, and the chip; where Bryn is
+    // isn't told, and they're under Everyone else
+    await menu.getByRole("tab", { name: "Players" }).click();
+    await expect(row.locator(".nanny-icon")).toHaveAttribute("aria-label", LABEL, { timeout: 30000 });
+    await expect(row.locator(".nanny-icon title")).toHaveText(LABEL);
+    await expect(row.locator(".player-chip.nanny")).toHaveText(LABEL);
+    await expect(row.locator(".party-where")).toHaveText("");
+    expect(await row.evaluate((one) => {
+        let heading = one.previousElementSibling;
+
+        while (heading && !heading.classList.contains("party-section")) {
+            heading = heading.previousElementSibling;
+        }
+
+        return heading?.textContent ?? "";
+    })).toMatch(/^Everyone else/);
+
+    // A message to Bryn alone: the phrases in place of the input, under the icon and its label
+    await row.locator(".party-message").click();
+    await expect(to).toHaveValue("guest-1");
+    await expect(to.locator('option[value="guest-1"]')).toHaveText("Bryn ☂");
+    await expect(menu.locator(".chat-input")).toBeHidden();
+    await expect(menu.locator(".chat-phrases-head")).toContainText(LABEL);
+    await expect(menu.locator(".chat-phrases-head .nanny-icon")).toHaveAttribute("aria-label", LABEL);
+
+    // The host's typed shout: the sender's note says who won't see it; it never reaches Bryn,
+    // and the host's told so
+    await to.selectOption({ label: "Shout (nearby)" });
+    await expect(menu.locator(".chat-nanny-note")).toHaveText("1 of 1 here is in Nanny Mode: they'll see quick phrases, not typed lines");
+    await shouting.fill("Meet me at the well");
+    await shouting.press("Enter");
+    await expect(menu.locator(".chat-line.shout.mine").last()).toHaveText("You shout: Meet me at the well", { timeout: 30000 });
+    await expect(host.locator("#hud")).toContainText("One player wasn't sent that: they take the quick phrases only.");
+
+    // A phrase arrives
+    await menu.locator('.chat-quick:not(.chat-phrases) .chat-phrase[data-quick="4"]').click();
+    await expect(theirs.locator(".chat-line.shout").last()).toContainText(`${ada} shouts: Help!`, { timeout: 30000 });
+    await expect(theirs.locator(".chat-log")).not.toContainText("Meet me at the well");
+    expect(await guest.evaluate(() => window.pellagos.game.chatLines.map(({ text }) => text))).toEqual(["Help!"]);
+
+    // Bryn answers with one: heard by the host, the icon by Bryn's name
+    await theirs.getByRole("combobox", { name: "Who to say it to" }).selectOption({ label: "Shout (nearby)" });
+    await theirs.locator('.chat-phrases .chat-phrase[data-quick="6"]').click();
+    await expect(menu.locator(".chat-line.shout:not(.mine)").last()).toContainText("Thanks!", { timeout: 30000 });
+    await expect(menu.locator(".chat-line.shout:not(.mine)").last().locator(".nanny-icon")).toHaveAttribute("aria-label", LABEL);
+
+    // Lifted: nothing of it drawn again, and Bryn types as ever
+    await host.evaluate(() => {
+        const { hosting } = window.pellagos.game;
+
+        hosting.restricted = () => false;
+        hosting.tellNannied();
+    });
+    await expect(notice).toBeHidden({ timeout: 30000 });
+    await expect(theirs.locator(".chat-input")).toBeVisible();
+    await expect(theirs.locator(".chat-phrases")).toBeHidden();
+    await expect(menu.locator(".chat-nanny-note")).toBeHidden();
+    await expect(menu.locator(".chat-nanny-what")).toBeHidden();
+    await menu.getByRole("tab", { name: "Players" }).click();
+    await expect(row.locator(".nanny-icon")).toHaveCount(0);
+    await expect(row.locator(".party-where")).not.toHaveText("");
+
+    await hostContext.close();
+    await guestContext.close();
+});
+
 test("two players walk about a while: the joined copy's checked against the host's every fifth of a second and never drifts; the guest's hero drawn going at once; what's sent measured", async ({ ownBrowser: browser }) => {
     const hostContext = await browser.newContext();
     const guestContext = await browser.newContext();

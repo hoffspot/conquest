@@ -7209,6 +7209,54 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     min-width: 0;
 }
 
+/* Nanny Mode in the Chat (app/partypanel.js): the notice of a player in it, its icon by a name,
+   the sender's note, and what the icon means */
+.chat-nanny {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    border-radius: 9px;
+    border: 1px solid rgba(150, 190, 255, 0.5);
+    background: rgba(150, 190, 255, 0.1);
+}
+
+.chat-nanny .journal-note {
+    margin: 0;
+    color: var(--ink);
+}
+
+.nanny-icon {
+    width: 1.1em;
+    height: 1.1em;
+    margin: 0 0.3em;
+    vertical-align: -0.18em;
+    color: #b6cdfa;
+}
+
+.chat-nanny .nanny-icon:first-child,
+.chat-phrases-head .nanny-icon,
+.chat-nanny-what .nanny-icon {
+    margin-left: 0;
+}
+
+.chat-phrases-head,
+.chat-nanny-note {
+    margin: 0;
+}
+
+.chat-nanny-what summary {
+    font-size: 13px;
+    color: var(--ink);
+    cursor: pointer;
+}
+
+.player-chip.nanny {
+    color: #b6cdfa;
+    border-color: rgba(150, 190, 255, 0.55);
+    background: rgba(150, 190, 255, 0.12);
+}
+
 /* Hear shouts, under the Chat's line: on, or turned off */
 .chat-shouts {
     display: flex;

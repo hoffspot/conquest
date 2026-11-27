@@ -3662,9 +3662,34 @@ party*). Players play together as a party of up to four (`PARTY.most`):
     its sayer is told how many it was kept from (`Hosting.chat` returns `missed`; a guest's game
     is sent `{ kind: "missed", count }`, `Joining.onMissed`): "One player wasn't sent that."
   - A phrase chosen goes both ways as ever.
-  Nothing sets the hook yet: who's restricted, and why, is the public worlds' to say (the plan's
-  `6B-16` on). Additive, with no `NET_VERSION` bump: a game that doesn't know `missed` or
+  A world on a server sets the hook from its Nanny Mode settings (docs/SERVER.md *Nanny Mode*;
+  off as shipped). Additive, with no `NET_VERSION` bump: a game that doesn't know `missed` or
   `nanny` lets them go.
+- **Nanny Mode in the chat panel** (app/partypanel.js; the scaling plan's 6B-17). The world
+  tells every game who's kept to the quick phrases, and each of those why
+  (`hosting.tellNannied()`: `{ kind: "nannied", ids, mine }`, `mine` being `{ why, code,
+  threshold }` for one who's kept and null for anyone else; `nannyWhy`, `NANNY_WHYS`). It's
+  told as someone comes in or leaves and when who's kept changes, and nothing is sent while
+  nobody is. In the page (`game.nanniedHeard`):
+  - **The one kept** has a notice at the top of the Chat tab: "Nanny Mode is on", why (the
+    rules where they seem to connect from, with the country's name; a country that couldn't be
+    told; or their own choice), and how it's lifted (`nannyWords`). No age check is set up on
+    any server yet, so for now it says it can't be turned off here. The input and Send give way
+    to every phrase of the quick chat's table. A typed line that reaches their game all the
+    same is let go of, unshown, with nothing in its place (`Joining`, `game.chatHeard`), and a
+    phrase is shown in the table's own words. Game options, Chat and players, has a Nanny Mode
+    row while it's on.
+  - **Everyone else** sees the icon (a speech bubble under an umbrella, labelled "Nanny Mode:
+    quick phrases only") by that player's name in the chat's lines, in To (an umbrella) and in
+    the Players tab, with the same words as a chip (`playerStatus`), and nowhere outside the
+    party menu. A message to them alone offers the phrases in place of the input. Under the
+    input, the sender's note says how many of those a typed line would go to won't see it
+    (`nannyNote`: "2 of 5 here are in Nanny Mode..."; to the area, how many in the world).
+    "What's this?" explains the icon. The Players tab doesn't say where such a player is to
+    anyone outside their party, and lists them under Everyone else, never Nearby.
+  - None of it is drawn while nobody in the world is in Nanny Mode.
+  The player's own switch, with a lock code, is the plan's 6B-18; the credit for the country
+  file comes with it (6B-19).
 - **Squads** (core/host.js `SQUAD`, the `squad` command; the scaling plan's 2-28). Parties
   allied: five at the most, led by one of them, whose leader speaks for it. Every squad command
   is a party's leader's, for their party (`unpartied`, `leader` otherwise):

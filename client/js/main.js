@@ -1024,6 +1024,11 @@ function applyChat(game = state.game) {
     game.blocked = settings.blocked;
     game.onBlocked = (blocked) => applySetting("blocked", blocksOf(blocked));
     game.onHearShouts = (on) => applySetting("hearShouts", Boolean(on));
+    // (Nanny Mode, as the world says of the player: its row under Chat and players, there only while it's on)
+    game.onNanny = (nanny) => {
+        $("#nannyrow").hidden = !nanny;
+    };
+    game.onNanny(game.nanny);
     game.takeDms({ party: !settings.refusePartyDms, world: !settings.refuseWorldDms, shout: settings.hearShouts });
 }
 

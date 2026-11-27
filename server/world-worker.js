@@ -22,9 +22,9 @@
 // It plays under the id `<player>.<slot>`, so that if the server stops without its players
 // leaving, each can still be put back in their slot when the world's next opened.
 //
-//   supervisor -> worker   { type: "enter", peer, player, role, nanny }   someone come in by a key (nanny: kept
+//   supervisor -> worker   { type: "enter", peer, player, role, nanny, why }   someone come in by a key (nanny: kept
 //                                                                  to the quick chat's phrases, access/nanny.js)
-//                          { type: "nanny", peer, on }             one of them kept to them from now, or not
+//                          { type: "nanny", peer, on, why }        one of them kept to them from now, or not
 //                          { type: "data", peer, text }            what their game said
 //                          { type: "drop", peer } / "back"         their link dropped, or came back
 //                          { type: "leave", peer }                 they've gone
@@ -238,6 +238,8 @@ hosting.restricted = (id) => {
 
     return false;
 };
+// (And why, as each is told alone: the chat panel's notice, core/netplay.js Session tellNannied)
+hosting.restrictedWhy = (id) => [...peers.values()].find((one) => one.nanny && hosting.players.get(one.peer) === id)?.why ?? null;
 hosting.idOf = (peer) => {
     const one = peers.get(peer);
 
@@ -585,12 +587,13 @@ setTimeout(tick, WORKER.tick);
 parentPort.on("message", async (message) => {
     switch (message.type) {
         case "enter":
-            peers.set(message.peer, { peer: message.peer, player: message.player, role: message.role, nanny: message.nanny === true, slot: null, linked: true, ready: false, hidden: false, held: false, since: clock(), character: null, asked: false });
+            peers.set(message.peer, { peer: message.peer, player: message.player, role: message.role, nanny: message.nanny === true, why: message.nanny === true ? (message.why ?? null) : null, slot: null, linked: true, ready: false, hidden: false, held: false, since: clock(), character: null, asked: false });
             look();
             break;
         case "nanny":
             if (peers.has(message.peer)) {
-                peers.get(message.peer).nanny = message.on === true;
+                Object.assign(peers.get(message.peer), { nanny: message.on === true, why: message.on === true ? (message.why ?? null) : null });
+                hosting.tellNannied();
             }
 
             break;

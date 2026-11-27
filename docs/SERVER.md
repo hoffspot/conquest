@@ -979,10 +979,15 @@ player the server doesn't keep yet (6B-1, 6B-21); `nannyFor` reads both records 
 them.
 
 The server works it out as a player comes in and tells the world's thread with their entry
-(`{ type: "enter", ..., nanny }`), and again for whoever's in a world when a Nanny Mode setting
-changes or a world's made public or not (`{ type: "nanny", peer, on }`): no restart. The world
-asks it of every chat line (core/netplay.js Session `restricted`). Each player's flag is in a
-world's players lists (`nanny`), for the management page.
+(`{ type: "enter", ..., nanny, why }`), and again for whoever's in a world when a Nanny Mode
+setting changes or a world's made public or not (`{ type: "nanny", peer, on, why }`): no restart.
+The world asks it of every chat line (core/netplay.js Session `restricted`). Each player's flag
+is in a world's players lists (`nanny`), for the management page.
+
+The world tells its games too (6B-17): every game who's in it, for the icon by their names, and
+each of those why (`why`: the reason, the country's code and its age, and nothing else known of
+them), for the notice at the top of their Chat tab (docs/WAR.md *Parties*, Nanny Mode in the
+chat panel). With no age check set up, that notice says it can't be turned off here for now.
 
 ## Crash reports
 
