@@ -1723,6 +1723,104 @@ describe("playing together (netplay.js)", () => {
         assert.deepEqual(heard.bryn.slice(-2), [{ from: HOST_PLAYER, name: "Ada", text: "Over here!", shout: true, quick: 9 }, { from: HOST_PLAYER, name: "Ada", text: "Thanks!", to: "guest-1", toName: "Bryn", dm: "party", quick: 6 }]);
     });
 
+    it("keeps one who's restricted to the quick chat's phrases (the scaling plan's 2-37): nothing typed said by them, nothing typed sent them, on every channel, the sayer told how many missed it; a phrase chosen both ways as ever; and no one restricted unless whoever runs the world says", () => {
+        const { host, hosting, join, deliver } = opened();
+        const [bryn, cass, dee] = ["Bryn", "Cass", "Dee"].map((name) => join(guest(name)));
+        const names = { host: HOST_PLAYER, bryn: "guest-1", cass: "guest-2", dee: "guest-3" };
+        const heard = { host: [], bryn: [], cass: [], dee: [] };
+        const unsaid = { bryn: [], cass: [], dee: [] };
+        const missed = { bryn: [], cass: [], dee: [] };
+        const kept = new Set();
+
+        hosting.onChat = (line) => heard.host.push(line.text);
+
+        for (const [who, { joining }] of [["bryn", bryn], ["cass", cass], ["dee", dee]]) {
+            joining.onChat = (line) => heard[who].push(line.text);
+            joining.onUnsaid = (reason) => unsaid[who].push(reason);
+            joining.onMissed = (count) => missed[who].push(count);
+        }
+
+        assert.ok(CHAT_REFUSED.includes("nanny") && REFUSALS.nanny);
+        assert.equal(hosting.restricted("guest-1"), false, "(nobody, till it's said)");
+
+        // Ada's party with Bryn, Cass's with Dee, the two allied; all four where they came in
+        host.command(HOST_PLAYER, { type: "party", do: "invite", who: "guest-1" });
+        bryn.joining.command({ type: "party", do: "accept" });
+        cass.joining.command({ type: "party", do: "invite", who: "guest-3" });
+        deliver();
+        dee.joining.command({ type: "party", do: "accept" });
+        deliver();
+        host.command(HOST_PLAYER, { type: "squad", do: "form", entry: "open" });
+        cass.joining.command({ type: "squad", do: "join", squad: host.squadFor(HOST_PLAYER).id });
+        deliver();
+
+        // Each line said by Ada on each channel, typed and chosen: who hears it, and what she's told
+        const said = (how, expected, told) => {
+            for (const list of Object.values(heard)) {
+                list.length = 0;
+            }
+
+            const result = hosting.chat(how.quick ? "" : `typed ${JSON.stringify(how)}`, how);
+
+            deliver();
+            assert.deepEqual(Object.entries(heard).filter(([, lines]) => lines.length).map(([who]) => who), expected, JSON.stringify({ how, kept: [...kept] }));
+            assert.deepEqual(result, told, JSON.stringify(how));
+        };
+
+        hosting.restricted = (id) => kept.has(id);
+        // (The burst's a world's own: each line a minute on)
+        const later = () => host.advance(15000);
+
+        // No one restricted: as ever
+        said({}, ["host", "bryn"], { ok: true });
+        said({ squad: true }, ["host", "bryn", "cass", "dee"], { ok: true });
+
+        // Bryn and Dee restricted: nothing typed reaches them, on any channel; a phrase does
+        kept.add(names.bryn).add(names.dee);
+        later();
+
+        for (const [how, typed, chosen] of [
+            [{}, [["host"], 1], ["host", "bryn"]],
+            [{ to: names.bryn }, [["host"], 1], ["host", "bryn"]],
+            [{ to: names.cass }, [["host", "cass"], 0], ["host", "cass"]],
+            [{ shout: true }, [["host", "cass"], 2], ["host", "bryn", "cass", "dee"]],
+            [{ area: true }, [["host", "cass"], 2], ["host", "bryn", "cass", "dee"]],
+            [{ squad: true }, [["host", "cass"], 2], ["host", "bryn", "cass", "dee"]],
+        ]) {
+            said(how, typed[0], { ok: true, ...(typed[1] ? { missed: typed[1] } : {}) });
+            later();
+            said({ ...how, quick: 4 }, chosen, { ok: true });
+            later();
+        }
+
+        // One restricted says nothing typed, on any channel: told why, and no one hears it
+        for (const how of [{}, { to: names.host }, { shout: true }, { area: true }, { squad: true }]) {
+            for (const list of Object.values(heard)) {
+                list.length = 0;
+            }
+
+            assert.deepEqual(bryn.joining.chat("Meet me by the well", how), { ok: true, pending: true });
+            deliver();
+            assert.deepEqual(Object.values(heard).flat(), [], JSON.stringify(how));
+        }
+
+        assert.deepEqual(unsaid.bryn, Array(5).fill("nanny"));
+
+        // Their phrase is said, to their party; and a guest's typed line kept from them is told to that guest
+        later();
+        assert.deepEqual(bryn.joining.chat("", { quick: 6 }), { ok: true, pending: true });
+        assert.deepEqual(cass.joining.chat("Typed, to the squad", { squad: true }), { ok: true, pending: true });
+        deliver();
+        assert.deepEqual([heard.host, heard.bryn, heard.cass, heard.dee], [["Thanks!", "Typed, to the squad"], ["Thanks!"], ["Typed, to the squad"], []]);
+        assert.deepEqual(missed, { bryn: [], cass: [2], dee: [] });
+
+        // The host's own player restricted: the same
+        kept.add(HOST_PLAYER);
+        later();
+        assert.deepEqual(hosting.chat("Typed"), { ok: false, reason: "nanny" });
+        assert.deepEqual(hosting.chat("", { quick: 1 }), { ok: true });
+    });
+
     it("keeps the quick chat's phrases a closed table: ids from 1 with none skipped, each a few words with no number or name in it, and each place's buttons phrases of it", () => {
         assert.deepEqual(QUICK_CHAT.map(({ id }) => id), QUICK_CHAT.map((_, k) => k + 1));
         assert.equal(new Set(QUICK_CHAT.map(({ text }) => text)).size, QUICK_CHAT.length);

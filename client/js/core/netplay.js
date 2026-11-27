@@ -110,6 +110,9 @@
 //                                                    (a line said in their party; or a direct
 //                                                    message, to them or theirs heard back: `dm`
 //                                                    "party" or "world", `to` whom it went to)
+//                    { kind: "missed", count }                  (a typed line of theirs kept from so
+//                                                    many it was for: those kept to the quick
+//                                                    chat's phrases, Session `restricted`)
 //                    { kind: "unsaid", reason, name }          (one of theirs not said: CHAT_REFUSED;
 //                                                    `name`, whose direct messages are closed)
 //                    { kind: "kicked", reason }                (sent out of the world: "afk", away too long;
@@ -381,7 +384,7 @@ export const CHAT = Object.freeze({ most: 200, burst: 5, burstMs: 10000, kept: 5
  * Why a line wasn't said (as host.js REFUSALS names them): nothing to say, in no party, too many too
  * quickly; a direct message to no one in the world, or to one not taking that kind ("closed").
  */
-export const CHAT_REFUSED = Object.freeze(["empty", "unpartied", "chatty", "nobody", "closed", "shoutsOff", "repeated", "areaOff", "squadless", "noPhrase"]);
+export const CHAT_REFUSED = Object.freeze(["empty", "unpartied", "chatty", "nobody", "closed", "shoutsOff", "repeated", "areaOff", "squadless", "noPhrase", "nanny"]);
 
 /**
  * Which lines a player takes till they say otherwise: direct messages from their party and from
@@ -723,6 +726,14 @@ export class Session {
         this.shouted = new Map();
         /** Whether the area channel's on in this world (AREA_CHAT): off, a line said to it is refused. */
         this.areaChat = true;
+
+        /**
+         * Whether a player (their id) is kept to the quick chat's phrases (Nanny Mode; the scaling
+         * plan's 2-37): nobody, unless whoever runs the world says otherwise. One who is can't say
+         * a typed line (`nanny`) and is sent none, on any channel; a phrase chosen (core/
+         * quickchat.js, a line's `quick`) goes both ways as ever.
+         */
+        this.restricted = () => false;
     }
 
     /** What sends the world itself to those who've joined (the Hosting's other part). */
@@ -930,6 +941,11 @@ export class Session {
             return { ok: false, reason: "areaOff" };
         }
 
+        // (One kept to the quick chat's phrases: nothing typed)
+        if (quick === null && this.restricted(id)) {
+            return { ok: false, reason: "nanny" };
+        }
+
         if (!(this.dms.get(id) ?? DMS_TAKEN).shout) {
             return { ok: false, reason: "shoutsOff" };
         }
@@ -961,7 +977,23 @@ export class Session {
             return other === id || (near && (this.dms.get(other) ?? DMS_TAKEN).shout);
         };
 
-        for (const member of [...this.host.players.keys()].filter(hears)) {
+        return this.#told(id, [...this.host.players.keys()].filter(hears), line, sent);
+    }
+
+    // A line told to those it's for (`members`): the host's own player here, the others sent it.
+    // Typed (not a phrase chosen, `quick`), it's kept from whoever's kept to the quick chat's
+    // phrases (`restricted`), the sayer told how many it was kept from: { ok: true, missed } for
+    // the host's own, a "missed" message to anyone else
+    #told(id, members, line, sent) {
+        let missed = 0;
+
+        for (const member of members) {
+            if (member !== id && line.quick === undefined && this.restricted(member)) {
+                missed++;
+
+                continue;
+            }
+
             if (member === HOST_PLAYER) {
                 this.onChat(line);
             } else {
@@ -973,7 +1005,15 @@ export class Session {
             }
         }
 
-        return { ok: true };
+        if (missed && id !== HOST_PLAYER) {
+            const peer = [...this.players].find(([, player]) => player === id)?.[0];
+
+            if (peer !== undefined) {
+                this.hosting.post(peer, "missed", encode({ kind: "missed", count: missed }));
+            }
+        }
+
+        return { ok: true, ...(missed ? { missed } : {}) };
     }
 
     // A line said by a player to their party: to each in it (the host's own player told here, the
@@ -993,6 +1033,11 @@ export class Session {
 
         if (squad && !this.host.squadFor(id)) {
             return { ok: false, reason: "squadless" };
+        }
+
+        // (One kept to the quick chat's phrases: nothing typed, to anyone)
+        if (quick === null && this.restricted(id)) {
+            return { ok: false, reason: "nanny" };
         }
 
         if (to !== null && (!other || to === id)) {
@@ -1023,19 +1068,7 @@ export class Session {
         const line = { from: id, name: this.host.players.get(id)?.hero.name ?? "", text, ...(dm ? { to, toName: other.hero.name, dm } : {}), ...(squad ? { squad: true } : {}), ...(quick !== null ? { quick } : {}) };
         const sent = encode({ kind: "chat", ...line });
 
-        for (const member of dm ? [id, to] : squad ? [...party.members, ...this.host.allies(id)] : party.members) {
-            if (member === HOST_PLAYER) {
-                this.onChat(line);
-            } else {
-                const peer = [...this.players].find(([, player]) => player === member)?.[0];
-
-                if (peer !== undefined) {
-                    this.hosting.post(peer, "chat", sent);
-                }
-            }
-        }
-
-        return { ok: true };
+        return this.#told(id, dm ? [id, to] : squad ? [...party.members, ...this.host.allies(id)] : party.members, line, sent);
     }
 
     // Someone joining, with their character: into the world and sent it as it is, at once; or,
@@ -2127,7 +2160,7 @@ export class Hosting {
 
 // Each of a hosting's parts' own, as the hosting's own: read and set there as they always were
 for (const [part, keys] of [
-    ["session", ["clock", "players", "rtts", "done", "toldSelf", "heardAt", "quieted", "seq", "nextGuest", "allowance", "dropped", "hidden", "paused", "onJoin", "onLeave", "onKick", "most", "welcomes", "waiting", "ground", "loading", "placed", "idOf", "byCharacter", "characterOf", "onReady", "onAway", "onHold", "roleOf", "netcode", "onChat", "said", "dms"]],
+    ["session", ["clock", "players", "rtts", "done", "toldSelf", "heardAt", "quieted", "seq", "nextGuest", "allowance", "dropped", "hidden", "paused", "onJoin", "onLeave", "onKick", "most", "welcomes", "waiting", "ground", "loading", "placed", "idOf", "byCharacter", "characterOf", "onReady", "onAway", "onHold", "roleOf", "netcode", "onChat", "said", "dms", "restricted"]],
     ["feed", ["ops", "steps", "checkDue", "motionDue", "sendsPlaces", "asked", "worlds", "sparing", "taken"]],
 ]) {
     for (const key of keys) {
@@ -2316,6 +2349,9 @@ export class Joining {
          */
         this.onChat = () => {};
         this.onUnsaid = () => {};
+
+        /** Told a typed line of theirs was kept from so many it was for (`count`: they're kept to the quick chat's phrases). */
+        this.onMissed = () => {};
     }
 
     /**
@@ -2452,6 +2488,12 @@ export class Joining {
 
                 break;
             }
+            case "missed":
+                if (Number.isInteger(message.count) && message.count > 0) {
+                    this.onMissed(message.count);
+                }
+
+                break;
             case "unsaid":
                 if (CHAT_REFUSED.includes(message.reason)) {
                     this.onUnsaid(message.reason, { name: typeof message.name === "string" ? message.name : "" });

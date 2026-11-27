@@ -613,7 +613,9 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      nothing back for it. And for 2-36's `quick`, a phrase's id beside a chat line's words
      (`client/js/core/quickchat.js`): the words still travel, so a game that knows nothing of
      ids says and shows the line as ever. An id in that table is its phrase's for good: never
-     given to another, and a phrase no longer offered keeps its place (`retired`).
+     given to another, and a phrase no longer offered keeps its place (`retired`). And for
+     2-37's `missed` (a typed line kept from so many) and the refusal `nanny`: sent only by a
+     world that keeps someone to the quick phrases (Session `restricted`, nobody by default).
      And for 3-35's `how` and `played`: one joining a world hosted in a browser asks how it's
      played before its hello, and only one that asks is answered; a host that doesn't know the
      question says nothing, and is taken for lockstep after a wait (`HOW_WAIT`,
