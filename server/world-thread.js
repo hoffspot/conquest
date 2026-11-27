@@ -124,9 +124,14 @@ export class WorldThread {
         });
     }
 
-    /** Someone come in by a key (their player's id, and their part). */
-    enter(peer, { player, role }) {
-        this.#post({ type: "enter", peer, player, role });
+    /** Someone come in by a key (their player's id, their part, and whether they're kept to the quick chat's phrases: access/nanny.js). */
+    enter(peer, { player, role, nanny = false }) {
+        this.#post({ type: "enter", peer, player, role, nanny: nanny === true });
+    }
+
+    /** One of those in it kept to the quick chat's phrases from now, or no longer (`on`): the server's settings changed. */
+    nanny(peer, on) {
+        this.#post({ type: "nanny", peer, on: on === true });
     }
 
     /** What their game said. */

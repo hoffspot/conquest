@@ -7,6 +7,7 @@
 // refused. A setting added needs no step: it's filled in with its default. Keys it doesn't know
 // are kept, not dropped, so a newer server's settings come through an older one unharmed.
 
+import { countriesReason, NANNY, NANNY_COUNTRIES } from "../access/nanny.js";
 import { ceilingReason, publicReady } from "../access/cap.js";
 import { LIMITS } from "../access/limits.js";
 import { exists, readJSON, writeJSON } from "./files.js";
@@ -31,8 +32,9 @@ export const SETTINGS_STEPS = Object.freeze({});
 export const CAPS = Object.freeze({ players: LIMITS.players, mostPlayers: 8 });
 
 /**
- * Every setting: its kind ("text", "boolean", "integer", "number", or "choice": one of its `of`,
- * each with its words, `words`, as the management page lists them), its range (a text's most
+ * Every setting: its kind ("text", "boolean", "integer", "number", "choice": one of its `of`,
+ * each with its words, `words`, as the management page lists them; or "list": a list its own
+ * `reason` checks, shown on the management page and changed in the settings file), its range (a text's most
  * characters), its default, and what it's for (as the management page says it).
  */
 export const SETTINGS = Object.freeze({
@@ -71,6 +73,16 @@ export const SETTINGS = Object.freeze({
         default: "lockstep",
         about: "New worlds: how a world made here is played unless it's said as it's made (generated/multiplayer_scaling_plan.md 3-34). Replicated holds only while Replicated views above is on: otherwise a new world's lockstep, so nobody's kept out of it. Worlds already made don't change, and any world's own setting can still be changed",
     },
+    nanny: {
+        kind: "choice",
+        of: NANNY.scopes,
+        words: { off: "Off: nobody's kept to the quick phrases by the server", public: "Public worlds: those it applies to send and see quick phrases only there", all: "Every world: the same in every world of this server" },
+        default: "off",
+        about: "Nanny Mode (generated/multiplayer_scaling_plan.md 6B-16): players connecting from a listed country, or from one that can't be told, send and see the quick chat's phrases only. Leave it off until the server can tell a connection's country: till then every connection's is unknown",
+    },
+    nannyCountries: { kind: "list", reason: countriesReason, default: NANNY_COUNTRIES, about: "Nanny Mode's countries: each with the age its rules protect up to, why, the source and when it was last reviewed. Changed in the settings file; to be reviewed every 90 days" },
+    nannyUnknown: { kind: "boolean", default: true, about: "Nanny Mode for a connection whose country can't be told (a missing answer isn't a way out of it)" },
+    nannyHoldDays: { kind: "integer", min: 0, max: 365, default: 30, about: "How many days a player seen from a listed country stays in Nanny Mode after (so a VPN doesn't lift it at once)" },
     updateHour: { kind: "integer", min: 0, max: 23, default: 3, about: "The hour it installs new versions by itself from, this computer's time (3 is 3 in the morning)" },
 });
 
@@ -97,6 +109,8 @@ export function schemaReason(schema, key, value) {
             return textReason(key, value, setting.most);
         case "boolean":
             return typeof value === "boolean" ? null : `${key} must be true or false, not ${JSON.stringify(value)}.`;
+        case "list":
+            return setting.reason(value);
         case "choice":
             return setting.of.includes(value) ? null : `${key} must be ${setting.of.length > 1 ? "one of " : ""}${setting.of.join(", ")}, not ${JSON.stringify(value)}.`;
         case "integer":

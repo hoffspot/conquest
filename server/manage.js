@@ -222,7 +222,7 @@ export class Management {
             life,
             position,
             words: this.wordsOf(id),
-            players: (state?.players ?? []).filter((one) => one.id).map(({ player, name, away, linked, ready, hidden }) => ({ player, name, away, linked, ready, hidden })),
+            players: (state?.players ?? []).filter((one) => one.id).map(({ player, name, away, linked, ready, hidden, nanny }) => ({ player, name, away, linked, ready, hidden, nanny: nanny === true })),
             size: await sizeOf(stored.folder),
         };
     }
@@ -299,6 +299,11 @@ export class Management {
 
         await stored.writeMeta(meta);
         this.server.registry.entries.get(id)?.thread?.meta(meta);
+
+        // (Made public, or no longer: who's kept to the quick chat's phrases there may change, access/nanny.js)
+        if (settings !== undefined && Object.hasOwn(settings ?? {}, "public")) {
+            this.server.play?.renanny();
+        }
 
         // (Opened to anyone: its door made now, so it's among its keys at once)
         if (settings?.open === true) {
@@ -507,6 +512,8 @@ export class Management {
                 name: now?.name ?? null,
                 here: Boolean(now),
                 away: Boolean(now?.away),
+                // (Kept to the quick chat's phrases while they're in: access/nanny.js)
+                nanny: now?.nanny === true,
             });
         }
 
@@ -1595,6 +1602,11 @@ export class Management {
             }
         }
 
+        // (Nanny Mode changed: whoever's in a world now is told at once, access/nanny.js)
+        if (Object.keys(changes).some((key) => key.startsWith("nanny"))) {
+            this.server.play?.renanny();
+        }
+
         this.server.nearby.follow(this.server.settings.get("bonjour"));
         this.server.nearby.refresh();
         if (Object.hasOwn(changes, "tunnelPort")) {
@@ -1612,7 +1624,7 @@ export class Management {
             this.server.broker?.refresh();
         }
 
-        const words = ([key, value]) => (key !== "name" ? `${key} ${value}` : value ? `name “${value}”` : `name the computer's own (“${this.server.ownName}”)`);
+        const words = ([key, value]) => (Array.isArray(value) ? `${key} (${value.length} listed)` : key !== "name" ? `${key} ${value}` : value ? `name “${value}”` : `name the computer's own (“${this.server.ownName}”)`);
 
         await this.journal(`The server's settings were changed${by ? ` by ${by}` : ""}: ${Object.entries(changes).map(words).join(", ")}.`);
 
