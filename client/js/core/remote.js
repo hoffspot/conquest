@@ -48,6 +48,7 @@ export const REMOTE = Object.freeze({
         onChat: "A line said in the player's party, or a direct message",
         onUnsaid: "Why a line of the player's wasn't said",
         onMissed: "How many a typed line of the player's was kept from (those kept to the quick phrases)",
+        onNannied: "Who's kept to the quick phrases (Nanny Mode), and why the player is, if they are ({ ids, mine })",
     }),
 });
 

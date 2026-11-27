@@ -179,7 +179,12 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
 
     // Into a world, by a session: let in (waiting its turn if it must), given a place
     // Whether one coming into a world from a country's kept to the quick chat's phrases (access/nanny.js)
-    const nannyOf = (world, country) => nannyFor({ country, record: null, world: { public: server.metaOf(world)?.settings?.public === true }, settings: nannySettings(server.settings), now: clock() }).on;
+    // (and why, as they're told in the chat panel: { why, code, threshold })
+    const nannyOf = (world, country) => {
+        const { on, why, code, threshold } = nannyFor({ country, record: null, world: { public: server.metaOf(world)?.settings?.public === true }, settings: nannySettings(server.settings), now: clock() });
+
+        return { on, why: on ? { why, code, threshold } : null };
+    };
 
     const enter = async (socket, address, world, session) => {
         const { principal } = policy.identify({ world, session, address, from: socket.from });
@@ -228,10 +233,11 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
         // (Kept to the quick chat's phrases, by where they connect from: access/nanny.js. No
         // country's looked up yet, 6B-19 and 6B-20, and no record kept of them, 6B-1)
         const country = socket.country ?? null;
-        const place = { world, peer, country, nanny: nannyOf(world, country), player: principal.player.id, role: principal.role, via: principal.via, socket, token: hashOf(token), address, from: socket.from, tunnel: socket.tunnel, away: null };
+        const kept = nannyOf(world, country);
+        const place = { world, peer, country, nanny: kept.on, nannyWhy: kept.why, player: principal.player.id, role: principal.role, via: principal.via, socket, token: hashOf(token), address, from: socket.from, tunnel: socket.tunnel, away: null };
 
         places.set(placeKey(world, peer), place);
-        thread.enter(peer, { player: place.player, role: place.role, nanny: place.nanny });
+        thread.enter(peer, { player: place.player, role: place.role, nanny: place.nanny, why: place.nannyWhy });
         playing(place);
         socket.send(`entered ${peer} ${token}`);
     };
@@ -398,11 +404,12 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
         /** Who's kept to the quick chat's phrases worked out again (the server's settings changed, or a world's): each world told of whoever's changed. */
         renanny() {
             for (const place of places.values()) {
-                const on = nannyOf(place.world, place.country);
+                const { on, why } = nannyOf(place.world, place.country);
 
-                if (on !== place.nanny) {
+                if (on !== place.nanny || JSON.stringify(why) !== JSON.stringify(place.nannyWhy)) {
                     place.nanny = on;
-                    registry.entries.get(place.world)?.thread?.nanny(place.peer, on);
+                    place.nannyWhy = why;
+                    registry.entries.get(place.world)?.thread?.nanny(place.peer, on, why);
                 }
             }
         },

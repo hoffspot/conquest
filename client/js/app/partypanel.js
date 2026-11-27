@@ -36,7 +36,7 @@
 // It only shows and asks: what's done is the host's (core/host.js "order" and "party" commands),
 // through the game.
 
-import { quickShown, quickText } from "../core/quickchat.js";
+import { QUICK_CHAT, quickShown, quickText } from "../core/quickchat.js";
 import { CHAT } from "../core/netplay.js";
 
 const element = (tag, className, text = "") => Object.assign(document.createElement(tag), { className, textContent: text });
@@ -99,6 +99,77 @@ export function playersPage(everyone, { search = "", page = 0 } = {}) {
 /** What can be said to the party with a tap (the chat's quick phrases). */
 export const QUICK_PHRASES = Object.freeze(quickShown("panel").map(({ text }) => text));
 
+/**
+ * Nanny Mode in the chat panel (generated/multiplayer_scaling_plan.md 6B-17: a player in it sends
+ * and sees the quick chat's phrases and nothing typed, core/netplay.js Session `restricted`): its
+ * icon's label, the chip beside a name, and what "What's this?" says of it.
+ */
+export const NANNY_LABEL = "Nanny Mode: quick phrases only";
+export const NANNY_WHAT = "Some players see and send quick phrases only. It's set by the rules of where they connect from, or by their own choice. It says nothing else about them.";
+
+// A country by its name in English ("GB": "United Kingdom"); its code, where there's no knowing
+const countryName = (code) => {
+    try {
+        return new Intl.DisplayNames(["en"], { type: "region" }).of(code) ?? code;
+    } catch {
+        return code;
+    }
+};
+
+/**
+ * What a player in Nanny Mode is told at the top of the Chat tab: { notice, why (one line, or ""
+ * where the world didn't say), off (how it's lifted) }, from why they're in it ({ why, code,
+ * threshold }: core/netplay.js nannyWhy). No age check's set up on any server yet (the plan's
+ * 6B-22), so only a player's own choice can be lifted here.
+ */
+export function nannyWords({ why = null, code = null } = {}) {
+    return {
+        notice: "You can send and see quick phrases only. Typed messages from other players don't reach you, and you can't type to them. Everything else in the game is as it was.",
+        why:
+            why === "country" || why === "held"
+                ? `The rules where you seem to be connecting from${code ? ` (${countryName(code)})` : ""} limit typed chat with players you don't know until your age has been checked.`
+                : why === "unknown"
+                  ? "We couldn't tell where you're connecting from."
+                  : why === "chosen"
+                    ? "You switched it on."
+                    : "",
+        off: why === "chosen" ? "You switched Nanny Mode on in Game options, under Chat and players. Switch it off there, with the lock code if one was set." : "Age checks aren't set up on this server yet, so Nanny Mode can't be turned off here for now.",
+    };
+}
+
+/**
+ * The sender's note under the Chat's input: how many of those a typed line would go to (`of`) are
+ * in Nanny Mode (`kept`), and so won't see it; "" when none are. `all`: counted over the whole
+ * world, where there's no telling who'd hear (the area's channel).
+ */
+export function nannyNote({ kept = 0, of = 0, all = false } = {}) {
+    if (kept <= 0) {
+        return "";
+    }
+
+    return all
+        ? `${kept} in this world ${kept === 1 ? "is" : "are"} in Nanny Mode: they'll see quick phrases, not typed lines`
+        : `${kept} of ${Math.max(of, kept)} here ${kept === 1 ? "is" : "are"} in Nanny Mode: they'll see quick phrases, not typed lines`;
+}
+
+// Nanny Mode's icon: a speech bubble under an umbrella, with its label for those who can't see it
+function nannyIcon() {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+
+    svg.setAttribute("class", "nanny-icon");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", NANNY_LABEL);
+    title.textContent = NANNY_LABEL;
+    path.setAttribute("fill", "currentColor");
+    path.setAttribute("d", "M12 1a9 9 0 0 1 9 9h-8.2v2H11v-2H3a9 9 0 0 1 9-9zM6 13h12a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-6l-3 2.5V20H6a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2z");
+    svg.append(title, path);
+
+    return svg;
+}
+
 /** How many lines haven't been seen, as a badge shows it: none, "1" to "9", or "9+". */
 export function unreadLabel(count) {
     return count > 9 ? "9+" : count > 0 ? String(count) : "";
@@ -110,9 +181,10 @@ export function unreadLabel(count) {
  * another's; "free": none), or asked to one ("asked"); away (AFK: core/host.js AFK); fallen, or
  * resting; their people at war with the player's ("war"). From { me (the player themselves),
  * party ({ yours, leads (they lead it), leader (its leader's name) }, or null), asked (who's
- * asked them to theirs: "you", a name, or null), away, resting, dead, hostile, blocked }.
+ * asked them to theirs: "you", a name, or null), away, resting, dead, hostile, blocked, nanny (in
+ * Nanny Mode: NANNY_LABEL, the last chip) }.
  */
-export function playerStatus({ me = false, party = null, asked = null, away = false, resting = false, dead = false, hostile = false, blocked = false }) {
+export function playerStatus({ me = false, party = null, asked = null, away = false, resting = false, dead = false, hostile = false, blocked = false, nanny = false }) {
     const chips = [];
 
     if (blocked && !me) {
@@ -141,6 +213,10 @@ export function playerStatus({ me = false, party = null, asked = null, away = fa
 
     if (hostile && !me) {
         chips.push({ text: "At war with your people", kind: "war" });
+    }
+
+    if (nanny) {
+        chips.push({ text: NANNY_LABEL, kind: "nanny" });
     }
 
     return chips;
@@ -288,7 +364,40 @@ export class PartyPanel {
         this.shoutsBox = Object.assign(document.createElement("input"), { type: "checkbox", checked: true });
         this.shoutsBox.addEventListener("change", () => this.onShouts(this.shoutsBox.checked));
         this.shoutsSwitch.append(this.shoutsBox, element("span", "chat-shouts-text", "Hear shouts from players nearby"));
-        this.chatBody.append(this.chatLog, this.chatNote, this.quick, this.form, this.shoutsSwitch);
+        // (Nanny Mode, the plan's 6B-17: the notice of a player in it, with why and how it's
+        // lifted; every phrase to choose from where nothing can be typed; the sender's note; and
+        // what the icon means. None of it drawn while nobody in the world's in it)
+        this.nannyNotice = element("div", "chat-nanny");
+        this.nannyNotice.hidden = true;
+        this.nannyShown = null;
+        this.phrasesHead = element("p", "journal-note chat-phrases-head");
+        this.phrasesHead.append(nannyIcon(), element("span", "", NANNY_LABEL));
+        this.phrases = element("div", "chat-quick chat-phrases");
+        this.phrasesHead.hidden = this.phrases.hidden = true;
+
+        for (const { id, text: phrase, retired = false } of QUICK_CHAT) {
+            if (retired) {
+                continue;
+            }
+
+            const button = element("button", "chat-phrase", phrase);
+
+            button.type = "button";
+            button.dataset.quick = String(id);
+            button.addEventListener("click", () => this.onSay(phrase, { quick: id }));
+            this.phrases.append(button);
+        }
+
+        this.nannyNote = element("p", "journal-note chat-nanny-note");
+        this.nannyNote.hidden = true;
+        this.nannyWhat = element("details", "chat-nanny-what");
+        this.nannyWhat.hidden = true;
+
+        const what = element("summary", "");
+
+        what.append(nannyIcon(), element("span", "", "What's this?"));
+        this.nannyWhat.append(what, element("p", "journal-note", NANNY_WHAT));
+        this.chatBody.append(this.nannyNotice, this.chatLog, this.chatNote, this.quick, this.phrasesHead, this.phrases, this.form, this.nannyNote, this.nannyWhat, this.shoutsSwitch);
         this.shownLine = null;
 
         // Everyone playing in the world, and what can be done about them here
@@ -490,8 +599,39 @@ export class PartyPanel {
 
     // The chat as it is: its lines made again only when there's a new one (the newest kept in view,
     // if it was), how many haven't been seen on its tab, and whether there's anyone to say anything to
-    #chat({ lines, unread, canSay, to = null, targets = [], shouts = null, squad = false }) {
+    // (Nanny Mode: `nanny`, why the player's in it, or null; `note`, the sender's note; `anyNanny`,
+    // whether anyone in the world is; a target's or a line's `nanny`, its speaker in it)
+    #chat({ lines, unread, canSay, to = null, targets = [], shouts = null, squad = false, nanny = null, note = "", anyNanny = false }) {
         const unseen = unreadLabel(unread);
+        // (Phrases only: the player's in Nanny Mode, or the one they'd message alone is)
+        const phrasesOnly = Boolean(nanny) || Boolean(targets.find(({ id }) => id === to)?.nanny);
+        const nannyShown = JSON.stringify(nanny);
+
+        if (nannyShown !== this.nannyShown) {
+            const words = nanny ? nannyWords(nanny) : null;
+            const first = element("p", "journal-note");
+
+            this.nannyShown = nannyShown;
+            this.nannyNotice.hidden = !nanny;
+
+            if (words) {
+                first.append(nannyIcon(), element("strong", "", "Nanny Mode is on."), ` ${words.notice}`);
+                this.nannyNotice.replaceChildren(first, ...(words.why ? [element("p", "journal-note chat-nanny-why", words.why)] : []), element("p", "journal-note chat-nanny-off", words.off));
+            } else {
+                this.nannyNotice.replaceChildren();
+            }
+        }
+
+        this.input.hidden = this.sendButton.hidden = this.quick.hidden = phrasesOnly;
+        this.phrasesHead.hidden = this.phrases.hidden = !phrasesOnly;
+        this.nannyNote.textContent = nanny ? "" : note;
+        this.nannyNote.hidden = Boolean(nanny) || !note;
+        this.nannyWhat.hidden = !anyNanny;
+
+        for (const button of this.phrases.children) {
+            button.disabled = !canSay;
+        }
+
         const shouting = to === SHOUT_TO && shouts === true;
         const toArea = to === AREA_TO && shouts === true;
         const toSquad = to === SQUAD_TO && squad === true;
@@ -518,7 +658,17 @@ export class PartyPanel {
                 Object.assign(document.createElement("option"), { value: "", textContent: "Party" }),
                 ...(squad ? [Object.assign(document.createElement("option"), { value: SQUAD_TO, textContent: "Squad" })] : []),
                 ...(shouts ? [Object.assign(document.createElement("option"), { value: SHOUT_TO, textContent: "Shout (nearby)" }), Object.assign(document.createElement("option"), { value: AREA_TO, textContent: "Area (this town, or this stretch of land)" })] : []),
-                ...targets.map(({ id, name, party }) => Object.assign(document.createElement("option"), { value: id, textContent: party ? `${name} (party)` : name })),
+                ...targets.map(({ id, name, party, nanny: theirs = false }) => {
+                    // (One in Nanny Mode: an umbrella by their name, and its label read out)
+                    const option = Object.assign(document.createElement("option"), { value: id, textContent: `${party ? `${name} (party)` : name}${theirs ? " ☂" : ""}` });
+
+                    if (theirs) {
+                        option.title = NANNY_LABEL;
+                        option.setAttribute("aria-label", `${name}, ${NANNY_LABEL}`);
+                    }
+
+                    return option;
+                }),
             );
         }
 
@@ -541,11 +691,11 @@ export class PartyPanel {
         this.shownLine = newest;
         log.replaceChildren(
             ...(lines.length
-                ? lines.map(({ name, text, mine = false, system = false, dm = null, shout = false, area = false, squad: toTheSquad = false }) => {
+                ? lines.map(({ name, text, mine = false, system = false, dm = null, shout = false, area = false, squad: toTheSquad = false, nanny: theirs = false }) => {
                       const line = element("li", `chat-line${mine ? " mine" : ""}${system ? " system" : ""}${dm ? " dm" : ""}${shout ? " shout" : ""}${area ? " area" : ""}${toTheSquad ? " squad" : ""}`);
 
                       if (!system) {
-                          line.append(element("span", "chat-name", dm ? `${mine ? "To" : "From"} ${name}` : shout ? (mine ? "You shout" : `${name} shouts`) : area ? (mine ? "You, to the area" : `${name}, to the area`) : toTheSquad ? (mine ? "You, to the squad" : `${name}, to the squad`) : name), ": ");
+                          line.append(element("span", "chat-name", dm ? `${mine ? "To" : "From"} ${name}` : shout ? (mine ? "You shout" : `${name} shouts`) : area ? (mine ? "You, to the area" : `${name}, to the area`) : toTheSquad ? (mine ? "You, to the squad" : `${name}, to the squad`) : name), ...(theirs ? [nannyIcon()] : []), ": ");
                       }
 
                       line.append(element("span", "chat-text", text));
@@ -793,7 +943,14 @@ export class PartyPanel {
                     chips.append(element("span", `player-chip ${chip.kind}`, chip.text));
                 }
 
-                text.append(element("span", "party-name", `${leads ? "♛ " : ""}${me ? `${name} (you)` : name}`), element("span", "party-kind", title), chips, element("span", "party-where", where));
+                const called = element("span", "party-name", `${leads ? "♛ " : ""}${me ? `${name} (you)` : name}`);
+
+                // (In Nanny Mode: its icon beside their name)
+                if (player.nanny) {
+                    called.append(nannyIcon());
+                }
+
+                text.append(called, element("span", "party-kind", title), chips, element("span", "party-where", where));
 
                 if (can === "invite" || can === "asked" || can === "full") {
                     const invite = element("button", "journal-button party-invite", can === "asked" ? "Asked" : "Invite");

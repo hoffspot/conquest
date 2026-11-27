@@ -84,7 +84,8 @@ import { ABILITIES, bound, buys, isJunk, itemLabel, ITEMS, junkable, junkSale, p
 import { TREASURE } from "../core/treasure.js";
 import { atLevel, shopPrice, wareAt } from "../core/stock.js";
 import { isGuid } from "../core/guid.js";
-import { CHAT, DMS_TAKEN, PACE } from "../core/netplay.js";
+import { CHAT, DMS_TAKEN, PACE, SHOUT } from "../core/netplay.js";
+import { quickText } from "../core/quickchat.js";
 import { RUNNER, WorldRunner } from "../core/runner.js";
 import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, handInAt, MOST_REQUESTS, objectiveOf, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { MISSIONS, MORE_BY_RANK, rewardOf as missionReward, rewardWords, senderName } from "../core/missions.js";
@@ -195,7 +196,7 @@ import { JournalPanel, bearing, keepMessage, regardOf } from "./journal.js";
 import { ReaderPanel } from "./reader.js";
 import { Journey } from "./journey.js";
 import { SpellbookPanel } from "./spellbook.js";
-import { AREA_TO, musterWords, PartyPanel, PLAYERS_PAGE, SHOUT_TO, SQUAD_TO } from "./partypanel.js";
+import { AREA_TO, musterWords, nannyNote, PartyPanel, PLAYERS_PAGE, SHOUT_TO, SQUAD_TO } from "./partypanel.js";
 import { medalWords } from "../core/credit.js";
 import { PackPanel } from "./pack.js";
 import { Governor } from "./governor.js";
@@ -1853,7 +1854,18 @@ export class Game {
             remote.onChat = (line) => this.chatHeard(line);
             remote.onUnsaid = (reason, said) => this.#unsaid(reason, said);
             remote.onMissed = (count) => this.#missed(count);
+            remote.onNannied = (told) => this.nanniedHeard(told);
         }
+
+        /**
+         * Nanny Mode as the world's told it (core/netplay.js Session tellNannied; the scaling
+         * plan's 6B-17): who's kept to the quick chat's phrases (`nannied`, ids), and why the
+         * player is (`nanny`: { why, code, threshold }; null, they aren't). Told as it changes:
+         * onNanny(nanny), for Game options' row.
+         */
+        this.nannied = new Set();
+        this.nanny = null;
+        this.onNanny = () => {};
 
         /**
          * How the camera's turned and shaken (Game options): whether it follows round behind the
@@ -12580,6 +12592,7 @@ export class Game {
         const together = Boolean(this.hosting || this.remote);
         const party = together ? this.worldview.partyFor(this.me) : null;
         const others = together ? [...this.worldview.players.values()].filter(({ id }) => id !== this.me && !this.isBlocked(id)) : [];
+        const anyNanny = together && this.nannied.size > 0;
 
         return {
             lines: this.chatLines,
@@ -12590,7 +12603,9 @@ export class Game {
             shouts: together ? Boolean(this.dmsTaken.shout) : null,
             // (In a squad: its chat to say to, core/host.js SQUAD)
             squad: together && Boolean(this.worldview.squadFor?.(this.me)),
-            targets: others.map(({ id, hero }) => ({ id, name: hero.name, party: Boolean(party?.members.includes(id)) })).sort((a, b) => b.party - a.party || a.name.localeCompare(b.name)),
+            targets: others.map(({ id, hero }) => ({ id, name: hero.name, party: Boolean(party?.members.includes(id)), ...(this.nannied.has(id) ? { nanny: true } : {}) })).sort((a, b) => b.party - a.party || a.name.localeCompare(b.name)),
+            // (Nanny Mode: why the player's in it, whether anyone is, and the sender's note)
+            ...(anyNanny ? { nanny: this.nanny, anyNanny, note: nannyNote(this.#nannyHeard()) } : {}),
         };
     }
 
@@ -12598,8 +12613,14 @@ export class Game {
      * A line said in the player's party (core/netplay.js: heard as it's sent on to those in it,
      * their own lines too): into the chat; another's with a chime, and counted unread till it's seen.
      */
-    chatHeard({ from, name, text, to = null, toName = "", dm = null, shout = false, area = false, squad = false }) {
+    chatHeard({ from, name, text, to = null, toName = "", dm = null, shout = false, area = false, squad = false, quick = null }) {
         const mine = from === this.me;
+
+        // (In Nanny Mode: a typed line of another's that reached here all the same is let go of,
+        // unshown, with nothing in its place)
+        if (this.nanny && !mine && quickText(quick) === null) {
+            return;
+        }
 
         // (A line to the area, core/netplay.js AREA_CHAT: taken and let go of as a shout is)
         shout ||= area;
@@ -12612,6 +12633,12 @@ export class Game {
 
         // (A direct message by whom it's with: the one it's to, or from)
         const line = dm ? { name: mine ? toName : name, text, mine, dm, with: mine ? to : from } : { name: mine ? "You" : name, text, mine, ...(area ? { area: true } : shout ? { shout: true } : squad ? { squad: true } : {}) };
+
+        // (Its speaker in Nanny Mode, or the one a message of the player's went to: the icon by their name)
+        if (this.nannied.has(dm && mine ? to : from)) {
+            line.nanny = true;
+        }
+
         const reading = this.partyPanel?.open && this.partyPanel.tab === "chat";
 
         this.#chatLine(line);
@@ -12860,6 +12887,46 @@ export class Game {
         }
     }
 
+    /** Who's in Nanny Mode, as the world tells it ({ ids, mine }: core/netplay.js Session tellNannied). */
+    nanniedHeard({ ids = [], mine = null } = {}) {
+        const was = JSON.stringify(this.nanny);
+
+        this.nannied = new Set(ids);
+        this.nanny = mine;
+
+        if (JSON.stringify(mine) !== was) {
+            this.onNanny(mine);
+        }
+
+        this.#chatShown();
+    }
+
+    // Of those a typed line of the player's would go to now, how many are in Nanny Mode, for the
+    // sender's note (partypanel.js nannyNote): the party, the squad, those in a shout's reach, the
+    // one messaged alone; to the area, of the whole world (`all`: there's no telling who'd hear)
+    #nannyHeard() {
+        const others = [...this.worldview.players.keys()].filter((id) => id !== this.me);
+        const me = this.battle.actor(this.me);
+        const party = this.worldview.partyFor(this.me);
+        const near = (id) => {
+            const actor = this.battle.actor(id);
+
+            return Boolean(actor && me && actor.map === me.map && Math.hypot(actor.x - me.x, actor.y - me.y) <= SHOUT.reach);
+        };
+        const heard =
+            this.chatTo === AREA_TO
+                ? others
+                : this.chatTo === SHOUT_TO
+                  ? others.filter(near)
+                  : this.chatTo === SQUAD_TO
+                    ? [...new Set([...(party?.members ?? []), ...this.worldview.allies(this.me)])].filter((id) => id !== this.me)
+                    : this.chatTo
+                      ? [this.chatTo]
+                      : (party?.members ?? []).filter((id) => id !== this.me);
+
+        return { kept: heard.filter((id) => this.nannied.has(id)).length, of: heard.length, all: this.chatTo === AREA_TO };
+    }
+
     // A typed line of the player's kept from some it was for: they're kept to the quick chat's
     // phrases (core/netplay.js Session `restricted`)
     #missed(count) {
@@ -12926,15 +12993,19 @@ export class Game {
                 const asked = this.worldview.invitation(id);
                 const yours = Boolean(party && party === mine);
                 const can = id === this.me ? null : yours ? (mine.leader === this.me ? "dismiss" : null) : party ? null : asked ? "asked" : full ? "full" : "invite";
+                // (In Nanny Mode: marked so, and where they are told to no one outside their party,
+                // who finds them under Everyone else, never Nearby)
+                const nanny = this.nannied.has(id);
+                const hidden = nanny && id !== this.me && !yours;
 
                 return {
                     id,
                     name: player.hero.name,
                     me: id === this.me,
                     title: `${player.standing?.title?.() ?? STANDINGS[0].title}${player.realm ? ` of the ${peopleOf(player.realm)}` : ""}`,
-                    where: this.#whereWords(actor, me),
+                    where: hidden ? "" : this.#whereWords(actor, me),
                     // (Near enough to be under Nearby: on the player's map, within PLAYERS_PAGE.near)
-                    near: id !== this.me && Boolean(actor && me && actor.map === me.map && Math.hypot(actor.x - me.x, actor.y - me.y) <= PLAYERS_PAGE.near),
+                    near: id !== this.me && !hidden && Boolean(actor && me && actor.map === me.map && Math.hypot(actor.x - me.x, actor.y - me.y) <= PLAYERS_PAGE.near),
                     // (Of a party allied with the player's: under Your squad)
                     ally: allies.has(id),
                     party: party ? { yours, leads: party.leader === id, leader: nameOf(party.leader) } : null,
@@ -12944,6 +13015,7 @@ export class Game {
                     dead: Boolean(actor?.dead),
                     hostile: id !== this.me && Boolean(this.worldview.war?.hostile(this.self.realm, player.realm)),
                     blocked: id !== this.me && this.isBlocked(id),
+                    ...(nanny ? { nanny: true } : {}),
                     can,
                     // (A duel: asked of them, or yielded to them if that's whom the player's in one with)
                     duel: id === this.me ? null : duel ? (duel.with === id ? "yield" : null) : this.worldview.challenge(id)?.from === this.me ? "asked" : "ask",

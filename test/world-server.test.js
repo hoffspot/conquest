@@ -720,6 +720,13 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         assert.equal((await server.manage.details(made.json.world)).players[0].nanny, true);
         assert.equal([...server.play.places.values()].find((place) => place.world === made.json.world).nanny, true);
 
+        // Their game's told who's in it, and why they are (6B-17: the chat panel's notice)
+        const nannied = () => game.messages.filter((message) => message.kind === "nannied");
+
+        await until(() => nannied().length === 1, "their game told", ENTERING);
+        assert.equal(nannied()[0].ids.length, 1);
+        assert.deepEqual(nannied()[0].mine, { why: "unknown", code: null, threshold: 18 });
+
         // A typed shout: refused. A phrase: said
         game.say({ kind: "chat", text: "Is anyone about?", shout: true });
         await until(() => unsaid().length === 1, "the refusal", ENTERING);
@@ -732,6 +739,8 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         // In public worlds alone: this one isn't, so they're out of it, the world told as it runs
         await server.manage.changeSettings({ nanny: "public" });
         await until(async () => (await listed())?.nanny === false, "the players list to say they're out of it", ENTERING);
+        await until(() => nannied().length === 2, "their game told they're out of it", ENTERING);
+        assert.deepEqual([nannied()[1].ids, nannied()[1].mine], [[], null]);
         game.say({ kind: "chat", text: "Is anyone about now?", shout: true });
         await until(() => chats().length === 2, "the typed line", ENTERING);
         assert.deepEqual(chats().at(-1), ["Is anyone about now?", null]);

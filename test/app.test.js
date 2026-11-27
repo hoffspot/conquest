@@ -6,7 +6,7 @@ import { LOOKS } from "../client/js/characters/peoples.js";
 import { formatBytes, Loader } from "../client/js/app/loader.js";
 import { ICONS, ITEM_ICONS } from "../client/js/app/icons.js";
 import { messagePlace, PARTY_ICON, partyFit, PLATE_SIZE, plateScale } from "../client/js/app/hud.js";
-import { memberKind, musterWords, PLAYERS_PAGE, playersPage, playerStatus, QUICK_PHRASES, timeLeft, unreadLabel } from "../client/js/app/partypanel.js";
+import { memberKind, musterWords, NANNY_LABEL, NANNY_WHAT, nannyNote, nannyWords, PLAYERS_PAGE, playersPage, playerStatus, QUICK_PHRASES, timeLeft, unreadLabel } from "../client/js/app/partypanel.js";
 import { buildingsOf, compassTurn, interiorColours, mapColours, Minimap, paintPatch, paintingPatch, treesOf } from "../client/js/app/minimap.js";
 import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, flicked, flickReach, FLIP, iconOf, offensive, pickerEntries, PLACES, QUICK, QUICK_SHOWN, QUICK_TWO, readWheels, ROLES, rolesOf, sectorPath, wheelPlace, WHEELS, whomFor } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
@@ -1822,6 +1822,28 @@ describe("the bars over the others (hud.js)", () => {
         assert.deepEqual(said({ me: true, hostile: true }), ["free: In no party"], "(never at war with themselves)");
         assert.deepEqual(said({ blocked: true, party: { yours: false, leads: true, leader: "Cai" } }), ["blocked: Blocked", "partied: Leads a party"], "(blocked, first)");
         assert.deepEqual(said({ me: true, blocked: true }), ["free: In no party"], "(never blocked by themselves)");
+    });
+
+    it("words Nanny Mode in the chat panel as the plan drafts it (6B-17): the chip and the icon's label, what a player in it is told and why, how it's lifted, and the sender's note", () => {
+        assert.equal(NANNY_LABEL, "Nanny Mode: quick phrases only");
+        assert.match(NANNY_WHAT, /It says nothing else about them\.$/);
+        assert.deepEqual(playerStatus({ nanny: true, away: true }).map(({ text, kind }) => `${kind}: ${text}`), ["free: In no party", "afk: Away (AFK)", `nanny: ${NANNY_LABEL}`], "(the last chip)");
+        assert.deepEqual(playerStatus({}).filter(({ kind }) => kind === "nanny"), []);
+
+        const country = nannyWords({ why: "country", code: "GB", threshold: 16 });
+
+        assert.match(country.notice, /^You can send and see quick phrases only\. Typed messages from other players don't reach you, and you can't type to them\./);
+        assert.equal(country.why, "The rules where you seem to be connecting from (United Kingdom) limit typed chat with players you don't know until your age has been checked.");
+        assert.equal(country.off, "Age checks aren't set up on this server yet, so Nanny Mode can't be turned off here for now.");
+        assert.equal(nannyWords({ why: "held", code: "BR" }).why, country.why.replace("United Kingdom", "Brazil"));
+        assert.equal(nannyWords({ why: "unknown" }).why, "We couldn't tell where you're connecting from.");
+        assert.deepEqual([nannyWords({ why: "chosen" }).why, nannyWords({ why: "chosen" }).off], ["You switched it on.", "You switched Nanny Mode on in Game options, under Chat and players. Switch it off there, with the lock code if one was set."]);
+        assert.equal(nannyWords({}).why, "", "(not said: no line for it)");
+
+        assert.equal(nannyNote({ kept: 2, of: 5 }), "2 of 5 here are in Nanny Mode: they'll see quick phrases, not typed lines");
+        assert.equal(nannyNote({ kept: 1, of: 1 }), "1 of 1 here is in Nanny Mode: they'll see quick phrases, not typed lines");
+        assert.equal(nannyNote({ kept: 3, of: 9, all: true }), "3 in this world are in Nanny Mode: they'll see quick phrases, not typed lines");
+        assert.equal(nannyNote({ kept: 0, of: 5 }), "", "(nobody in it: nothing drawn)");
     });
 
     it("sets the Players tab's players out under headings (the player and their party, those near, everyone else), those found by name alone, 25 to a page", () => {

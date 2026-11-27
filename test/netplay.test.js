@@ -17,7 +17,7 @@ import { newGuid } from "../client/js/core/guid.js";
 import { HOST_PLAYER, Host, OWN, REFUSALS } from "../client/js/core/host.js";
 import { Navigation } from "../client/js/core/navigation.js";
 import { MOTION } from "../client/js/core/motion.js";
-import { AGAIN, AREA_CHAT, CHAT, CHAT_REFUSED, chatLine, DMS_TAKEN, SHOUT, characterFrom, CHECK_EVERY, HEARD, Hosting, Joining, LATELY, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, QUIET, SELF, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
+import { AGAIN, AREA_CHAT, CHAT, CHAT_REFUSED, chatLine, DMS_TAKEN, NANNIED_MOST, NANNY_WHYS, nannyWhy, SHOUT, characterFrom, CHECK_EVERY, HEARD, Hosting, Joining, LATELY, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, QUIET, SELF, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { selfOf } from "../client/js/core/selfstate.js";
 import { QUICK_CHAT, QUICK_MOST, QUICK_SHOWN, quickShown, quickText } from "../client/js/core/quickchat.js";
@@ -1819,6 +1819,71 @@ describe("playing together (netplay.js)", () => {
         later();
         assert.deepEqual(hosting.chat("Typed"), { ok: false, reason: "nanny" });
         assert.deepEqual(hosting.chat("", { quick: 1 }), { ok: true });
+    });
+
+    it("tells every game who's kept to the quick chat's phrases, and each of those why (Nanny Mode, the scaling plan's 6B-17): nothing sent while nobody is; told as someone comes in, leaves, and when whoever runs the world says it's changed; one kept shows no typed line that reaches them all the same, and a phrase as the table has it", () => {
+        const { hosting, join, deliver } = opened();
+        const bryn = join(guest("Bryn"));
+        const told = { host: [], bryn: [], cass: [] };
+        const kept = new Map();
+
+        hosting.onNannied = (one) => told.host.push(one);
+        bryn.joining.onNannied = (one) => told.bryn.push(one);
+
+        // Nobody kept: nothing said of it, however often it's asked
+        hosting.tellNannied();
+        deliver();
+        assert.deepEqual(told, { host: [], bryn: [], cass: [] });
+        assert.equal(hosting.nanniedTold, false);
+        assert.deepEqual([bryn.joining.nanny, [...bryn.joining.nannied]], [null, []]);
+
+        // Bryn kept, for the country they connect from: everyone's told who, Bryn alone why
+        hosting.restricted = (id) => kept.has(id);
+        hosting.restrictedWhy = (id) => kept.get(id);
+        kept.set("guest-1", { why: "country", code: "GB", threshold: 16, address: "203.0.113.9" });
+        hosting.tellNannied();
+        deliver();
+        assert.deepEqual(told.host, [{ ids: ["guest-1"], mine: null }]);
+        assert.deepEqual(told.bryn, [{ ids: ["guest-1"], mine: { why: "country", code: "GB", threshold: 16 } }], "(and nothing else that was known of them)");
+        assert.deepEqual([bryn.joining.nanny, [...bryn.joining.nannied]], [{ why: "country", code: "GB", threshold: 16 }, ["guest-1"]]);
+
+        // One coming in is told, with no one asking
+        const cass = join(guest("Cass"));
+
+        cass.joining.onNannied = (one) => told.cass.push(one);
+        deliver();
+        assert.deepEqual([...cass.joining.nannied], ["guest-1"]);
+        assert.equal(cass.joining.nanny, null);
+
+        // Kept, a typed line that's sent them all the same isn't shown; a phrase is, in the table's words
+        const heard = [];
+
+        bryn.joining.onChat = (line) => heard.push(line.text);
+        bryn.joining.hear(JSON.stringify({ kind: "chat", from: "guest-2", name: "Cass", text: "Meet me by the well" }));
+        bryn.joining.hear(JSON.stringify({ kind: "chat", from: "guest-2", name: "Cass", text: "Call me on 555 0100", quick: 4 }));
+        assert.deepEqual(heard, ["Help!"]);
+
+        // No longer kept: told so, once, and then nothing more said of it
+        kept.clear();
+        hosting.tellNannied();
+        deliver();
+        assert.deepEqual(told.bryn.at(-1), { ids: [], mine: null });
+        assert.equal(bryn.joining.nanny, null);
+        assert.equal(hosting.nanniedTold, false);
+
+        const before = told.bryn.length;
+
+        hosting.tellNannied();
+        deliver();
+        assert.equal(told.bryn.length, before);
+
+        // What's heard is taken for no more than it is
+        assert.deepEqual(nannyWhy({ why: "because", code: "gb", threshold: 160 }), { why: null, code: null, threshold: null });
+        assert.deepEqual(nannyWhy("country"), { why: null, code: null, threshold: null });
+        assert.deepEqual(NANNY_WHYS, ["country", "held", "unknown", "chosen"]);
+        bryn.joining.hear(JSON.stringify({ kind: "nannied", ids: ["guest-9", 7, ...Array(200).fill("x")], mine: "yes" }));
+        assert.equal(bryn.joining.nannied.size <= NANNIED_MOST, true);
+        assert.deepEqual(bryn.joining.nanny, { why: null, code: null, threshold: null });
     });
 
     it("keeps the quick chat's phrases a closed table: ids from 1 with none skipped, each a few words with no number or name in it, and each place's buttons phrases of it", () => {

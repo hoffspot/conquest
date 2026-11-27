@@ -648,6 +648,7 @@ export async function openWorld(game, { address = null, broker = null, netcode =
     // (One sent out, told why: their place at the relay closed after it)
     hosting.onKick = (peer) => link.kick(peer);
     hosting.onChat = (line) => game.chatHeard(line);
+    hosting.onNannied = (told) => game.nanniedHeard(told);
     link.onFrom = (peer, text) => hosting.hear(peer, text);
     link.onGone = (peer) => hosting.gone(peer);
     link.onHere = (peers) => hosting.still(peers);
