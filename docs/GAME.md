@@ -2646,7 +2646,9 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   *Parties*): what's been said, the newest at the foot, the player's own lines as "You" in green,
   others' by name in gold, and the party's comings and goings among them in grey; eight quick
   phrases (`QUICK_PHRASES`: "On my way!", "Wait for me.", "Follow me!", "Help!", "Ready.",
-  "Thanks!", "Well fought!", "Back to town.") said with a tap; and a line to type, sent with Enter
+  "Thanks!", "Well fought!", "Back to town.") said with a tap, each a phrase of the quick chat's
+  table sent by its id (core/quickchat.js `QUICK_CHAT`, `QUICK_SHOWN.panel`: docs/WAR.md
+  *Parties*, The quick chat's phrases); and a line to type, sent with Enter
   or Send (none of the game's keys while typing in it). In no party of players, there's no one to
   hear, so it's greyed. Another's line plays a chime ("chatHeard": two glockenspiel notes) and, not
   seen at once, counts on the Party button (hud.js `partyUnread`: a red badge, "1" to "9+") and on
@@ -7229,8 +7231,9 @@ everywhere.
 **Typing** (padkeys.js). A world's four-letter code is picked a letter at a time (`CodePicker`:
 ↑ ↓ the letter, ← → the next); anything else is typed on the game's own keyboard (`PadKeyboard`,
 over the foot of the screen: ✕ types, □ deletes, △ a space, L1 Shift, R1 done, ○ closes, what's
-typed kept). To the party, ready lines stand over its keys (`READY_LINES`: "On my way", "Help!"
-and the rest), sent the moment one's chosen.
+typed kept). To the party, ready lines stand over its keys (`READY_LINES`: "On my way!", "Help!"
+and the rest, the quick chat's phrases `QUICK_SHOWN.pad` names), sent the moment one's chosen,
+by its id.
 
 **The page knows** (`body[data-pad="on"]`) from the controller's first press till a touch, a click
 or a key on a keyboard: only then are its rings, marks and prompts shown, and the Action Bar's

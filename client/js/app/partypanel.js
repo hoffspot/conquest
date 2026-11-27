@@ -36,6 +36,7 @@
 // It only shows and asks: what's done is the host's (core/host.js "order" and "party" commands),
 // through the game.
 
+import { quickShown, quickText } from "../core/quickchat.js";
 import { CHAT } from "../core/netplay.js";
 
 const element = (tag, className, text = "") => Object.assign(document.createElement(tag), { className, textContent: text });
@@ -96,7 +97,7 @@ export function playersPage(everyone, { search = "", page = 0 } = {}) {
 }
 
 /** What can be said to the party with a tap (the chat's quick phrases). */
-export const QUICK_PHRASES = Object.freeze(["On my way!", "Wait for me.", "Follow me!", "Help!", "Ready.", "Thanks!", "Well fought!", "Back to town."]);
+export const QUICK_PHRASES = Object.freeze(quickShown("panel").map(({ text }) => text));
 
 /** How many lines haven't been seen, as a badge shows it: none, "1" to "9", or "9+". */
 export function unreadLabel(count) {
@@ -243,11 +244,13 @@ export class PartyPanel {
         this.chatNote = element("p", "journal-note chat-note");
         this.quick = element("div", "chat-quick");
 
-        for (const phrase of QUICK_PHRASES) {
+        // (Each a phrase of the quick chat's table, said by its id: core/quickchat.js)
+        for (const { id, text: phrase } of quickShown("panel")) {
             const button = element("button", "chat-phrase", phrase);
 
             button.type = "button";
-            button.addEventListener("click", () => this.onSay(phrase));
+            button.dataset.quick = String(id);
+            button.addEventListener("click", () => this.onSay(phrase, { quick: id }));
             this.quick.append(button);
         }
 
@@ -268,8 +271,14 @@ export class PartyPanel {
         this.form.addEventListener("submit", (event) => {
             event.preventDefault();
 
+            // (A line chosen over a controller's keyboard, app/padkeys.js: the field holds a
+            // phrase's words and its id, and it's said as that phrase; anything typed isn't)
+            const quick = Number(this.input.dataset.quick);
+
+            delete this.input.dataset.quick;
+
             if (this.input.value.trim()) {
-                this.onSay(this.input.value);
+                this.onSay(this.input.value, quickText(quick) === this.input.value ? { quick } : {});
                 this.input.value = "";
             }
         });

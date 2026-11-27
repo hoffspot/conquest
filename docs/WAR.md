@@ -3642,6 +3642,16 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   out and turns them off. A blocked player's shouts are let go of as their messages are. It's the
   host's `Session` that sends them, so they're the same played by lockstep and by views. What two
   games say to each other changed (`NET_VERSION` 240).
+- **The quick chat's phrases** (core/quickchat.js `QUICK_CHAT`; the scaling plan's 2-36). One
+  table of 18 phrases, each by an id from 1: the party menu's eight quick buttons and the eight
+  lines over a controller's keyboard are phrases of it (`QUICK_SHOWN`). A phrase chosen is sent
+  as its id beside its words (`{ kind: "chat", text, quick }`; `Hosting.chat`'s and
+  `Joining.chat`'s `quick`). The host looks the id up and says the table's words, whatever came
+  with it, and the line's marked `quick` to all who hear it, on every channel. An id that's no
+  phrase's is refused (`noPhrase`). Words typed to say the same aren't marked: that's what lets
+  a world tell a phrase chosen from words typed (Nanny Mode's channel, 2-37). The table's
+  closed: no slots for a place or a name, no numbers, 16 characters at the most, and an id is
+  its phrase's for good. Additive, with no `NET_VERSION` bump: the words still travel.
 - **Squads** (core/host.js `SQUAD`, the `squad` command; the scaling plan's 2-28). Parties
   allied: five at the most, led by one of them, whose leader speaks for it. Every squad command
   is a party's leader's, for their party (`unpartied`, `leader` otherwise):

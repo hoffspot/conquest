@@ -2868,7 +2868,7 @@ export class Game {
         this.partyPanel.onParty = (what, who) => (what === "readyCheck" ? this.readyCheck() : this.#partyOrder(what, who));
         this.partyPanel.onDuel = (what, who) => this.#duelOrder(what, who);
         this.partyPanel.onSquad = (what, rest) => this.#squadOrder(what, rest);
-        this.partyPanel.onSay = (text) => this.#sayToParty(text);
+        this.partyPanel.onSay = (text, how) => this.#sayToParty(text, how);
         this.partyPanel.onTab = () => this.#showParty();
         this.partyPanel.onClose = () => this.closeParty();
         this.partyPanel.onWorld = () => {
@@ -12834,9 +12834,9 @@ export class Game {
         }
     }
 
-    #sayToParty(text) {
+    #sayToParty(text, { quick = null } = {}) {
         // ("/ready": a ready check of the party, its leader's: #readyCheck)
-        if (/^\s*\/ready\s*$/i.test(text)) {
+        if (quick === null && /^\s*\/ready\s*$/i.test(text)) {
             this.readyCheck();
 
             return;
@@ -12846,7 +12846,7 @@ export class Game {
         const area = this.chatTo === AREA_TO;
         const squad = this.chatTo === SQUAD_TO;
         const to = shout || area || squad ? null : this.chatTo;
-        const said = !shout && !area && !to && !this.worldview.partyFor(this.me) ? { ok: false, reason: "unpartied" } : this.hosting ? this.hosting.chat(text, { to, shout, area, squad }) : this.remote ? this.remote.chat(text, { to, shout, area, squad }) : { ok: false, reason: "unpartied" };
+        const said = !shout && !area && !to && !this.worldview.partyFor(this.me) ? { ok: false, reason: "unpartied" } : this.hosting ? this.hosting.chat(text, { to, shout, area, squad, quick }) : this.remote ? this.remote.chat(text, { to, shout, area, squad, quick }) : { ok: false, reason: "unpartied" };
 
         if (said.ok) {
             this.sound?.play("tap");

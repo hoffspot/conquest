@@ -610,7 +610,10 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      2-30's `gathering`, on a muster in the summary's `squads`: what it gathered at). 3-26's `viewed`, the answer to `again` for a game sent views, is a message
      only such a game is sent: additive and opted into, so no `NET_VERSION` bump. The same
      goes for 3-27's `seen`, which only such a game says; a world that hears none holds
-     nothing back for it.
+     nothing back for it. And for 2-36's `quick`, a phrase's id beside a chat line's words
+     (`client/js/core/quickchat.js`): the words still travel, so a game that knows nothing of
+     ids says and shows the line as ever. An id in that table is its phrase's for good: never
+     given to another, and a phrase no longer offered keeps its place (`retired`).
      And for 3-35's `how` and `played`: one joining a world hosted in a browser asks how it's
      played before its hello, and only one that asks is answered; a host that doesn't know the
      question says nothing, and is taken for lockstep after a wait (`HOW_WAIT`,

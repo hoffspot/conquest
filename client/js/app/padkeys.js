@@ -14,10 +14,11 @@
 // and goes when it's done with (`onDone`) or closed (Circle: what's typed kept; the code picker
 // puts the code back as it was).
 
+import { quickShown } from "../core/quickchat.js";
 import { KEY_ROWS, keyLetter, nearestThatWay, stepLetter, symbolOf } from "./gamepad.js";
 
 /** Ready lines to the party, chosen rather than typed with a controller in hand. */
-export const READY_LINES = Object.freeze(["On my way", "Wait for me", "Help!", "Over here", "Ready", "Thanks!", "Well fought", "Let's go"]);
+export const READY_LINES = Object.freeze(quickShown("pad").map(({ text }) => text));
 
 // What each of the keyboard's own keys shows
 const KEY_FACES = Object.freeze({ shift: "⇧ Shift", space: "Space", back: "⌫", done: "Done" });
@@ -154,6 +155,14 @@ export class PadKeyboard {
                 button.type = "button";
                 button.tabIndex = -1;
                 button.dataset.line = words;
+
+                // (A phrase of the quick chat's table: chosen, said by its id)
+                const phrase = quickShown("pad").find(({ text }) => text === words);
+
+                if (phrase) {
+                    button.dataset.quick = String(phrase.id);
+                }
+
                 button.addEventListener("click", () => this.press(button));
 
                 return button;
@@ -188,6 +197,11 @@ export class PadKeyboard {
 
         if (button.dataset.line) {
             write(input, button.dataset.line);
+
+            if (button.dataset.quick) {
+                input.dataset.quick = button.dataset.quick;
+            }
+
             this.#done();
 
             return;
