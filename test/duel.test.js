@@ -10,7 +10,7 @@ import { describe, it } from "node:test";
 import { DOWNED, DUEL_DOWN_MS, STEP_MS } from "../client/js/core/battle.js";
 import { COMMAND_SHAPES } from "../client/js/core/commandshape.js";
 import { SCOPES } from "../client/js/core/eventscope.js";
-import { DUEL, HOST_PLAYER, Host, presetRules, REFUSALS, RULE_CHOICES, RULES } from "../client/js/core/host.js";
+import { ASKING, DUEL, HOST_PLAYER, Host, presetRules, REFUSALS, RULE_CHOICES, RULES } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { OWN_PARTS, ownParts } from "../client/js/core/summary.js";
 
@@ -94,7 +94,9 @@ describe("a duel asked (core/host.js DUEL, the duel command)", () => {
         assert.deepEqual(told(run(host, 100), HOST_PLAYER), ["declined"]);
         assert.equal(host.duelOf(HOST_PLAYER), null);
 
-        // (Let lapse)
+        // (Let lapse: asked again a minute after the first, the plan's 2-34)
+        assert.equal(duel(host, HOST_PLAYER, "ask", { who: "bea" }).reason, "askedLately");
+        run(host, ASKING.again);
         assert.equal(duel(host, HOST_PLAYER, "ask", { who: "bea" }).ok, true);
 
         const lapsed = run(host, DUEL.askMs + 200);

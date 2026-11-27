@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { HOST_PLAYER, Host, TRADE } from "../client/js/core/host.js";
+import { ASKING, HOST_PLAYER, Host, TRADE } from "../client/js/core/host.js";
 import { Hosting, Joining } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { PACK_SIZE } from "../client/js/core/progress.js";
@@ -216,7 +216,9 @@ describe("trading face to face (host.js)", () => {
         assert.equal(host.trades.size, 0);
         assert.deepEqual(off(run(host, STEP_MS)).map(({ why }) => why), ["cancelled", "cancelled"]);
 
-        // Parted
+        // Parted (a minute after being said no: the plan's 2-34)
+        assert.equal(host.command(HOST_PLAYER, { type: "trade", with: "bryn" }).reason, "askedLately");
+        run(host, ASKING.again);
         begin();
         put(bryn, [ada.square[0] + TRADE.apart + 2, ada.square[1]]);
         assert.deepEqual(off(run(host, STEP_MS)).map(({ why }) => why), ["apart", "apart"]);
@@ -227,7 +229,8 @@ describe("trading face to face (host.js)", () => {
         assert.equal(off(run(host, TRADE.asking - 1000)).length, 0);
         assert.deepEqual(off(run(host, 2000)).map(({ why }) => why), ["unanswered", "unanswered"]);
 
-        // Fallen
+        // Fallen (a minute after asking and getting no answer)
+        run(host, ASKING.again);
         begin();
         Object.assign(bryn, { hp: 0, dead: true, respawnAt: host.battle.time + 5000 });
         assert.deepEqual(off(run(host, STEP_MS)).map(({ why }) => why), ["apart", "apart"]);

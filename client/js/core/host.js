@@ -428,6 +428,15 @@ export const PARTY = Object.freeze({ most: 4, reach: 40, askMs: 30000 });
  * where each of them is (`allies`: their dots on the maps); never what each has found of the
  * maps, a dungeon's run, or what falls to them: those are a party's.
  */
+/**
+ * Asking another player to a party, a duel or a trade (the scaling plan's 2-34): one asking of a
+ * kind to a player at a time, and `again` ms from asking them before the same can be asked of
+ * them again if they said no, let it lapse or it was called off (`askedLately` till then). One
+ * said yes to holds no one back: two who've traded, or fought a duel, can again at once. Saying
+ * yes by asking back (a duel's, a trade's) is no asking.
+ */
+export const ASKING = Object.freeze({ again: 60000, kinds: Object.freeze(["party", "duel", "trade"]) });
+
 export const SQUAD = Object.freeze({ most: 5, askMs: 60000, entries: Object.freeze(["open", "ask", "closed"]) });
 
 /**
@@ -1355,6 +1364,7 @@ export const REFUSALS = Object.freeze({
     partied: "They're in a party already.",
     partyFull: "The party's full: four at most.",
     asked: "They've been asked already.",
+    askedLately: "You asked them a moment ago: give it a minute before asking again.",
     uninvited: "No one's asked you to a party.",
     unpartied: "You're not in a party.",
     chatty: "Not so fast: give it a moment before saying more.",
@@ -1995,6 +2005,9 @@ export class Host {
         this.parties = new Map();
         this.partyIds = new Map();
         this.invites = new Map();
+        // (When each last asked whom to a party, a duel or a trade: ASKING, by
+        // `${kind}|${from}|${to}`, the battle's time. Kept while it holds anyone back)
+        this.askedLately = new Map();
         this.nextParty = 1;
         /**
          * The squads (SQUAD), by id: { id, leader (the party that leads it), parties (their ids,
@@ -3804,6 +3817,7 @@ export class Host {
             nextFollower: this.nextFollower,
             parties: copy([...this.parties.values()]),
             invites: copy([...this.invites.entries()]),
+            ...(this.#askedOf().length ? { askedLately: this.#askedOf() } : {}),
             nextParty: this.nextParty,
             // (The squads, SQUAD: none kept of a world with none; who's asked isn't kept)
             ...(this.squads.size ? { squads: copy([...this.squads.values()]) } : {}),
@@ -4053,6 +4067,7 @@ export class Host {
         host.parties = new Map((snapshot.parties ?? []).map((party) => [party.id, structuredClone(party)]));
         host.partyIds = new Map([...host.parties.values()].flatMap(({ id, members }) => members.map((member) => [member, id])));
         host.invites = new Map(structuredClone(snapshot.invites ?? []));
+        host.askedLately = new Map(structuredClone(snapshot.askedLately ?? []));
         host.duelAsks = new Map(structuredClone(snapshot.duelAsks ?? []));
         host.duels = new Map(structuredClone(snapshot.duels ?? []));
         host.noDuels = new Set(snapshot.noDuels ?? []);
@@ -6286,8 +6301,11 @@ export class Host {
 
         const asked = [...this.trades.values()].find((trade) => trade.from === other.id && trade.to === player.id);
 
-        // (They'd asked: it's begun, with nothing offered yet, and neither's asking anyone else)
+        // (They'd asked: it's begun, with nothing offered yet, and neither's asking anyone else;
+        // said yes to, their asking holds them back from no other)
         if (asked) {
+            this.askedLately.delete(`trade|${other.id}|${player.id}`);
+
             for (const trade of [...this.trades.values()]) {
                 if (trade !== asked && (trade.from === player.id || trade.from === other.id)) {
                     this.trades.delete(trade.id);
@@ -6299,6 +6317,12 @@ export class Host {
 
             return { ok: true, trade: asked.id, open: true };
         }
+
+        if (!this.#mayAsk("trade", player.id, other.id)) {
+            return refuse("askedLately");
+        }
+
+        this.#askedNow("trade", player.id, other.id);
 
         // (Asking: whoever they'd asked before is asked no longer)
         for (const trade of [...this.trades.values()]) {
@@ -17830,6 +17854,12 @@ export class Host {
                     return refuse("duelAsked");
                 }
 
+                if (!this.#mayAsk("duel", player.id, who)) {
+                    return refuse("askedLately");
+                }
+
+                this.#askedNow("duel", player.id, who);
+
                 const until = this.battle.time + DUEL.askMs;
 
                 this.duelAsks.set(who, { from: player.id, until });
@@ -17885,6 +17915,7 @@ export class Host {
         const at = this.battle.time + DUEL.startMs;
 
         this.duelAsks.delete(player.id);
+        this.askedLately.delete(`duel|${asker.id}|${player.id}`);
         this.duels.set(player.id, { with: asker.id, at });
         this.duels.set(asker.id, { with: player.id, at });
         this.#event("duel", { id: player.id, change: "begun", with: asker.id, name: asker.hero.name, at });
@@ -18296,6 +18327,25 @@ export class Host {
         }
     }
 
+    // Who asked whom what within ASKING.again, as kept: [[`${kind}|${from}|${to}`, when], ...]
+    #askedOf() {
+        return [...this.askedLately].filter(([, at]) => this.battle.time - at < ASKING.again);
+    }
+
+    // Whether a player may ask another to this (`kind`: one of ASKING.kinds) now: not within
+    // ASKING.again of having asked them the same
+    #mayAsk(kind, from, to) {
+        const at = this.askedLately.get(`${kind}|${from}|${to}`);
+
+        return at === undefined || this.battle.time - at >= ASKING.again;
+    }
+
+    // A player's asked another to this, now: noted (and what's too old to hold anyone back let go)
+    #askedNow(kind, from, to) {
+        this.askedLately = new Map(this.#askedOf());
+        this.askedLately.set(`${kind}|${from}|${to}`, this.battle.time);
+    }
+
     /** Who's asked a player to their party, and till when ({ from, until }), or null. */
     invitation(playerId) {
         return this.invites.get(playerId) ?? null;
@@ -18355,6 +18405,12 @@ export class Host {
                     return refuse("asked");
                 }
 
+                if (!this.#mayAsk("party", player.id, who)) {
+                    return refuse("askedLately");
+                }
+
+                this.#askedNow("party", player.id, who);
+
                 const until = this.battle.time + PARTY.askMs;
 
                 this.invites.set(who, { from: player.id, until });
@@ -18376,6 +18432,9 @@ export class Host {
                 }
 
                 const theirs = this.partyFor(asker.id);
+
+                // (Said yes to: no asking to hold them back from the next)
+                this.askedLately.delete(`party|${asker.id}|${player.id}`);
 
                 if (theirs && theirs.members.length >= PARTY.most) {
                     return refuse("partyFull");

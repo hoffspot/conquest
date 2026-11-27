@@ -992,7 +992,15 @@ test("two players make a party: one asks from the party menu, the other says no,
     await expect(host.locator("#banner")).toContainText("Bryn says no to your party.", { timeout: 30000 });
     await expect(asking).toHaveText("Invite", { timeout: 30000 });
 
-    // Asked again, Bryn says yes: a party of two, the host leading it
+    // Asked again at once: not yet, a minute from the first asking (the plan's 2-34); the
+    // minute up, asked, and Bryn says yes: a party of two, the host leading it
+    const since = await host.evaluate(() => window.pellagos.game.host.askedLately.get("party|player|guest-1"));
+
+    expect(typeof since).toBe("number");
+    await asking.click();
+    await expect(host.locator("#banner")).toContainText("You asked them a moment ago", { timeout: 30000 });
+    await expect(asked).toBeHidden();
+    await expect.poll(() => host.evaluate((from) => window.pellagos.game.host.battle.time - from, since), { timeout: 150000, intervals: [2000] }).toBeGreaterThanOrEqual(60000);
     await asking.click();
     await expect(asked).toBeVisible({ timeout: 30000 });
     await asked.getByRole("button", { name: "Accept" }).click();
