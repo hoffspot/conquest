@@ -3526,7 +3526,13 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   Ignore: let go, and after 30 seconds (`PARTY.askMs`) it lapses, the one who asked told they
   didn't answer. With **Refuse party invites** in Game options (`refuseInvites`) they're never
   shown it, and it lapses the same. One asked can't be asked again till they've answered or it's
-  lapsed. Said yes to (`accept`), they're in the asker's party; or, with the asker in none, a new
+  lapsed. **A minute between repeats** (core/host.js `ASKING`; the scaling plan's 2-34): one
+  who's asked another to a party, a duel or a trade can't ask them the same again within a
+  minute of asking (`ASKING.again`), whether they said no, let it lapse or it was called off
+  (`askedLately`: "You asked them a moment ago"). It's by kind and by who asks whom, so another
+  player may ask them, and they may ask back. One said yes to holds no one back: two who've
+  traded or fought a duel can again at once. Who asked whom when is the host's `askedLately`,
+  kept in a snapshot while it holds anyone back. `NET_VERSION` 263. Said yes to (`accept`), they're in the asker's party; or, with the asker in none, a new
   one, the asker leading it. Each in it is told who's come.
 - **Led.** The one leading it is crowned (in the party menu and on their icon); they can put one
   out (`remove`) or make another leader (`promote`). Anyone can leave (`leave`). When the leader
