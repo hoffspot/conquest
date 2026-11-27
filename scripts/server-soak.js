@@ -37,6 +37,12 @@
 //                  beside lockstep, never sent (core/viewfeed.js; the scaling plan's 3-14). The
 //                  report's `views` and a line at the end say what they cost: the pass's mean
 //                  time a step, and the bytes a second each player's frames came to
+//     --scenario stage2
+//                  Stage 2's exit scenario (scripts/stage2.js; the scaling plan's 2-35): a
+//                  `shared` world, everyone human in the humans' town, in two parties of four;
+//                  an invasion, a hell rift and a dungeon gone into by each party in a run of its
+//                  own; and the world's rules asked after on every copy. It fails if a rule's
+//                  broken, or if what it was to do wasn't done in a run long enough for it
 //     --shadow     every whole copy asks for its frames beside lockstep and holds each to its
 //                  copy (core/shadow.js; the plan's 3-17), the views dark if nothing else is
 //                  said. It fails if any frame differs from the copy it was held to
@@ -55,6 +61,7 @@ import { Bot, ThinBot } from "../client/js/core/bot.js";
 import { LIMITS } from "../server/access/limits.js";
 import { WORLD_SETTINGS } from "../server/storage/worlds.js";
 import { WorldServer } from "../server/world-server.js";
+import { judgeStage2, STAGE2, Stage2Play } from "./stage2.js";
 
 export const SERVER_SOAK = Object.freeze({
     // How long (minutes) before memory's expected to have settled; and how much (a share) the
@@ -88,7 +95,7 @@ const memory = () => {
 
 // --- A player, in a process of its own (--join) ---
 
-async function play({ port, world, key, name, race, seed, shadow = false }) {
+async function play({ port, world, key, name, race, seed, shadow = false, stage2 = null }) {
     const servers = new KnownServers(memory());
     const client = new ServerClient(servers.remember(addressOf(`127.0.0.1:${port}`)), { servers, secure: false });
     const entered = await client.enter({ world, key });
@@ -101,7 +108,12 @@ async function play({ port, world, key, name, race, seed, shadow = false }) {
         onClosed: (reason) => (closed = reason),
         onDrop: () => (dropped = true),
     });
-    const bot = new Bot(joining, { seed, shadow });
+    // (Its part in Stage 2's scenario, played over the bot's own: scripts/stage2.js)
+    let part = null;
+    const bot = new Bot(joining, { seed, shadow, onEvents: (events) => part?.hear(events) });
+
+    part = stage2 ? new Stage2Play(joining, bot, stage2) : null;
+
     let ready = false;
     let last = performance.now();
 
@@ -109,6 +121,7 @@ async function play({ port, world, key, name, race, seed, shadow = false }) {
         const now = performance.now();
 
         bot.tick(now - last);
+        part?.tick(now - last);
         last = now;
 
         // (Its copy made: playing, as the game says once it's loaded)
@@ -120,7 +133,7 @@ async function play({ port, world, key, name, race, seed, shadow = false }) {
 
     process.on("message", (message) => {
         if (message === "report") {
-            process.send({ ...bot.report(), closed, dropped });
+            process.send({ ...bot.report(), closed, dropped, ...(part ? { stage2: part.report() } : {}) });
         }
     });
 
@@ -391,7 +404,12 @@ export async function watched(server, world, { minutes, started = Date.now(), lo
     return samples;
 }
 
-export async function soakServer({ seed = 2, minutes = 120, players: count = 8, thin = 0, hold = false, fights = false, oneTown = false, tunnel = false, replication = null, shadow = false, log = console.log } = {}) {
+export async function soakServer({ seed = 2, minutes = 120, players: count = 8, thin = 0, hold = false, fights = false, oneTown = false, tunnel = false, replication = null, shadow = false, scenario = null, log = console.log } = {}) {
+    // (Stage 2's scenario: a `shared` world, everyone human in the humans' town, in parties)
+    const stage2 = scenario === "stage2";
+
+    oneTown = oneTown || stage2;
+
     const folder = await mkdtemp(path.join(os.tmpdir(), "pellagos-server-soak-"));
     const limits = limitsFor(count + thin);
     const server = await WorldServer.open(folder, { awake: () => ({ stop() {} }), router: false, funnel: false, ...(Object.keys(limits).length ? { limits } : {}) });
@@ -416,7 +434,7 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
         }
 
         const port = tunnel ? server.tunnelPort : server.port;
-        const made = await server.createWorld({ name: "The soak", seed, race: "human", heroes: "brought", settings: { debugCommands: true } });
+        const made = await server.createWorld({ name: "The soak", seed, race: "human", heroes: "brought", settings: { debugCommands: true, ...(stage2 ? { preset: "shared" } : {}) } });
         const raceOf = (k) => (oneTown ? "human" : SERVER_SOAK.peoples[k % SERVER_SOAK.peoples.length]);
 
         log(`World ${made.world} (seed ${seed}) on 127.0.0.1:${port}${tunnel ? ", its tunnel listener" : ""}${Object.keys(limits).length ? `; opened with ${JSON.stringify(limits)} in place of its limits` : ""}`);
@@ -425,7 +443,12 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
             const race = raceOf(k);
 
             // (Owners all: the fights they start are theirs to start, with the debug commands)
-            players.push(await player({ port, world: made.world, key: made.ownerKey, name: `Soak${k + 1}`, race, seed: k + 1, shadow }));
+            // (Its party, in the scenario: the first of each STAGE2.party leads it)
+            const first = k - (k % STAGE2.party);
+            const mates = Array.from({ length: STAGE2.party }, (_, j) => `Soak${first + j + 1}`).slice(0, Math.max(0, count - first));
+            const part = stage2 ? { stage2: { name: `Soak${k + 1}`, leader: `Soak${first + 1}`, mates, party: first / STAGE2.party } } : {};
+
+            players.push(await player({ port, world: made.world, key: made.ownerKey, name: `Soak${k + 1}`, race, seed: k + 1, shadow, ...part }));
             log(`Soak${k + 1} in, as ${/^[aeiou]/.test(race) ? "an" : "a"} ${race}`);
         }
 
@@ -459,13 +482,20 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
 
         failures.push(...judged.failures);
 
+        // (The scenario: what it was to do, done; and the rules held, on every copy)
+        const staged = stage2 ? judgeStage2(reports, { minutes }) : null;
+
+        if (staged) {
+            failures.push(...staged.failures);
+        }
+
         // (And every step, tick and save of the run counted into the buckets the server's own
         // metrics keep: what its /metrics would say, so a run and a live server are read alike)
         const sum = (key) => reports.reduce((all, report) => all + (report[key] ?? 0), 0);
 
         const passes = server.metrics.passesOf(made.world);
 
-        return { seed, minutes, options: { players: count, thin, hold, fights, layout: oneTown ? "one-town" : "spread", tunnel, ...(replication ? { replication } : {}), ...(shadow ? { shadow } : {}) }, limits, players: reports, samples, histograms: server.metrics.histogramsOf(made.world), passes, views: viewsOf(passes, count + thin), ...(shadows ? { shadows } : {}), judged, resyncs: sum("resyncs"), desyncs: sum("desyncs"), skips: sum("skips"), failures };
+        return { seed, minutes, options: { players: count, thin, hold, fights, layout: oneTown ? "one-town" : "spread", tunnel, ...(stage2 ? { scenario } : {}), ...(replication ? { replication } : {}), ...(shadow ? { shadow } : {}) }, limits, players: reports, samples, histograms: server.metrics.histogramsOf(made.world), passes, views: viewsOf(passes, count + thin), ...(shadows ? { shadows } : {}), ...(staged ? { stage2: staged } : {}), judged, resyncs: sum("resyncs"), desyncs: sum("desyncs"), skips: sum("skips"), failures };
     } finally {
         for (const one of players) {
             one.stop();
@@ -490,6 +520,7 @@ const { values } = parseArgs({
         tunnel: { type: "boolean" },
         replication: { type: "string" },
         shadow: { type: "boolean" },
+        scenario: { type: "string" },
         seed: { type: "string" },
         json: { type: "boolean" },
     },
@@ -501,6 +532,11 @@ if (values.join) {
 } else if (values["join-thin"]) {
     await playThin(JSON.parse(values["join-thin"]));
 } else if (process.argv[1] === fileURLToPath(import.meta.url)) {
+    if (values.scenario && values.scenario !== "stage2") {
+        console.error("--scenario stage2 is the only scenario there is");
+        process.exit(1);
+    }
+
     if (values.spread && values["one-town"]) {
         console.error("--spread or --one-town, not both");
         process.exit(1);
@@ -517,6 +553,7 @@ if (values.join) {
         tunnel: values.tunnel === true,
         replication: values.replication ?? null,
         shadow: values.shadow === true,
+        scenario: values.scenario ?? null,
     });
 
     await mkdir(path.dirname(REPORT), { recursive: true });
@@ -546,6 +583,13 @@ if (values.join) {
         const { players, frames, compared, late, differences } = report.shadows;
 
         console.log(`Shadows: ${players} players sent ${frames} frames beside lockstep, ${compared} held to their copies (${late} came too late to be), ${differences} differences`);
+    }
+
+    if (report.stage2) {
+        const { players, partied, invaded, rifted, delved, runs, checks, faults, kills, killMs, spoils } = report.stage2;
+
+        console.log(`Stage 2's scenario: ${partied} of ${players} in parties of ${STAGE2.party}; the invasion ${invaded ? "called" : "not called"}, the rift ${rifted ? "torn open" : "not torn open"}; ${delved} into the dungeon, ${runs} run(s) of it; the rules asked after ${checks} times, ${faults.length} fault(s)`);
+        console.log(`  (reported, not judged: a foe ${(killMs / 1000).toFixed(1)} s to kill on the middle, of ${kills} one copy saw fall; spoils found ${spoils} times)`);
     }
 
     console.log(`The world sent again to a copy ${report.resyncs} time(s) in all: ${report.desyncs} for a copy found astray, ${report.skips} for one fallen too far behind to catch up`);
