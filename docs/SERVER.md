@@ -818,6 +818,25 @@ the server runs on), with nothing else running. Nothing in CI runs it, and the n
 holds its runs, the mixed one at 25 among them, only to a mean step under 50 ms. Each run's late
 steps are in its report with their parts, as Health lists a server's.
 
+**Stage 2's gate** is the same soak with `-- --scenario stage2` (scripts/stage2.js; the scaling
+plan's 2-35). Its world has the `shared` preset, and its eight players come in as humans in the
+humans' town and play their parts over what the soak's bots do anyway: the first of each four
+asks the other three to a party; the first party's leader calls an invasion a minute and a half
+in and the second's tears a hell rift open at four minutes (the debug commands, theirs as
+owners); at seven minutes everyone sets off for the nearest dungeon and goes in, each party into
+a run of its own. Every two seconds each asks, of its own copy of the world, whether the rules
+hold (`ruleFaults`): the director's things in any three cells by three no more than an area
+holds, and no two runs of a dungeon with a floor or a lane in common; and of everything its copy
+hears, whether a foe's spoils went to a player who never struck it. It fails as the soak does,
+and if a rule's broken, if the world's sent again to a copy more than once a player-hour, or if
+what it was to do wasn't done in a run long enough for it. What a foe takes to kill and how
+often spoils are found are reported and not judged: the plan asks for them inside a band, and
+no band is set. On a 4-core Linux machine, six minutes of it: both parties made, the invasion
+and the rift called, the rules asked after 1,392 times with no fault, no copy sent the world
+again, the worst minute's 99th percentile 7.3 ms (too short for the dungeon, which is seven
+and a half minutes' walk on seed 2, or for memory's hour). The gate itself is two hours of it on
+the server's own Mac, and the owner's own session in a `shared` world: neither is run yet.
+
 `npm run soak:server` runs a world server with 8 players in Node, each playing by itself, for two
 hours, and says whether the world's memory stayed flat after the first hour (no more than 15% above
 where it stood then), whether every minute's 99th-percentile step stayed under 50 ms once the

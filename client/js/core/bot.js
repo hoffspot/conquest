@@ -54,9 +54,13 @@ export class Bot {
      *     sent out: core/host.js AFK).
      * @param {number} [options.seed] - Where it sends itself, and which way its fights face.
      * @param {object} [options.timing] - As BOT.
+     * @param {Function} [options.onEvents] - Told each step's events as its copy plays them.
      */
-    constructor(joining, { idle = false, seed = 1, timing = BOT, shadow = false } = {}) {
+    constructor(joining, { idle = false, seed = 1, timing = BOT, shadow = false, onEvents = null } = {}) {
         this.joining = joining;
+        // (Told what its copy hears, a step's events at a time: a scenario playing over it,
+        // scripts/stage2.js)
+        this.onEvents = onEvents;
         this.idle = idle;
         this.timing = timing;
         this.random = seed >>> 0 || 1;
@@ -123,6 +127,7 @@ export class Bot {
 
         for (let events = this.joining.step(); events !== null; events = this.joining.step()) {
             steps++;
+            this.onEvents?.(events);
 
             for (const event of events) {
                 if (event.type === "away" || event.type === "afk") {
