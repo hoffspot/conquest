@@ -7862,6 +7862,11 @@ export class Battle {
         const budget = held ? 0 : actor.pace * seconds * this.#share(actor, "speed") * (riding ? carried(actor.pace, walk, actor.speed * SPRINT) : 1);
         const travelled = held ? 0 : sparing ? this.#walked(actor, budget) : this.#travel(actor, budget);
 
+        // (Stopped, having gone through another player or one of theirs: not inside them)
+        if (actor.mingled === true && !actor.path.length && !held) {
+            this.#standApart(actor);
+        }
+
         // Getting nowhere, jostling: squeezing past (#bumps)
         if (!actor.path.length || held) {
             actor.progress = null;
@@ -8166,6 +8171,7 @@ export class Battle {
 
         const squeezing = this.time < actor.squeezeUntil;
         const end = squeezing && !this.#aim(actor) ? actor.path.at(-1) : null;
+        const mine = this.#playerOf(actor);
         let nearest = null;
         let best = Infinity;
 
@@ -8185,6 +8191,13 @@ export class Battle {
             }
 
             if (squeezing && (other.kind !== "player" || actor.kind === "player") && !this.#standsAt(other, end, THRONG)) {
+                continue;
+            }
+
+            // (Another player, or one of another's company: gone through, #mingles)
+            if (mine !== null && this.#mingles(actor, mine, other)) {
+                actor.mingled = true;
+
                 continue;
             }
 
@@ -8208,6 +8221,7 @@ export class Battle {
 
         const squeezing = this.time < actor.squeezeUntil;
         const end = squeezing && !this.#aim(actor) ? actor.path.at(-1) : null;
+        const mine = this.#playerOf(actor);
         let nearest = null;
         let best = Infinity;
         let nearestK = Infinity;
@@ -8227,6 +8241,13 @@ export class Battle {
                 continue;
             }
 
+            // (Another player, or one of another's company: gone through, #mingles)
+            if (mine !== null && this.#mingles(actor, mine, other)) {
+                actor.mingled = true;
+
+                continue;
+            }
+
             const after = hypot(other.x - x, other.y - y);
 
             if (after < 2 * BODY && after < hypot(other.x - actor.x, other.y - actor.y) && (after < best || (after === best && k < nearestK))) {
@@ -8237,6 +8258,54 @@ export class Battle {
         }
 
         return nearest;
+    }
+
+    // The player a character is, or follows (a hired adventurer, a creature called or raised: not
+    // one of a pack keeping to its own), or null
+    #playerOf(actor) {
+        if (actor.kind === "player") {
+            return actor.id;
+        }
+
+        return actor.leader && this.actor(actor.leader)?.kind === "player" ? actor.leader : null;
+    }
+
+    // Whether a character goes through another, not held up by them (the scaling plan's 2-32):
+    // players and their companies never block each other. `mine` is the player it is or follows
+    // (playerOf); the other is another player, or one of another's company, and no enemy of it
+    // (two in a duel, or of peoples at war where players fight, block as ever). But no one comes
+    // to rest inside another: one standing where it's going to stop (THRONG) is in its way
+    #mingles(actor, mine, other) {
+        const theirs = this.#playerOf(other);
+
+        return theirs !== null && theirs !== mine && !this.hostile(actor, other) && !this.#standsAt(other, actor.path.at(-1), THRONG);
+    }
+
+    // One who's gone through another (#mingles) and stopped: if it stands inside one it went
+    // through (stopped short, or they came to stand where it was going), it steps out to the
+    // nearest square no one's on. The later of two (by the roster) is the one that moves
+    #standApart(actor) {
+        const mine = this.#playerOf(actor);
+        const count = this.#foundNear(actor.map, actor.x, actor.y, 2 * BODY);
+        const near = this.#found;
+        let inside = false;
+
+        for (let i = 0; i < count && !inside; i++) {
+            const other = this.actors[near[i]];
+            const theirs = other === actor || other.dead || other.lurking || other.map !== actor.map ? null : this.#playerOf(other);
+
+            inside = theirs !== null && theirs !== mine && !other.path.length && hypot(other.x - actor.x, other.y - actor.y) < 2 * BODY && (other.mingled !== true || this.actors.indexOf(other) < this.actors.indexOf(actor));
+        }
+
+        if (!inside) {
+            delete actor.mingled;
+
+            return;
+        }
+
+        if (this.time - actor.lastPathAt >= REPATH_MS) {
+            this.#pathTo(actor, nearestFree(this.#squares(actor.map), actor.square, { taken: this.#others(actor.map, actor), within: 3 }));
+        }
     }
 
     // Whether someone is standing still (going nowhere, or held up) with their body over a point

@@ -497,6 +497,85 @@ describe("the battle (battle.js)", () => {
         assert.ok(one.x < player.x, "still on its side of them");
     });
 
+    it("never holds one player up behind another, nor behind one of another's company (the scaling plan's 2-32): gone through as if no one stood there; an enemy holds them up as ever; and no one stops inside another", () => {
+        const rows = ["###########", "...........", "###########"];
+        // How long a player takes down the corridor, from one end to the other, with `others` in it
+        const walked = (others, teams = ["hero", "hero"]) => {
+            const battle = new Battle(worldOf(rows), { seed: 1 });
+            const ada = battle.add({ id: "ada", kind: "player", weapon: "sword", team: teams[0], square: [1, 1] });
+            const added = others.map((other) => battle.add({ weapon: "sword", team: teams[1], ...other }));
+            let nearest = Infinity;
+            let t = 0;
+
+            battle.command("ada", { type: "move", to: [9, 1] });
+
+            for (; t < 30000 && (ada.path.length || ada.order); t += STEP_MS) {
+                battle.advance(STEP_MS);
+                nearest = Math.min(nearest, ...added.map((other) => Math.hypot(ada.x - other.x, ada.y - other.y)));
+            }
+
+            return { ms: t, nearest, ada, added, battle };
+        };
+        const alone = walked([]);
+
+        assert.deepEqual(alone.ada.square, [9, 1]);
+
+        // Another player standing in the only way: gone through, in the time it takes alone
+        const past = walked([{ id: "bryn", kind: "player", square: [5, 1] }]);
+
+        assert.deepEqual(past.ada.square, [9, 1]);
+        assert.equal(past.ms, alone.ms, "not held up a step");
+        assert.ok(past.nearest < 2 * BODY, "(through them: there's no way round)");
+        assert.deepEqual(past.added[0].square, [5, 1], "who's not moved by it");
+
+        // One of another's company (their hired sword, by them): the same
+        const company = walked([
+            { id: "bryn", kind: "player", square: [6, 1] },
+            { id: "hire", kind: "follower", ai: "follow", leader: "bryn", square: [5, 1] },
+        ]);
+
+        assert.deepEqual(company.ada.square, [9, 1]);
+        assert.equal(company.ms, alone.ms);
+
+        // One of the wild's keeping to its own leader is nobody's company: in the way as ever
+        const pack = walked([
+            { id: "elder", kind: "folk", neutral: true, square: [7, 1] },
+            { id: "pup", kind: "folk", neutral: true, leader: "elder", square: [5, 1] },
+        ]);
+
+        assert.ok(pack.ms > alone.ms, "held up by one that isn't a player's");
+
+        // An enemy player (of a people at war with theirs): in the way, and fought
+        const foe = walked([{ id: "bryn", kind: "player", square: [5, 1] }], ["hero", "raiders"]);
+
+        assert.ok(foe.ms > alone.ms || foe.ada.square[0] < 9, "an enemy's not gone through");
+
+        // Where they were going is where another stands: they stop by them, not in them
+        const battle = new Battle(worldOf(rows), { seed: 1 });
+        const ada = battle.add({ id: "ada", kind: "player", weapon: "sword", team: "hero", square: [1, 1] });
+        const bryn = battle.add({ id: "bryn", kind: "player", weapon: "sword", team: "hero", square: [5, 1] });
+
+        battle.command("ada", { type: "move", to: [5, 1] });
+        run(battle, 12000);
+        assert.ok(Math.hypot(ada.x - bryn.x, ada.y - bryn.y) >= 2 * BODY - 1e-9, "by them, not in them");
+        assert.ok(ada.x < bryn.x);
+
+        // Stopped short while going through one (who then stays): they step out of them
+        battle.command("ada", { type: "move", to: [9, 1] });
+
+        for (let t = 0; t < 20000 && Math.hypot(ada.x - bryn.x, ada.y - bryn.y) >= BODY; t += STEP_MS) {
+            battle.advance(STEP_MS);
+        }
+
+        assert.ok(Math.hypot(ada.x - bryn.x, ada.y - bryn.y) < BODY, "(in the midst of them)");
+        battle.command("ada", { type: "stop" });
+        run(battle, 6000);
+        assert.ok(Math.hypot(ada.x - bryn.x, ada.y - bryn.y) >= 2 * BODY - 1e-9, `left standing ${Math.hypot(ada.x - bryn.x, ada.y - bryn.y).toFixed(2)} m from them`);
+        assert.equal(ada.path.length, 0);
+        assert.equal(ada.mingled, undefined);
+        assert.deepEqual(bryn.square, [5, 1]);
+    });
+
     it("steps round someone standing by a wall in its way the same way all along, not one way and then back the other, rocking where it stands", () => {
         // (Its way along the wall, half a metre out from it; the one in it a little further out,
         // all but straight ahead: round them on the open side, or between them and the wall, but

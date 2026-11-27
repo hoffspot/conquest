@@ -1295,7 +1295,16 @@ whoever's harmed it most, and can be taunted off them (docs/WILDS.md *Whom they 
   it finds its way again. Getting no nearer where it's going for 1.5 s (two jostling in a
   narrow way), it squeezes past whoever's there for 2 s: but never a player (unless it's one),
   nor, unless it's after someone, anyone standing still, or held up, within `THRONG` of where
-  it's going. Before, the
+  it's going. **Players and their companies never block each other** (`#mingles`; the scaling
+  plan's 2-32): a player, or one who follows a player (a hired adventurer, a creature called or
+  raised), goes straight through another player and through another's company, with no wait
+  and no step aside, so no one can hold a doorway, a stair or a narrow way against the rest.
+  An enemy is in the way as ever (two in a duel, or of peoples at war where players fight), as
+  is one of the wild's keeping to its own leader. And no one comes to rest inside another: one
+  standing within `THRONG` of where it's going still stops it by them, and one who stops short
+  while going through another (or finds them come to stand where it was going) steps out to
+  the nearest square no one's on (`#standApart`). A player and their own company are to each
+  other as they were. `NET_VERSION` 261. Before, the
   townsfolk making for an errand where someone stood (another of them, or the player standing
   on its square) went round and round them, then squeezed through onto where they stood, and
   stood there in them. Sent to fight someone, it stops as soon as they're within reach (with a
