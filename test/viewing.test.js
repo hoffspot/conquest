@@ -397,7 +397,14 @@ describe("a replicated world's link (core/viewing.js)", () => {
         const door = host.world.interiors.buildings.get(key).door;
 
         assert.ok(host.open.has(key), "the world's got it ready");
-        play(8);
+
+        // (Told, and got ready in her game, within a second and a half, whenever in the summary's
+        // round she got there: she's ten steps sooner since Bob, where they both came in, stopped
+        // holding her up, the plan's 2-32, and eight steps on no longer happened to be when)
+        for (let k = 0; k < 30 && (kept.delveOf(site.id)?.tier === undefined || !kept.open.has(key)); k++) {
+            play();
+        }
+
         assert.equal(kept.delveOf(site.id)?.tier, host.delveOf(site.id).tier, "how strong it's made is said");
         assert.ok(kept.open.has(key), "and her game has it ready");
         assert.ok(ann.events.some((event) => event.type === "open" && event.key === key), "which her game's told, as a copy's host tells it");
