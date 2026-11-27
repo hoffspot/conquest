@@ -1372,6 +1372,7 @@ export const REFUSALS = Object.freeze({
     shoutsOff: "You've turned shouts off: turn Hear shouts on in the Chat to shout.",
     repeated: "You've just shouted that.",
     areaOff: "The area channel is off in this world.",
+    noPhrase: "That's no phrase this world knows.",
     closed: "They aren't taking direct messages.",
     leader: "Only the party's leader can do that.",
     squadded: "Your party's in a squad already.",

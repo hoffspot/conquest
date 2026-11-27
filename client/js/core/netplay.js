@@ -133,6 +133,7 @@ import { Shadow } from "./shadow.js";
 import { SHADOW_KIND, VIEW_MODE, ViewFeed } from "./viewfeed.js";
 import { misshapen, MISSHAPEN, nearer } from "./commandshape.js";
 import { count, lap } from "./probe.js";
+import { quickText } from "./quickchat.js";
 import { selfOf } from "./selfstate.js";
 import { STARTING_WEAPONS } from "./weapons.js";
 import { decode, encode, encodePlain, fromBase64, toBase64 } from "./wire.js";
@@ -380,7 +381,7 @@ export const CHAT = Object.freeze({ most: 200, burst: 5, burstMs: 10000, kept: 5
  * Why a line wasn't said (as host.js REFUSALS names them): nothing to say, in no party, too many too
  * quickly; a direct message to no one in the world, or to one not taking that kind ("closed").
  */
-export const CHAT_REFUSED = Object.freeze(["empty", "unpartied", "chatty", "nobody", "closed", "shoutsOff", "repeated", "areaOff", "squadless"]);
+export const CHAT_REFUSED = Object.freeze(["empty", "unpartied", "chatty", "nobody", "closed", "shoutsOff", "repeated", "areaOff", "squadless", "noPhrase"]);
 
 /**
  * Which lines a player takes till they say otherwise: direct messages from their party and from
@@ -849,7 +850,13 @@ export class Session {
                 break;
             case "chat": {
                 const id = this.players.get(peer);
-                const said = id ? (message.shout === true ? this.#shout(id, message.text) : message.area === true ? this.#shout(id, message.text, { area: true }) : message.squad === true ? this.#say(id, message.text, null, { squad: true }) : this.#say(id, message.text, typeof message.to === "string" ? message.to : null)) : null;
+                // (A phrase chosen, by its id: the table's words said, whatever came with it, and the
+                // line marked so; an id that's no phrase's refused. core/quickchat.js)
+                // (Anything said for an id is one: null, a string, a number that's no phrase's)
+                const chosen = message.quick !== undefined;
+                const words = chosen ? quickText(message.quick) : message.text;
+                const how = chosen ? { quick: message.quick } : {};
+                const said = !id ? null : words === null ? { ok: false, reason: "noPhrase" } : message.shout === true ? this.#shout(id, words, how) : message.area === true ? this.#shout(id, words, { area: true, ...how }) : message.squad === true ? this.#say(id, words, null, { squad: true, ...how }) : this.#say(id, words, typeof message.to === "string" ? message.to : null, how);
 
                 if (said && !said.ok) {
                     this.hosting.post(peer, "unsaid", encode({ kind: "unsaid", reason: said.reason, ...(said.name ? { name: said.name } : {}) }));
@@ -889,8 +896,16 @@ export class Session {
      * (CHAT_REFUSED: nothing to say, in no party, too many lines too quickly, no such player, or
      * one not taking that kind of message: `name`, theirs).
      */
-    chat(text, { to = null, shout = false, area = false, squad = false } = {}) {
-        return shout ? this.#shout(HOST_PLAYER, text) : area ? this.#shout(HOST_PLAYER, text, { area: true }) : squad ? this.#say(HOST_PLAYER, text, null, { squad: true }) : this.#say(HOST_PLAYER, text, to);
+    chat(text, { to = null, shout = false, area = false, squad = false, quick = null } = {}) {
+        // (A phrase chosen, `quick`: its id, core/quickchat.js. The table's words said, marked so)
+        const words = quick === null ? text : quickText(quick);
+        const how = quick === null ? {} : { quick };
+
+        if (words === null) {
+            return { ok: false, reason: "noPhrase" };
+        }
+
+        return shout ? this.#shout(HOST_PLAYER, words, how) : area ? this.#shout(HOST_PLAYER, words, { area: true, ...how }) : squad ? this.#say(HOST_PLAYER, words, null, { squad: true, ...how }) : this.#say(HOST_PLAYER, words, to, how);
     }
 
     /** Which lines a player takes (`party`, `world`, `shout`: DMS_TAKEN), as they say (the host's own player's, as the game says). */
@@ -904,7 +919,7 @@ export class Session {
     // (`area`: said to the area channel instead, AREA_CHAT: to every player in the sayer's
     // settlement or on their cell of land who takes shouts, wherever in it they are; refused
     // where the world has the channel off)
-    #shout(id, said, { area = false } = {}) {
+    #shout(id, said, { area = false, quick = null } = {}) {
         const text = chatLine(said);
 
         if (!text) {
@@ -935,7 +950,7 @@ export class Session {
         lately.push({ at: now, text });
 
         const from = this.host.battle.actor(id);
-        const line = { from: id, name: this.host.players.get(id)?.hero.name ?? "", text, ...(area ? { area: true } : { shout: true }) };
+        const line = { from: id, name: this.host.players.get(id)?.hero.name ?? "", text, ...(area ? { area: true } : { shout: true }), ...(quick !== null ? { quick } : {}) };
         const sent = encode({ kind: "chat", ...line });
         const where = area ? this.host.chatArea(id) : null;
         const hears = (other) => {
@@ -967,7 +982,7 @@ export class Session {
     // sayer alone, if they take that kind (#dms), else the sayer told whose aren't
     // (`squad`: to their party and every party allied with it, core/host.js SQUAD, the scaling
     // plan's 2-29; refused of one whose party's in no squad, "squadless")
-    #say(id, said, to = null, { squad = false } = {}) {
+    #say(id, said, to = null, { squad = false, quick = null } = {}) {
         const text = chatLine(said);
         const party = this.host.partyFor(id);
         const other = to === null ? null : this.host.players.get(to);
@@ -1005,7 +1020,7 @@ export class Session {
 
         this.said.set(id, [...lately, now]);
 
-        const line = { from: id, name: this.host.players.get(id)?.hero.name ?? "", text, ...(dm ? { to, toName: other.hero.name, dm } : {}), ...(squad ? { squad: true } : {}) };
+        const line = { from: id, name: this.host.players.get(id)?.hero.name ?? "", text, ...(dm ? { to, toName: other.hero.name, dm } : {}), ...(squad ? { squad: true } : {}), ...(quick !== null ? { quick } : {}) };
         const sent = encode({ kind: "chat", ...line });
 
         for (const member of dm ? [id, to] : squad ? [...party.members, ...this.host.allies(id)] : party.members) {
@@ -2432,7 +2447,7 @@ export class Joining {
                 const dm = (message.dm === "party" || message.dm === "world") && typeof message.to === "string" ? { to: message.to, toName: typeof message.toName === "string" ? message.toName : "", dm: message.dm } : {};
 
                 if (text && typeof message.from === "string") {
-                    this.onChat({ from: message.from, name: typeof message.name === "string" ? message.name : "", text, ...dm, ...(message.shout === true ? { shout: true } : {}), ...(message.area === true ? { area: true } : {}), ...(message.squad === true ? { squad: true } : {}) });
+                    this.onChat({ from: message.from, name: typeof message.name === "string" ? message.name : "", text, ...dm, ...(message.shout === true ? { shout: true } : {}), ...(message.area === true ? { area: true } : {}), ...(message.squad === true ? { squad: true } : {}), ...(quickText(message.quick) !== null ? { quick: message.quick } : {}) });
                 }
 
                 break;
@@ -2454,14 +2469,19 @@ export class Joining {
      * to them (heard back too). Returns { ok: true, pending: true }, or, with nothing to say,
      * { ok: false, reason: "empty" }.
      */
-    chat(text, { to = null, shout = false, area = false, squad = false } = {}) {
-        const line = chatLine(text);
+    chat(text, { to = null, shout = false, area = false, squad = false, quick = null } = {}) {
+        // (A phrase chosen, `quick`: sent as its id beside its words, core/quickchat.js)
+        const line = quick === null ? chatLine(text) : quickText(quick);
+
+        if (quick !== null && line === null) {
+            return { ok: false, reason: "noPhrase" };
+        }
 
         if (!line) {
             return { ok: false, reason: "empty" };
         }
 
-        this.send(encode({ kind: "chat", text: line, ...(shout ? { shout: true } : area ? { area: true } : squad ? { squad: true } : typeof to === "string" ? { to } : {}) }));
+        this.send(encode({ kind: "chat", text: line, ...(quick !== null ? { quick } : {}), ...(shout ? { shout: true } : area ? { area: true } : squad ? { squad: true } : typeof to === "string" ? { to } : {}) }));
 
         return { ok: true, pending: true };
     }

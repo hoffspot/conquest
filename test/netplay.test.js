@@ -20,6 +20,7 @@ import { MOTION } from "../client/js/core/motion.js";
 import { AGAIN, AREA_CHAT, CHAT, CHAT_REFUSED, chatLine, DMS_TAKEN, SHOUT, characterFrom, CHECK_EVERY, HEARD, Hosting, Joining, LATELY, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, QUIET, SELF, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { selfOf } from "../client/js/core/selfstate.js";
+import { QUICK_CHAT, QUICK_MOST, QUICK_SHOWN, quickShown, quickText } from "../client/js/core/quickchat.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
 import { areaChatFor } from "../server/reopen.js";
@@ -1663,6 +1664,81 @@ describe("playing together (netplay.js)", () => {
         assert.ok(readFileSync(new URL("../server/world-worker.js", import.meta.url), "utf8").includes("hosting.session.areaChat = areaChatFor(settings);"));
         // (And a shout's still a shout there)
         assert.equal(hosting.chat("Still here", { shout: true }).reason, "chatty");
+    });
+
+    it("says a phrase of the quick chat's by its id (the scaling plan's 2-36): the table's words said, whatever came with the id, and the line marked `quick` to all who hear it; an id that's no phrase's refused; and words typed to say the same not marked", () => {
+        const { host, hosting, join, deliver } = opened();
+        const bryn = join(guest("Bryn"));
+        const heard = { host: [], bryn: [] };
+        const unsaid = [];
+
+        hosting.onChat = (line) => heard.host.push(line);
+        bryn.joining.onChat = (line) => heard.bryn.push(line);
+        bryn.joining.onUnsaid = (reason) => unsaid.push(reason);
+        host.command(HOST_PLAYER, { type: "party", do: "invite", who: "guest-1" });
+        bryn.joining.command({ type: "party", do: "accept" });
+        deliver();
+
+        assert.ok(CHAT_REFUSED.includes("noPhrase") && REFUSALS.noPhrase);
+        assert.deepEqual([quickText(1), quickText(QUICK_CHAT.length), quickText(0), quickText(QUICK_CHAT.length + 1), quickText(1.5), quickText("1"), quickText(undefined)], ["On my way!", QUICK_CHAT.at(-1).text, null, null, null, null, null]);
+
+        // The host's own, and a guest's: the phrase's words, marked with its id
+        assert.deepEqual(hosting.chat("", { quick: 4 }), { ok: true });
+        assert.deepEqual(bryn.joining.chat("", { quick: 1 }), { ok: true, pending: true });
+        deliver();
+
+        const [help, coming] = [{ from: HOST_PLAYER, name: "Ada", text: "Help!", quick: 4 }, { from: "guest-1", name: "Bryn", text: "On my way!", quick: 1 }];
+
+        assert.deepEqual(heard, { host: [help, coming], bryn: [help, coming] });
+
+        // Words typed to say the same: said, and not marked
+        assert.deepEqual(bryn.joining.chat("On my way!"), { ok: true, pending: true });
+        deliver();
+        assert.deepEqual(heard.host.at(-1), { from: "guest-1", name: "Bryn", text: "On my way!" });
+        assert.equal("quick" in heard.bryn.at(-1), false);
+
+        // An id with other words beside it (a game that's been tampered with): the table's said
+        bryn.joining.send(encode({ kind: "chat", text: "Meet me at the docks at nine", quick: 6 }));
+        deliver();
+        assert.deepEqual(heard.host.at(-1), { from: "guest-1", name: "Bryn", text: "Thanks!", quick: 6 });
+
+        // An id out of range, or no id at all: refused, nothing said; a game told at once of its own
+        const said = heard.host.length;
+
+        assert.deepEqual(hosting.chat("Hello", { quick: 0 }), { ok: false, reason: "noPhrase" });
+        assert.deepEqual(bryn.joining.chat("Hello", { quick: QUICK_CHAT.length + 1 }), { ok: false, reason: "noPhrase" });
+
+        for (const quick of [0, -1, QUICK_CHAT.length + 1, 2.5, "3", null, true]) {
+            bryn.joining.send(encode({ kind: "chat", text: "Hello", quick }));
+        }
+
+        deliver();
+        assert.deepEqual(unsaid, Array(7).fill("noPhrase"));
+        assert.equal(heard.host.length, said);
+
+        // On every channel: a shout's, the squad's and a direct message's marked the same
+        assert.deepEqual(hosting.chat("", { quick: 9, shout: true }), { ok: true });
+        assert.deepEqual(hosting.chat("", { quick: 6, to: "guest-1" }), { ok: true });
+        deliver();
+        assert.deepEqual(heard.bryn.slice(-2), [{ from: HOST_PLAYER, name: "Ada", text: "Over here!", shout: true, quick: 9 }, { from: HOST_PLAYER, name: "Ada", text: "Thanks!", to: "guest-1", toName: "Bryn", dm: "party", quick: 6 }]);
+    });
+
+    it("keeps the quick chat's phrases a closed table: ids from 1 with none skipped, each a few words with no number or name in it, and each place's buttons phrases of it", () => {
+        assert.deepEqual(QUICK_CHAT.map(({ id }) => id), QUICK_CHAT.map((_, k) => k + 1));
+        assert.equal(new Set(QUICK_CHAT.map(({ text }) => text)).size, QUICK_CHAT.length);
+        assert.equal(QUICK_MOST, 16);
+
+        for (const { id, text } of QUICK_CHAT) {
+            assert.ok(text.length <= QUICK_MOST && /^[A-Z][A-Za-z' ]+[.!?]$/.test(text), `${id}: ${text}`);
+            assert.equal(chatLine(text), text, `${id}: said as it's written`);
+        }
+
+        // (An id's a phrase's for good: these are as they were first sent)
+        assert.deepEqual(QUICK_CHAT.slice(0, 10).map(({ text }) => text), ["On my way!", "Wait for me.", "Follow me!", "Help!", "Ready.", "Thanks!", "Well fought!", "Back to town.", "Over here!", "Let's go!"]);
+        assert.deepEqual(QUICK_SHOWN, { panel: [1, 2, 3, 4, 5, 6, 7, 8], pad: [1, 2, 4, 9, 5, 6, 7, 10] });
+        assert.deepEqual(quickShown("panel").map(({ text }) => text), ["On my way!", "Wait for me.", "Follow me!", "Help!", "Ready.", "Thanks!", "Well fought!", "Back to town."]);
+        assert.deepEqual(quickShown("pad").map(({ id }) => id), QUICK_SHOWN.pad);
+        assert.deepEqual(quickShown("nowhere"), []);
     });
 
     it("says a line to the squad (the scaling plan's 2-29): to the sayer's own party and to every player of the parties allied with it, wherever they are, and to no one else; refused of one in no squad", () => {
