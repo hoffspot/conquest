@@ -28,6 +28,8 @@ const SWITCHES = Object.freeze({
     "world public": "2027-11-22",
     // (Nanny Mode's scope, off till a country source exists and the owner rules public or all: 6B-16)
     "server nanny": "2027-11-27",
+    // (What's in front of the tunnel's port, Tailscale Funnel as shipped: 6C-1)
+    "server front": "2027-11-28",
 });
 
 const CHEAP = Object.freeze({ N: 2 ** 10, r: 8, p: 1, length: 32, maxmem: 32 * 1024 * 1024 });

@@ -370,6 +370,37 @@ internet panel):
 3. **Tested from outside.** The game's **Test from outside** (Multiplayer, Known Servers), from a phone on its mobile data,
    tries every way in and tells the page how it went.
 
+**What's in front of the tunnel's port** (`server/guards.js` `FRONTS`; the scaling plan's 6C-1).
+With **Let the internet in through a tunnel** on (`funnel`), the server listens on its tunnel
+port, on the computer alone, and takes everything that comes there for the internet's. Settings'
+**What's in front** (`front`) says who brings it:
+
+| Front | Who runs it | The one header believed for a visitor's address |
+|---|---|---|
+| `funnel`, Tailscale Funnel (as shipped) | The server asks Tailscale itself | `X-Forwarded-For`, its last address |
+| `cloudflared`, Cloudflare Tunnel | The owner, pointed at `http://127.0.0.1:<tunnel port>` | `CF-Connecting-IP`, one address |
+| `proxy`, a reverse proxy of the owner's | The owner, pointed at the same | `X-Forwarded-For`, its last address |
+
+- **One header a front, and no other.** A visitor can write any header they like; the front
+  overwrites or appends only its own. Behind Cloudflare an `X-Forwarded-For` is passed on with
+  whatever the visitor put in it, so it isn't read there. Where the front's header says nothing
+  usable, the visitor's address is "tunnel": still the internet's, never home's.
+- **No header at all on a direct connection.** There, where a request is from is its socket's own
+  address, whatever its headers claim.
+- **Its name.** Funnel's is found by asking Tailscale. For the other two, give **The name the
+  internet reaches this server by** (`frontHost`: `pellagos.example.com`); the server answers to
+  that name through the tunnel, lists `https://` that name among its addresses, and lets pages
+  from it use it. Until it's a host's name, the server isn't reached through its front, and the
+  internet panel says so. The front's own TLS is the visitor's: the tunnel's port is plain.
+- **Changing the front, its name or the tunnel's port** sends out whoever came in through it and
+  opens the tunnel again as it's set.
+- **Tailscale asked again** after a failure in 1, 5 then 30 minutes, each a fifth sooner or later
+  by chance (`FUNNEL_TIMES.jitter`), so servers that lost a tunnel together don't all ask at once.
+- A proxy of the owner's must append the visitor's address to `X-Forwarded-For` itself (nginx's
+  `$proxy_add_x_forwarded_for`, Caddy by default), and nothing but it may reach the tunnel's
+  port: it listens on the computer alone for that reason.
+- The country a front says a visitor is in (Cloudflare's `CF-IPCountry`) is the plan's 6B-20.
+
 **Close to the internet** stops answering it at once.
 
 ## Bringing your own world

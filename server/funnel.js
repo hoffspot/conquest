@@ -17,7 +17,10 @@
 import { tailscale as platformTailscale } from "./platform/index.js";
 
 /** How long a command may take (ms), how often it's looked at again, and how long it waits after failing. */
-export const FUNNEL_TIMES = Object.freeze({ command: 15000, look: 10 * 60 * 1000, retry: [60 * 1000, 5 * 60 * 1000, 30 * 60 * 1000] });
+export const FUNNEL_TIMES = Object.freeze({ command: 15000, look: 10 * 60 * 1000, retry: [60 * 1000, 5 * 60 * 1000, 30 * 60 * 1000], jitter: 0.2 });
+
+/** A wait (ms) made a little shorter or longer by chance (`random`: 0 to 1), by FUNNEL_TIMES.jitter of itself at the most either way. */
+export const jittered = (wait, random) => Math.round(wait * (1 + (2 * random - 1) * FUNNEL_TIMES.jitter));
 
 /** Where Funnel takes the internet's connections (Tailscale offers 443, 8443 and 10000). */
 export const FUNNEL_PORT = 443;
@@ -50,9 +53,9 @@ const complaintOf = ({ stdout = "", stderr = "" }) =>
         .find(Boolean) ?? "";
 
 export class Funnel {
-    /** For `server` (world-server.js: its tunnelPort, reachChanged()). `run` (Tailscale's command) and `clock` for the tests. */
-    constructor(server, { run = platformTailscale(), clock = Date.now } = {}) {
-        Object.assign(this, { server, run, clock });
+    /** For `server` (world-server.js: its tunnelPort, reachChanged()). `run` (Tailscale's command), `clock` and `random` (the chance in how long it waits to ask again) for the tests. */
+    constructor(server, { run = platformTailscale(), clock = Date.now, random = Math.random } = {}) {
+        Object.assign(this, { server, run, clock, random });
         this.on = false;
         this.working = null;
         this.timer = null;
@@ -237,7 +240,9 @@ export class Funnel {
     }
 
     #failed(error) {
-        const wait = FUNNEL_TIMES.retry[Math.min(this.tries, FUNNEL_TIMES.retry.length - 1)];
+        // (A little sooner or later than the step says, FUNNEL_TIMES.jitter either way: servers that
+        // lost the same tunnel at the same moment don't all ask for it again at once)
+        const wait = jittered(FUNNEL_TIMES.retry[Math.min(this.tries, FUNNEL_TIMES.retry.length - 1)], this.random());
 
         this.tries++;
         this.open = false;
