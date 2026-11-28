@@ -243,3 +243,5 @@ if (process.send) {
 }
 
 server.updater.start();
+// (The country file, for Nanny Mode: fetched once a month while it's on, net/geoip.js)
+server.countries.start();

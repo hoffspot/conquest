@@ -624,6 +624,11 @@ test("its name, given in Settings, is the server's at once: the page's own, its 
 
     await expect(name).toHaveValue("");
     await expect(name).toHaveAttribute("placeholder", server.ownName);
+
+    // (Under Nanny Mode's countries: the country file, none yet, and whose it is, server/net/geoip.js)
+    await expect(settings.locator("[data-countries]")).toContainText("No country file yet: every connection's country is unknown.");
+    await expect(settings.locator("[data-countries] a")).toHaveText("IP Geolocation by DB-IP");
+    await expect(settings.locator("[data-countries] a")).toHaveAttribute("href", "https://db-ip.com");
     await name.fill("  Pellagos   Home Server ");
     await settings.getByRole("button", { name: "Save" }).click();
     await expect(page.locator("#who")).toContainText("Pellagos Home Server · version");

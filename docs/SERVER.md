@@ -971,9 +971,26 @@ settings (the scaling plan's 6B-16):
   told is in it too, at the oldest age listed. A missing answer must not be the way out.
 - **Hold days** (`nannyHoldDays`, 30): how long one seen from a listed country stays in it after.
 
-**Leave it off for now.** Nothing looks a connection's country up yet (the plan's 6B-19 and
-6B-20), so with it on every connection's country is unknown and, with unknown countries in it,
-everyone is. Nothing lifts it yet either: that takes a passed age check at or over the
+**The country file** (`server/net/geoip.js`; the plan's 6B-19). A connection's country is read
+from DB-IP's free "IP to Country Lite" file ([IP Geolocation by DB-IP](https://db-ip.com), CC BY
+4.0, credited in the game's Credits and under Nanny Mode's countries on the management page).
+
+- **Fetched by the server**, into `geoip/` in its data folder, never kept in the repository:
+  this month's file (last month's, if this month's isn't out), about 31 MB compressed, as the
+  server starts and once a day after, whenever it holds none or an older month's. Only while
+  Nanny Mode is on: off, nothing is asked of anyone. Turning it on fetches at once.
+- **Kept only once it's read whole.** A download that's cut short, isn't the file, or holds
+  too few ranges is let go of, and the file there was goes on answering. Settings says the
+  file's month, how many ranges it holds, when it was fetched, and why the last fetch failed.
+- **Looked up in memory** (IPv4 and IPv6 ranges in typed arrays, a binary search; an IPv4
+  address written as IPv6 is the IPv4 one). No other service is asked about any connection.
+- **Unknown** is the answer with no file, with one more than 62 days old, for an address in no
+  country's range, and for the server's own network, which has no country. With unknown
+  countries in Nanny Mode (as shipped), that puts players on the server's own Wi-Fi in it.
+- As a newer file is read, whoever is in a world is looked at again.
+
+**Leave it off for now.** The file is right about a country most of the time, not all of it, and
+a front's own word for the country (the plan's 6B-20) isn't read yet. Nothing lifts it yet either: that takes a passed age check at or over the
 country's age (6B-22), never an age someone says they are. The hold needs a record of the
 player the server doesn't keep yet (6B-1, 6B-21); `nannyFor` reads both records if it's given
 them.

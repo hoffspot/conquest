@@ -396,7 +396,11 @@ export class PartyPanel {
         const what = element("summary", "");
 
         what.append(nannyIcon(), element("span", "", "What's this?"));
-        this.nannyWhat.append(what, element("p", "journal-note", NANNY_WHAT));
+        // (Where a server tells a connection's country from: the credit DB-IP's licence asks for)
+        const credit = element("p", "journal-note chat-nanny-credit");
+
+        credit.append(Object.assign(element("a", "", "IP Geolocation by DB-IP"), { href: "https://db-ip.com", target: "_blank", rel: "noopener" }));
+        this.nannyWhat.append(what, element("p", "journal-note", NANNY_WHAT), credit);
         this.chatBody.append(this.nannyNotice, this.chatLog, this.chatNote, this.quick, this.phrasesHead, this.phrases, this.form, this.nannyNote, this.nannyWhat, this.shoutsSwitch);
         this.shownLine = null;
 

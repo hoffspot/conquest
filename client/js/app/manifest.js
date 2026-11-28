@@ -67,7 +67,7 @@ export const MANIFEST = Object.freeze([
             ["js/app/memoryguard.js", 5673, "927481090c"],
             ["js/app/minimap.js", 61154, "74b29b46c7"],
             ["js/app/pack.js", 116609, "f3ecb61405"],
-            ["js/app/partypanel.js", 62127, "dee4b87c66"],
+            ["js/app/partypanel.js", 62455, "5a90ae0098"],
             ["js/app/peer.js", 44164, "2ab5c75b64"],
             ["js/app/plan-worker.js", 1669, "a83a0bcb7e"],
             ["js/app/plans.js", 11719, "4ec56330af"],

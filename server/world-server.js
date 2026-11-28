@@ -40,6 +40,7 @@ import { answer, connectionOf, guard, hostsOf, INTERNET_CLOSED, LIMITS_HTTP, ori
 import { Log } from "./log.js";
 import { Management } from "./manage.js";
 import { Nearby } from "./nearby.js";
+import { CountryFile } from "./net/geoip.js";
 import { Updater } from "./update/updater.js";
 import { ACME_TLS, reverseNameOf } from "./net/acme.js";
 import { newKey, pem, pemOfKey, selfSigned } from "./net/x509.js";
@@ -115,6 +116,7 @@ export class WorldServer {
         const server = new WorldServer({ root, folder, access, identity, adminKey, ...options });
 
         server.history = await History.open(path.join(root, HISTORY_FILE));
+        await server.countries.load();
 
         for (const id of await folder.worlds.ids()) {
             await server.#add(await folder.worlds.open(id));
@@ -125,7 +127,7 @@ export class WorldServer {
         return server;
     }
 
-    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, home = isHome, acme = {}, tokens = null, router = {}, funnel = {}, tunnelPort = null, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null, onRestart = null, ice = null, update = {}, log = null, limits = {} }) {
+    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, home = isHome, acme = {}, tokens = null, router = {}, funnel = {}, tunnelPort = null, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null, onRestart = null, ice = null, update = {}, countries = {}, log = null, limits = {} }) {
         Object.assign(this, { root, folder, access, identity, adminKey, interfaces, hostname, names, onStop, onRestart, ice });
 
         /** The limits it was opened with in place of its own (open's `limits`: none, on any server that's run as one). */
@@ -281,6 +283,14 @@ export class WorldServer {
 
         /** Its updates (update/updater.js): new versions looked for once a day, once it's started; installed when its owner asks, or by itself overnight. */
         this.updater = new Updater(this, update);
+
+        /**
+         * Which country a connection's from (net/geoip.js: DB-IP's country file, in the data
+         * folder), for Nanny Mode: fetched once a month while Nanny Mode's on, once it's started
+         * (serve.js); whoever's in a world is looked at again as a newer file's read.
+         */
+        this.countries = new CountryFile({ root, ...countries, wanted: () => this.settings.get("nanny") !== "off" });
+        this.countries.onFetched = () => this.play?.renanny();
     }
 
     /**
@@ -870,6 +880,7 @@ export class WorldServer {
         this.metrics.stop();
         await this.history.save();
         this.updater.close();
+        this.countries.close();
         this.nearby.stop();
         await this.certifier.close();
         await this.router?.close();
