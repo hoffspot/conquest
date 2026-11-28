@@ -36,7 +36,7 @@ import { Certifier, tokensFileOf } from "./certify.js";
 import { Funnel } from "./funnel.js";
 import { History, HISTORY_FILE, HISTORY_SAVE, samplerOf } from "./history.js";
 import { attachBroker, BROKER_PATH } from "./broker.js";
-import { answer, connectionOf, guard, hostsOf, INTERNET_CLOSED, LIMITS_HTTP, originsOf, Refusal, urlOf } from "./guards.js";
+import { answer, connectionOf, FRONTS, guard, hostsOf, INTERNET_CLOSED, LIMITS_HTTP, originsOf, Refusal, urlOf } from "./guards.js";
 import { Log } from "./log.js";
 import { Management } from "./manage.js";
 import { Nearby } from "./nearby.js";
@@ -342,6 +342,33 @@ export class WorldServer {
         return this.settings.get("funnel") ? null : "This server isn't reached through a tunnel.";
     }
 
+    /** What's in front of the tunnel listener (the `front` setting: guards.js FRONTS), by name. */
+    get front() {
+        const front = this.settings.get("front");
+
+        return Object.hasOwn(FRONTS, front) ? front : "funnel";
+    }
+
+    /**
+     * The name the internet reaches it by through its front: Tailscale Funnel's own, found by
+     * asking Tailscale; another front's, the owner's `frontHost` setting, if it's a host's name.
+     * Null with none.
+     */
+    get frontName() {
+        if (this.front === "funnel") {
+            return this.funnel?.name ?? null;
+        }
+
+        const host = String(this.settings.get("frontHost") ?? "").trim().toLowerCase();
+
+        return /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(host) ? host : null;
+    }
+
+    /** Its address through its front (https://, the front's own TLS), or null: Funnel's once it's open, another's once it's named. */
+    get frontUrl() {
+        return this.front === "funnel" ? (this.funnel?.url ?? null) : this.frontName ? `https://${this.frontName}` : null;
+    }
+
     /** A world's world.json (as it was last written), or null. */
     metaOf(id) {
         return this.worlds.get(id)?.meta ?? null;
@@ -364,7 +391,7 @@ export class WorldServer {
 
     /** Where the internet reaches it now: its secure addresses (with a certificate), and Funnel's (through the tunnel). */
     internetAddresses() {
-        return [...(this.internetClosed ? [] : this.secureAddresses()), ...(!this.tunnelClosed && this.funnel?.url ? [this.funnel.url] : [])];
+        return [...(this.internetClosed ? [] : this.secureAddresses()), ...(!this.tunnelClosed && this.frontUrl ? [this.frontUrl] : [])];
     }
 
     /**
@@ -707,7 +734,9 @@ export class WorldServer {
             });
         }
 
-        await this.funnel?.follow(on && this.tunnel !== null).catch(() => {});
+        // (Tailscale's asked only where Funnel's the front: another front is the owner's to run)
+        await this.funnel?.follow(on && this.front === "funnel" && this.tunnel !== null).catch(() => {});
+        this.reachChanged?.();
 
         if (!on) {
             await this.closeTunnel();
@@ -723,6 +752,8 @@ export class WorldServer {
         if (!this.tunnel) {
             const tunnel = net.createServer((socket) => {
                 socket.tunnel = true;
+                // (By which front: the one header it's trusted for is that front's, guards.js FRONTS)
+                socket.front = this.front;
                 this.#sort(socket);
             });
 
@@ -806,9 +837,10 @@ export class WorldServer {
 
         this.hosts = hostsOf(this.port, { names: [...this.names, ...(this.certificate?.names ?? [])], ...(this.interfaces ? { interfaces: this.interfaces } : {}), hostname: this.hostname });
 
-        // (Through the tunnel: Funnel's name, as browsers send it on 443, or the tunnel's own
-        // address, should the tunnel not pass the name on)
-        const funnel = this.funnel?.name ?? null;
+        // (Through the tunnel: its front's name (Funnel's, or the owner's for another front), as
+        // browsers send it on 443, or the tunnel's own address, should the tunnel not pass the
+        // name on)
+        const funnel = this.frontName;
 
         this.tunnelHosts = new Set([...(funnel ? [funnel, `${funnel}:443`] : []), ...(this.tunnelPort ? [`127.0.0.1:${this.tunnelPort}`, `localhost:${this.tunnelPort}`] : [])]);
 

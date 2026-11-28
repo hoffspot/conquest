@@ -7,6 +7,7 @@
 // refused. A setting added needs no step: it's filled in with its default. Keys it doesn't know
 // are kept, not dropped, so a newer server's settings come through an older one unharmed.
 
+import { FRONTS } from "../guards.js";
 import { countriesReason, NANNY, NANNY_COUNTRIES } from "../access/nanny.js";
 import { ceilingReason, publicReady } from "../access/cap.js";
 import { LIMITS } from "../access/limits.js";
@@ -49,8 +50,16 @@ export const SETTINGS = Object.freeze({
     bonjour: { kind: "boolean", default: true, about: "Show this server to others on the Wi-Fi, and list the servers near it (Bonjour)" },
     internet: { kind: "boolean", default: false, about: "Answer the internet (over TLS alone, once the server has a certificate)" },
     router: { kind: "boolean", default: true, about: "Ask the router to let the internet in (PCP, NAT-PMP or UPnP), while the internet's answered" },
-    funnel: { kind: "boolean", default: false, about: "Let the internet in through Tailscale Funnel (for a home whose provider shares its address), while the internet's answered" },
-    tunnelPort: { kind: "integer", min: 1, max: 65535, default: 8482, about: "The port a tunnel (Tailscale Funnel) brings the internet to, on this computer alone" },
+    funnel: { kind: "boolean", default: false, about: "Let the internet in through a tunnel (Tailscale Funnel, unless another front's chosen below: for a home whose provider shares its address), while the internet's answered" },
+    tunnelPort: { kind: "integer", min: 1, max: 65535, default: 8482, about: "The port a tunnel brings the internet to, on this computer alone" },
+    front: {
+        kind: "choice",
+        of: Object.keys(FRONTS),
+        default: "funnel",
+        words: { funnel: "Tailscale Funnel (the server asks for it itself)", cloudflared: "Cloudflare Tunnel (cloudflared, run by you, pointed at the tunnel's port)", proxy: "A reverse proxy of your own, pointed at the tunnel's port" },
+        about: "What's in front of the tunnel's port: the server believes that front's own header, and no other, for where a visitor is from",
+    },
+    frontHost: { kind: "text", most: 253, default: "", about: "The name the internet reaches this server by through Cloudflare Tunnel or your own proxy (pellagos.example.com). Tailscale Funnel's is found by itself" },
     broker: { kind: "boolean", default: true, about: "List players' own worlds (hosted in their browsers) here, and help their games connect to them" },
     relaying: { kind: "boolean", default: true, about: "Relay a player's own world through this server when games can't connect to it directly (1 to 5 KB/s for each who's joined)" },
     compress: { kind: "boolean", default: true, about: "Compress what's sent to players' games that ask for it (a world as a player comes in: a sixth the size to download, for a millisecond or two of the server's time). It takes effect for those who connect after it's changed" },

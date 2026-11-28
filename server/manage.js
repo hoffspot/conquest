@@ -17,6 +17,7 @@
 // Everything that changes a world it can't change while it runs (its heroes mode, a restore) sets
 // it aside first, or is refused; whatever can't be undone is backed up before it's done.
 
+import { FRONTS } from "./guards.js";
 import { randomBytes } from "node:crypto";
 import { appendFile, cp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -1276,10 +1277,12 @@ export class Management {
         const day = (when) => when.slice(0, 10);
         const funnel = server.funnel?.state() ?? null;
         const direct = on && Boolean(certificate);
-        const tunneled = on && server.settings.get("funnel") && Boolean(funnel?.url);
+        // (Through its front: Tailscale Funnel once it's open, another front once it's named, guards.js FRONTS)
+        const front = server.front;
+        const tunneled = on && server.settings.get("funnel") && Boolean(server.frontUrl);
         const open = direct || tunneled;
         const acme = server.certifier?.state() ?? null;
-        const through = tunneled ? `through Tailscale Funnel, at ${funnel.url} (Tailscale's certificate)` : "";
+        const through = tunneled ? (front === "funnel" ? `through Tailscale Funnel, at ${funnel.url} (Tailscale's certificate)` : `through ${FRONTS[front].name}, at ${server.frontUrl} (its own certificate)`) : "";
         const words = direct
             ? `Answers the internet, over TLS alone, at ${server.secureAddresses().join(" and ")}${tunneled ? `, and ${through}` : ""}. Its certificate, from ${certificate.issuer}, runs till ${day(certificate.notAfter)}. Plain http from the internet is refused; a page asked for that way is sent on to https.`
             : tunneled
@@ -1287,7 +1290,7 @@ export class Management {
               : certificate
                 ? `Doesn't answer the internet: it's closed to it (“Answer the internet” is off in Settings). It has a certificate for ${certificate.names.join(", ")}, till ${day(certificate.notAfter)}.`
                 : on
-                  ? `It's open to the internet, but has no certificate yet${server.settings.get("funnel") ? ", and Tailscale Funnel isn't open," : ""} so it can't be reached securely and the internet isn't answered. Set up a way in below.`
+                  ? `It's open to the internet, but has no certificate yet${server.settings.get("funnel") ? (front === "funnel" ? ", and Tailscale Funnel isn't open," : ", and its front has no name yet (“The name the internet reaches this server by” in Settings),") : ""} so it can't be reached securely and the internet isn't answered. Set up a way in below.`
                   : "Answers its own Wi-Fi alone: it's closed to the internet (“Answer the internet” is off in Settings), and has no certificate.";
 
         const router = server.router?.state() ?? null;
@@ -1613,7 +1616,8 @@ export class Management {
 
         this.server.nearby.follow(this.server.settings.get("bonjour"));
         this.server.nearby.refresh();
-        if (Object.hasOwn(changes, "tunnelPort")) {
+        // (The tunnel's port, or what's in front of it, changed: whoever's in through it let go, and it's opened again as it's set)
+        if (Object.hasOwn(changes, "tunnelPort") || Object.hasOwn(changes, "front") || Object.hasOwn(changes, "frontHost")) {
             await this.server.closeTunnel();
         }
 

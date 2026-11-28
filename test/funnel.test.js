@@ -13,7 +13,8 @@ import os from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
 import { NET_VERSION } from "../client/js/core/netplay.js";
-import { Funnel, FUNNEL_REFUSALS } from "../server/funnel.js";
+import { Funnel, FUNNEL_REFUSALS, FUNNEL_TIMES, jittered } from "../server/funnel.js";
+import { connectionOf, FRONTS, frontOf, guard } from "../server/guards.js";
 import { tailscale } from "../server/platform/index.js";
 import { PLAY_PROTOCOL } from "../server/play.js";
 import { WorldServer } from "../server/world-server.js";
@@ -261,6 +262,121 @@ describe("the tunnel listener (server/world-server.js, guards.js)", () => {
         servers.push(second);
         await until(() => second.tunnelError, "the port refused");
         assert.match(second.manage.internet().funnel.words, /The tunnel's port on this computer \(\d+\) is taken by something else/);
+    });
+});
+
+describe("what's in front of the tunnel listener (guards.js FRONTS; the scaling plan's 6C-1)", () => {
+    // A request as the server's guard sees it: over a socket (direct, or the tunnel listener's by a front), with headers
+    const asked = ({ address = "127.0.0.1", front = undefined, tunnel = front !== undefined, secure = false, host = "play.example.com", headers = {} }) =>
+        connectionOf({ socket: { remoteAddress: address, tunnel, ...(front === undefined ? {} : { front }), encrypted: secure }, headers: { host, ...headers } }, { origin: undefined });
+    const standing = { hosts: new Set(["play.example.com"]), tunnelHosts: new Set(["play.example.com"]), origins: new Set(), internetClosed: null, tunnelClosed: null };
+    const from = (request) => guard(asked(request), standing);
+    // (Every header anyone might put an address in, each claiming somewhere else)
+    const claims = { "x-forwarded-for": "192.168.1.5", "cf-connecting-ip": "192.168.1.6", "x-real-ip": "192.168.1.7", forwarded: "for=192.168.1.8", "true-client-ip": "192.168.1.9" };
+
+    it("names three fronts, each trusted for one header: Tailscale Funnel and a reverse proxy for X-Forwarded-For's last address, Cloudflare Tunnel for CF-Connecting-IP; a name that's none is Funnel", () => {
+        assert.deepEqual(Object.keys(FRONTS), ["funnel", "cloudflared", "proxy"]);
+        assert.deepEqual(Object.fromEntries(Object.entries(FRONTS).map(([name, front]) => [name, [front.address, front.last, front.country]])), {
+            funnel: ["x-forwarded-for", true, null],
+            cloudflared: ["cf-connecting-ip", false, "cf-ipcountry"],
+            proxy: ["x-forwarded-for", true, null],
+        });
+        assert.equal(frontOf("no such front"), FRONTS.funnel);
+        assert.equal(frontOf(undefined), FRONTS.funnel);
+    });
+
+    it("believes no header on a direct connection: where it's from is the socket's own address, whatever the headers claim", () => {
+        // (From the internet, claiming to be at home: the internet's still)
+        assert.deepEqual(from({ address: "203.0.113.50", secure: true, headers: claims }), { address: "203.0.113.50", from: "internet", tunnel: false });
+        // (From home, claiming an address out on the internet: home's still)
+        assert.deepEqual(from({ address: "192.168.1.20", headers: { "x-forwarded-for": "198.51.100.7", "cf-connecting-ip": "198.51.100.8" } }), { address: "192.168.1.20", from: "home", tunnel: false });
+        assert.equal(asked({ address: "203.0.113.50", headers: claims }).forwarded, undefined, "(not so much as read)");
+        assert.equal(asked({ address: "203.0.113.50", headers: claims }).front, null);
+    });
+
+    it("believes Tailscale Funnel's X-Forwarded-For, its last address, and nothing else it's sent", () => {
+        assert.deepEqual(from({ front: "funnel", headers: { "x-forwarded-for": "198.51.100.7" } }), { address: "198.51.100.7", from: "internet", tunnel: true });
+        assert.deepEqual(from({ front: "funnel", headers: { "x-forwarded-for": "192.168.1.5, 10.0.0.9, 198.51.100.7" } }).address, "198.51.100.7", "(the earlier ones are anyone's say)");
+        assert.deepEqual(from({ front: "funnel", headers: { ...claims, "x-forwarded-for": "198.51.100.7" } }).address, "198.51.100.7");
+        // (No X-Forwarded-For: not Cloudflare's header in its place)
+        assert.deepEqual(from({ front: "funnel", headers: { "cf-connecting-ip": "198.51.100.8" } }), { address: "tunnel", from: "internet", tunnel: true });
+        // (A socket of the tunnel's with no front named, as before fronts had names: Funnel's)
+        assert.deepEqual(from({ tunnel: true, headers: { "x-forwarded-for": "198.51.100.7", "cf-connecting-ip": "198.51.100.8" } }).address, "198.51.100.7");
+        // (Never home, though it comes from loopback and says a home address)
+        assert.equal(from({ front: "funnel", headers: { "x-forwarded-for": "192.168.1.5" } }).from, "internet");
+    });
+
+    it("believes Cloudflare Tunnel's CF-Connecting-IP, one address, and never an X-Forwarded-For a visitor wrote themselves", () => {
+        assert.deepEqual(from({ front: "cloudflared", headers: { "cf-connecting-ip": "198.51.100.7" } }), { address: "198.51.100.7", from: "internet", tunnel: true });
+        assert.equal(from({ front: "cloudflared", headers: { "cf-connecting-ip": "2001:db8::7" } }).address, "2001:db8::7");
+        assert.equal(from({ front: "cloudflared", headers: { ...claims, "cf-connecting-ip": "198.51.100.7" } }).address, "198.51.100.7");
+        // (X-Forwarded-For alone, which Cloudflare passes on with whatever the visitor put in it: not believed)
+        assert.equal(from({ front: "cloudflared", headers: { "x-forwarded-for": "192.168.1.5, 198.51.100.7" } }).address, "tunnel");
+        // (More than one address in it isn't Cloudflare's doing: nothing usable)
+        assert.equal(from({ front: "cloudflared", headers: { "cf-connecting-ip": "192.168.1.5, 198.51.100.7" } }).address, "tunnel");
+        assert.equal(from({ front: "cloudflared", headers: { "cf-connecting-ip": "not an address" } }).address, "tunnel");
+    });
+
+    it("believes a reverse proxy's X-Forwarded-For, its last address, as Funnel's", () => {
+        assert.deepEqual(from({ front: "proxy", headers: { ...claims, "x-forwarded-for": "192.168.1.5, 198.51.100.7" } }), { address: "198.51.100.7", from: "internet", tunnel: true });
+        assert.equal(from({ front: "proxy", headers: { "cf-connecting-ip": "198.51.100.8", "x-real-ip": "198.51.100.9" } }).address, "tunnel");
+    });
+
+    it("waits a little more or less before asking Tailscale again, by chance, never more than a fifth either way", async () => {
+        assert.equal(FUNNEL_TIMES.jitter, 0.2);
+        assert.deepEqual([jittered(60000, 0), jittered(60000, 0.5), jittered(60000, 1)], [48000, 60000, 72000]);
+
+        const server = { tunnelPort: 8482 };
+
+        for (const [random, wait] of [[0, 48000], [0.5, 60000], [0.999, 71976]]) {
+            const funnel = new Funnel(server, { run: fakeTailscale({ backend: "Stopped" }), clock: () => 1000000, random: () => random });
+            const state = await funnel.follow(true);
+
+            assert.equal(Date.parse(state.retryAt) - 1000000, wait, String(random));
+            await funnel.follow(false);
+        }
+    });
+
+    it("takes the internet through Cloudflare Tunnel, run by the owner under a name of theirs: Tailscale never asked, the name among the server's, Cloudflare's header believed and no other", async () => {
+        const run = fakeTailscale();
+        const server = await serve(run, { settings: { front: "cloudflared", frontHost: "Play.Example.com" } });
+        const cloud = (extra = {}) => through(server, { host: "play.example.com", forwarded: null, ...extra });
+
+        await until(() => server.tunnelPort > 0, "the tunnel listening");
+        assert.deepEqual([server.front, server.frontName, server.frontUrl], ["cloudflared", "play.example.com", "https://play.example.com"]);
+        assert.deepEqual(run.calls.filter((call) => call.startsWith("funnel")), [], "(Tailscale's Funnel isn't asked for)");
+
+        // (Its card, from CF-Connecting-IP; its name among the server's addresses)
+        const card = await cloud({ headers: { "CF-Connecting-IP": "198.51.100.7", "X-Forwarded-For": "192.168.1.5" } });
+
+        assert.equal(card.status, 200);
+        assert.deepEqual(card.json.you, { address: "198.51.100.7", from: "internet", home: false });
+        assert.ok(card.json.addresses.includes("https://play.example.com"));
+
+        // (X-Forwarded-For alone isn't believed: where it's from can't be told)
+        assert.deepEqual((await cloud({ headers: { "X-Forwarded-For": "198.51.100.9" } })).json.you, { address: "tunnel", from: "internet", home: false });
+
+        // (By its own name alone; a page of its own may use it; never the management page)
+        assert.equal((await cloud({ host: NAME })).json.error, "host");
+        assert.equal((await cloud({ headers: { "CF-Connecting-IP": "198.51.100.7", Origin: "https://play.example.com" } })).status, 200);
+        assert.equal((await cloud({ route: "/admin", headers: { "CF-Connecting-IP": "198.51.100.7" } })).json.error, "home");
+
+        const internet = server.manage.internet();
+
+        assert.equal(internet.tunneled, true);
+        assert.match(internet.words, /Answers the internet through Cloudflare Tunnel, at https:\/\/play\.example\.com \(its own certificate\)/);
+
+        // (No name given, or one that isn't a host's: not reached through it, and said so)
+        await server.manage.changeSettings({ frontHost: "not a host name" });
+        assert.deepEqual([server.frontName, server.frontUrl, server.manage.internet().tunneled], [null, null, false]);
+        assert.match(server.manage.internet().words, /its front has no name yet/);
+        await until(() => server.tunnelPort > 0, "the tunnel listening again");
+        assert.equal((await cloud({ headers: { "CF-Connecting-IP": "198.51.100.7" } })).json.error, "host");
+
+        // (Back to Tailscale Funnel: asked for, and X-Forwarded-For believed again)
+        await server.manage.changeSettings({ front: "funnel" });
+        await until(() => server.funnel.state().url, "Funnel open");
+        assert.deepEqual((await through(server, { headers: { "CF-Connecting-IP": "198.51.100.8" } })).json.you, { address: "198.51.100.7", from: "internet", home: false });
     });
 });
 

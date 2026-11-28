@@ -5,9 +5,12 @@
 //   machine itself). The internet is answered only when the owner's turned on `internet` and the
 //   server has a certificate (storage/certificates.js), and then over TLS alone: plain from there
 //   is refused ("secure"; world-server.js sends a page load on to https://).
-// - A tunnel's (Tailscale Funnel's, on the tunnel listener: world-server.js) is the internet's,
-//   whatever loopback address it comes from: its TLS was the tunnel's, and where it's from is
-//   X-Forwarded-For's last address (the tunnel's own proxy adds it; earlier ones are anyone's say).
+// - A tunnel's (on the tunnel listener: world-server.js) is the internet's, whatever loopback
+//   address it comes from: its TLS was the tunnel's, and where it's from is what the front that
+//   brings it says, in the one header that front is trusted for (FRONTS: Tailscale Funnel's and a
+//   reverse proxy's X-Forwarded-For, its last address, the front's own; Cloudflare Tunnel's
+//   CF-Connecting-IP). No other header is read, and none at all on a direct connection: there,
+//   where it's from is the socket's own address, whatever its headers claim.
 // - Its Host one of the server's own names or addresses, so a page on some other site can't reach
 //   it by pointing a name of its own at the server's address (DNS rebinding).
 // - Its Origin, if it's a browser's, the server's own, the game's on GitHub Pages, one the owner
@@ -21,6 +24,23 @@ import { isHome, plainAddress } from "./access/addresses.js";
 
 /** Why the internet isn't answered when nothing's said otherwise (the server says why it isn't, or null when it is: world-server.js). */
 export const INTERNET_CLOSED = "This server doesn't answer the internet: only its own Wi-Fi.";
+
+/**
+ * What can stand in front of the tunnel listener and bring the internet to it (the `front`
+ * setting; generated/multiplayer_scaling_plan.md 6C-1), each with the one header it's trusted to
+ * say the visitor's address in (`address`; `last`: a list of them, the last being the front's own
+ * say, the rest anyone's), and the one it says their country in, if it does (`country`: read
+ * from 6B-20 on). Tailscale Funnel is asked for by the server itself (funnel.js); the others are
+ * the owner's to run, pointed at the tunnel's port, under the name in `frontHost`.
+ */
+export const FRONTS = Object.freeze({
+    funnel: Object.freeze({ name: "Tailscale Funnel", address: "x-forwarded-for", last: true, country: null }),
+    cloudflared: Object.freeze({ name: "Cloudflare Tunnel", address: "cf-connecting-ip", last: false, country: "cf-ipcountry" }),
+    proxy: Object.freeze({ name: "a reverse proxy", address: "x-forwarded-for", last: true, country: null }),
+});
+
+/** The front a tunnel's connection came by, by name: Tailscale Funnel's, for a name that's none (as before fronts had names). */
+export const frontOf = (name) => (Object.hasOwn(FRONTS, name) ? FRONTS[name] : FRONTS.funnel);
 
 /** HTTP's limits: the biggest body (bytes), and how long a request may take to come in (ms). */
 export const LIMITS_HTTP = Object.freeze({ body: 64 * 1024, headers: 5000, request: 10000, keepAlive: 5000 });
@@ -75,25 +95,32 @@ export function originsOf(hosts, extra = []) {
 export function connectionOf(request, options = {}) {
     const origin = Object.hasOwn(options, "origin") ? options.origin : request.headers.origin;
 
-    return { address: request.socket.remoteAddress, host: request.headers.host, origin, secure: Boolean(request.socket.encrypted), tunnel: Boolean(request.socket.tunnel), forwarded: request.headers["x-forwarded-for"] };
+    const tunnel = Boolean(request.socket.tunnel);
+    const front = tunnel ? (request.socket.front ?? "funnel") : null;
+
+    // (`forwarded`: what the front's own header says of where it's from; no header's read of a direct connection)
+    return { address: request.socket.remoteAddress, host: request.headers.host, origin, secure: Boolean(request.socket.encrypted), tunnel, front, forwarded: tunnel ? request.headers[frontOf(front).address] : undefined };
 }
 
-// Where a tunnel's request is from: X-Forwarded-For's last address (the tunnel's proxy's own say)
-function forwardedFrom(forwarded) {
-    return plainAddress(String(forwarded ?? "").split(",").at(-1)?.trim() ?? "") ?? "tunnel";
+// Where a tunnel's request is from, by its front's header: a list's last address (the front's own
+// say), or the one address a front that gives one gives; "tunnel" where it says nothing usable
+function forwardedFrom(forwarded, { last }) {
+    const said = String(forwarded ?? "");
+
+    return plainAddress(last ? (said.split(",").at(-1)?.trim() ?? "") : said.trim()) ?? "tunnel";
 }
 
 /**
  * Whether a request (or a socket's upgrade) may be taken, before anything's read of it: from where
- * (`address`; or through a tunnel, `tunnel`, `forwarded` its X-Forwarded-For), over TLS or not
+ * (`address`; or through a tunnel, `tunnel`, by a `front`, `forwarded` what its header says), over TLS or not
  * (`secure`), to which Host, from which Origin. Returns { address (as it's counted), from ("home"
  * or "internet"), tunnel }; throws a Refusal if not. The server says how it stands: its `hosts`
  * (and `tunnelHosts`, the tunnel's), `origins`, `blocks`, `isHome` (where's home), and
  * `internetClosed` and `tunnelClosed` (why the internet isn't answered, directly or through the
  * tunnel, or null when it is).
  */
-export function guard({ address, host, origin, secure = false, tunnel = false, forwarded = null }, { hosts, tunnelHosts = new Set(), origins, blocks, isHome: home = isHome, internetClosed = INTERNET_CLOSED, tunnelClosed = INTERNET_CLOSED }) {
-    const plain = tunnel ? forwardedFrom(forwarded) : plainAddress(address);
+export function guard({ address, host, origin, secure = false, tunnel = false, front = null, forwarded = null }, { hosts, tunnelHosts = new Set(), origins, blocks, isHome: home = isHome, internetClosed = INTERNET_CLOSED, tunnelClosed = INTERNET_CLOSED }) {
+    const plain = tunnel ? forwardedFrom(forwarded, frontOf(front)) : plainAddress(address);
     const from = !tunnel && plain && home(plain) ? "home" : "internet";
     const closed = tunnel ? tunnelClosed : internetClosed;
 
