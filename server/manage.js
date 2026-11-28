@@ -1263,6 +1263,8 @@ export class Management {
             // (Whether Nanny Mode's fit for public worlds, and what it lacks; and what public worlds lack altogether: access/nanny.js, access/cap.js)
             nanny: server.nannyReady(),
             public: publicReady({ nanny: server.nannyReady() }),
+            // (Reports of players from its public worlds: how many wait, how many they've muted. access/reports.js)
+            reports: server.playerReports?.counts() ?? { waiting: 0, muted: 0 },
             blocked: server.access.blocks.blocked().map(({ address, until, times }) => ({ address, until: new Date(until).toISOString(), times })),
         };
     }

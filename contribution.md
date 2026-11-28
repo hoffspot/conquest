@@ -620,6 +620,9 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      such a world, and by none till someone's kept. And for 6B-18's `nanny` on `dms` (a
      player's own choice to be kept to them): said only by a game whose player chose it. And
      for 6B-25's `nanny` in the broker's word: said only for one a server's rules keep to them.
+     And for 6B-6's `reports`, `report` and `reported` (reports of players) and the refusal
+     `muted`: a game says `report` only to a world that's told it `reports`, which only a
+     server's public world does; a world that knows none of it reads past a `report`.
      And for 3-35's `how` and `played`: one joining a world hosted in a browser asks how it's
      played before its hello, and only one that asks is answered; a host that doesn't know the
      question says nothing, and is taken for lockstep after a wait (`HOW_WAIT`,

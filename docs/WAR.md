@@ -3776,6 +3776,15 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   it (`shoutsOff`). A world can have it off (`Session.areaChat`, `areaOff`): a public world's is,
   till its typed chat is filtered and can be reported (`areaChatFor`, server/reopen.js; the
   plan's 6B-5 and 6B-6), though no world can be public yet. `NET_VERSION` 256.
+- **Report** (the party menu's Players tab; the scaling plan's 6B-6). Only in a world that's
+  told its games it takes reports (`reports`: a world server's public world, and no world can be
+  public yet). Report asks why under the list (core/netplay.js `REPORT_WHYS`, in
+  app/partypanel.js `REPORT_WORDS`: Abuse or harassment, Spam or adverts, Cheating, May be
+  under age, Something else) and sends `{ kind: "report", about, why }`; the world's answer
+  (`reported`) is shown: "Reported. Whoever runs this world will look at it.", or why not
+  (`REPORT_REFUSED`). The one reported isn't told. Whom several players report is muted by the
+  server: their shouts and area lines are refused (`muted`) till its owner has looked
+  (docs/SERVER.md, *Reports of players, and the chat log*).
 - **Blocked** (the party menu's Players tab; Game options, **Blocked players**). Whom a player's
   blocked is theirs alone, never told the host or anyone: their game lets go of a blocked
   player's direct messages as they come, and of their party invites (as **Refuse party invites**

@@ -1855,6 +1855,9 @@ export class Game {
             remote.onUnsaid = (reason, said) => this.#unsaid(reason, said);
             remote.onMissed = (count) => this.#missed(count);
             remote.onNannied = (told) => this.nanniedHeard(told);
+            // (Reports of players, where the world takes them: the Players tab's Report, and how one went)
+            remote.onReports = () => this.#chatShown();
+            remote.onReported = (how) => this.#reported(how);
         }
 
         /**
@@ -2910,6 +2913,7 @@ export class Game {
             this.#showParty();
         };
         this.partyPanel.onBlock = (id, on) => this.block(id, on);
+        this.partyPanel.onReport = (id, why) => this.report(id, why);
         this.partyPanel.onShouts = (on) => this.hearShouts(on);
         this.fate = new FatePanel(this.hud.root);
         this.talk.onChoose = (index) => this.#say(index);
@@ -12992,6 +12996,30 @@ export class Game {
         this.hud.message(`${count === 1 ? "One player wasn't" : `${count} players weren't`} sent that: they take the quick phrases only.`, 3);
     }
 
+    /**
+     * A player reported to whoever runs the world (their id; why, core/netplay.js REPORT_WHYS):
+     * only where the world's said it takes reports (a public world on a server). The answer's
+     * shown as it comes (#reported). Returns { ok } or { ok: false, reason }.
+     */
+    report(id, why) {
+        const sent = this.remote?.report(id, why) ?? { ok: false, reason: "reportsOff" };
+
+        if (!sent.ok) {
+            this.#reported(sent);
+        }
+
+        return sent;
+    }
+
+    // How a report of the player's went (core/netplay.js REPORT_REFUSED)
+    #reported({ ok, reason = "" } = {}) {
+        this.hud.message(ok ? "Reported. Whoever runs this world will look at it." : (REFUSALS[reason] ?? "That wasn't reported."), 2.4);
+
+        if (!ok) {
+            this.sound?.play("denied");
+        }
+    }
+
     // A line of the player's not said (core/netplay.js CHAT_REFUSED), and why (nothing to say:
     // nothing; to one not taking direct messages, whose they are: `name`)
     #unsaid(reason, { name = "" } = {}) {
@@ -13074,6 +13102,8 @@ export class Game {
                     dead: Boolean(actor?.dead),
                     hostile: id !== this.me && Boolean(this.worldview.war?.hostile(this.self.realm, player.realm)),
                     blocked: id !== this.me && this.isBlocked(id),
+                    // (Reported to whoever runs the world, where the world's said it takes reports)
+                    ...(id !== this.me && this.remote?.reports ? { report: true } : {}),
                     ...(nanny ? { nanny: true } : {}),
                     can,
                     // (A duel: asked of them, or yielded to them if that's whom the player's in one with)

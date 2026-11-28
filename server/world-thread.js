@@ -22,10 +22,10 @@ export class WorldThread {
      *     whatever the world's says), and { mostPlayers }, taken in place of both, from a server
      *     opened with one (world-server.js open's `limits`); none, on any server that's run as one.
      */
-    constructor(stored, { onSend = () => {}, onClose = () => {}, onState = () => {}, onJournal = () => {}, onExit = () => {}, onBinary = null } = {}, { mostPlayers = null, ceiling = null, replication = null } = {}) {
+    constructor(stored, { onSend = () => {}, onClose = () => {}, onState = () => {}, onJournal = () => {}, onExit = () => {}, onBinary = null, onSaid = null, onReport = null } = {}, { mostPlayers = null, ceiling = null, replication = null } = {}) {
         this.stored = stored;
         this.id = stored.id;
-        Object.assign(this, { onSend, onClose, onState, onJournal, onExit, onBinary });
+        Object.assign(this, { onSend, onClose, onState, onJournal, onExit, onBinary, onSaid, onReport });
 
         /** How it last said it was (world-worker.js report), and whether its thread's ended. */
         this.state = null;
@@ -94,6 +94,13 @@ export class WorldThread {
                 }
 
                 break;
+            case "said":
+                // (A line said in a public world, for the chat log: who said it, what, and to whom)
+                this.onSaid?.(message.peer, message.line, message.to);
+                break;
+            case "report":
+                this.onReport?.(message.peer, { about: message.about, why: message.why, names: message.names, places: message.places });
+                break;
             case "saved":
             case "stopped":
                 this.#asked.get(message.id)?.({ ok: message.ok });
@@ -125,8 +132,18 @@ export class WorldThread {
     }
 
     /** Someone come in by a key (their player's id, their part, and whether they're kept to the quick chat's phrases, and `why`: access/nanny.js). */
-    enter(peer, { player, role, nanny = false, why = null }) {
-        this.#post({ type: "enter", peer, player, role, nanny: nanny === true, why: nanny === true ? why : null });
+    enter(peer, { player, role, nanny = false, why = null, muted = false }) {
+        this.#post({ type: "enter", peer, player, role, nanny: nanny === true, why: nanny === true ? why : null, muted: muted === true });
+    }
+
+    /** One of those in it muted by reports of them from now, or no longer (`on`): access/reports.js. */
+    muted(peer, on) {
+        this.#post({ type: "muted", peer, on: on === true });
+    }
+
+    /** A report of theirs answered: taken, or why not (core/netplay.js REPORT_REFUSED). */
+    reported(peer, ok, reason = null) {
+        this.#post({ type: "reported", peer, ok: ok === true, reason });
     }
 
     /** One of those in it kept to the quick chat's phrases from now, or no longer (`on`): the server's settings changed. */

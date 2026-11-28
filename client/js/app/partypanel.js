@@ -37,7 +37,7 @@
 // through the game.
 
 import { QUICK_CHAT, quickShown, quickText } from "../core/quickchat.js";
-import { CHAT } from "../core/netplay.js";
+import { CHAT, REPORT_WHYS } from "../core/netplay.js";
 
 const element = (tag, className, text = "") => Object.assign(document.createElement(tag), { className, textContent: text });
 
@@ -104,6 +104,13 @@ export const QUICK_PHRASES = Object.freeze(quickShown("panel").map(({ text }) =>
  * and sees the quick chat's phrases and nothing typed, core/netplay.js Session `restricted`): its
  * icon's label, the chip beside a name, and what "What's this?" says of it.
  */
+/**
+ * Why a player can be reported to whoever runs a public world (core/netplay.js REPORT_WHYS; the
+ * scaling plan's 6B-6), in the Players tab's words. "May be under age" is Nanny Mode's, by those
+ * words in docs/MODERATION.md.
+ */
+export const REPORT_WORDS = Object.freeze({ abuse: "Abuse or harassment", spam: "Spam or adverts", cheating: "Cheating", underage: "May be under age", other: "Something else" });
+
 export const NANNY_LABEL = "Nanny Mode: quick phrases only";
 export const NANNY_WHAT = "Some players see and send quick phrases only. It's set by the rules of where they connect from, or by their own choice. It says nothing else about them.";
 
@@ -410,6 +417,10 @@ export class PartyPanel {
         this.everyoneHeading = element("h3", "journal-heading", "In this world");
         this.everyoneList = element("ul", "journal-list party-everyone-list");
         this.everyoneNote = element("p", "journal-note party-everyone-note");
+        // (A player being reported, where the world takes reports: why, chosen here)
+        this.reporting = null;
+        this.reportForm = element("div", "party-report-form");
+        this.reportForm.hidden = true;
         // (Found by name, and a page of them at a time: PLAYERS_PAGE)
         this.everyoneSearch = element("input", "party-search");
         Object.assign(this.everyoneSearch, { type: "search", maxLength: 40, autocomplete: "off", placeholder: "Find a player by name" });
@@ -435,7 +446,7 @@ export class PartyPanel {
         }
 
         this.everyonePager.append(this.everyonePrevious, this.everyonePageOf, this.everyoneNext);
-        this.everyoneBody.append(this.everyoneHeading, this.everyoneSearch, this.everyoneList, this.everyonePager, this.everyoneNote);
+        this.everyoneBody.append(this.everyoneHeading, this.everyoneSearch, this.everyoneList, this.everyonePager, this.reportForm, this.everyoneNote);
         this.everyoneShown = null;
         this.everyoneGiven = { everyone: [], leads: false, full: false, partied: false };
         this.everyonePage = 0;
@@ -487,6 +498,56 @@ export class PartyPanel {
         /** A squad command chosen (core/host.js the "squad" command): what, and what of ({ squad, party, entry }). */
         this.onSquad = () => {};
         this.onBlock = () => {};
+        /** A player reported to whoever runs the world (their id, and why: REPORT_WHYS). */
+        this.onReport = () => {};
+    }
+
+    // Why a player's being reported, asked under the list: a button for each reason, and one to
+    // think better of it. Nothing shown while nobody's being reported, or once they've gone
+    #reportAsked(players) {
+        const whom = this.reporting && players.find((player) => player.id === this.reporting && player.report);
+
+        if (!whom) {
+            this.reporting = null;
+            this.reportForm.hidden = true;
+            this.reportForm.replaceChildren();
+
+            return;
+        }
+
+        if (this.reportForm.dataset.id === whom.id && !this.reportForm.hidden) {
+            return;
+        }
+
+        const done = () => {
+            this.reporting = null;
+            this.reportForm.hidden = true;
+            this.reportForm.replaceChildren();
+            delete this.reportForm.dataset.id;
+        };
+        const cancel = element("button", "journal-button party-report-cancel", "Cancel");
+
+        cancel.type = "button";
+        cancel.addEventListener("click", done);
+        this.reportForm.dataset.id = whom.id;
+        this.reportForm.hidden = false;
+        this.reportForm.replaceChildren(
+            element("p", "journal-note party-report-ask", `Report ${whom.name} to whoever runs this world. Why?`),
+            ...REPORT_WHYS.map((why) => {
+                const button = element("button", "journal-button party-report-why", REPORT_WORDS[why]);
+
+                button.type = "button";
+                button.dataset.why = why;
+                button.addEventListener("click", () => {
+                    done();
+                    this.onReport(whom.id, why);
+                });
+
+                return button;
+            }),
+            cancel,
+            element("p", "journal-note party-report-what", "They'll see what was said between you lately, and where you both were. The other player isn't told who reported them."),
+        );
     }
 
     get open() {
@@ -999,11 +1060,25 @@ export class PartyPanel {
                     actions.append(block);
                 }
 
+                // (Reported to whoever runs the world, where it takes reports: why, asked below)
+                if (!me && player.report) {
+                    const report = element("button", "journal-button party-report", "Report");
+
+                    report.type = "button";
+                    report.addEventListener("click", () => {
+                        this.reporting = id;
+                        this.#reportAsked(everyone);
+                        this.reportForm.scrollIntoView?.({ block: "nearest" });
+                    });
+                    actions.append(report);
+                }
+
                 row.append(text, actions);
 
                 return row;
             })]),
         );
+        this.#reportAsked(everyone);
         this.everyoneNote.textContent = full
             ? "Your party's full: four play together in one at most."
             : leads

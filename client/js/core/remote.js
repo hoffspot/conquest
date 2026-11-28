@@ -24,6 +24,7 @@ export const REMOTE = Object.freeze({
         hold: "The player's game stopped or going again (and, an owner's, the world for everyone)",
         chat: "A line said to the player's party, or a direct message (`to`): { ok } or { ok: false, reason }",
         takeDms: "Which direct messages the player takes ({ party, world })",
+        report: "A player told of to whoever runs the world (about, why): { ok } or { ok: false, reason }",
         clock: "The time (ms), as the link times things by it",
     }),
     /** Read by the game. */
@@ -34,6 +35,7 @@ export const REMOTE = Object.freeze({
         inHand: "How many it's had in hand lately",
         lately: "A word there and back, as lately timed (ms), or null",
         paused: "Why the world's stopped ({ why, by }), or null while it's going",
+        reports: "Whether the world's said it takes reports of players",
         farBehind: "Whether it's fallen too far behind and is being brought up to date",
         received: "How many bytes it's heard, by kind (for the debug overlay)",
         members: "How many times who's in its world has changed with no event to say so (a link that keeps no copy; 0 for one whose copy plays their coming and going)",
@@ -49,6 +51,8 @@ export const REMOTE = Object.freeze({
         onUnsaid: "Why a line of the player's wasn't said",
         onMissed: "How many a typed line of the player's was kept from (those kept to the quick phrases)",
         onNannied: "Who's kept to the quick phrases (Nanny Mode), and why the player is, if they are ({ ids, mine })",
+        onReports: "Whether the world takes reports of players (on)",
+        onReported: "How a report of the player's went ({ ok, reason })",
     }),
 });
 

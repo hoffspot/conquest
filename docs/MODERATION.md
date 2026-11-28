@@ -2,7 +2,8 @@
 
 What the owner of a world server does to keep its players safe, and when. This is the runbook the
 scaling plan asks for (`generated/multiplayer_scaling_plan.md`, 6B-13 and 6B-23). It covers Nanny
-Mode today. Reports, mutes, bans and the rest are added here as they are built (6B-5 to 6B-10).
+Mode and reports from players today. Mutes by hand, bans and the rest are added here as they are
+built (6B-5 to 6B-10).
 
 How each thing works is in [SERVER.md](SERVER.md) (*Nanny Mode*); this says what to do.
 
@@ -57,9 +58,9 @@ unknown, so (as shipped) everyone is in Nanny Mode.
 
 ### When someone may be under age
 
-Reports from players aren't built yet (the plan's 6B-6). When they are, **May be under age** is
-one of the reasons a player can give, and it comes to the owner like any other report. Until
-then, if you have reason to think a player who is out of Nanny Mode should be in it:
+**May be under age** is one of the reasons a player can give when they report another (see
+*Reports from players*, below), and it comes to you like any other report. If a report, or
+anything else, gives you reason to think a player who is out of Nanny Mode should be in it:
 
 - A player who **passed an age check** can be made to pass it again:
   `POST /api/v1/server/players/<their player id>/agecheck/again`, with the admin key. Their key
@@ -73,3 +74,49 @@ then, if you have reason to think a player who is out of Nanny Mode should be in
 A player can switch Nanny Mode on for themselves in Game options, under Chat and players, and
 lock it with a code. That lock is kept on their device: clearing the browser's data forgets it.
 It is a parent's tool, and it doesn't replace the server's.
+
+## Reports from players
+
+In a **public** world, each player's row in the Players tab has a **Report** button. The player
+picks a reason: Abuse or harassment, Spam or adverts, Cheating, **May be under age**, or
+Something else. The other player isn't told who reported them. No other kind of world takes
+reports or keeps what's said.
+
+### What a report holds
+
+- Who reported whom: each one's player id in that world, their own identity if they came in by
+  one, and their hero's name.
+- The reason, the world and the time.
+- The last 20 lines said between the two (one said it and the other was sent it), from the
+  server's chat log.
+- Where each of them stood.
+
+### What the server does by itself
+
+- **Five reports an hour** from one player; a sixth is refused.
+- **Three different players** reporting the same one **within ten minutes** mutes them: their
+  shouts and what they say to the area channel are refused, in every world of the server. Their
+  party and their direct messages still work. They stay muted until you lift it.
+- Nobody is banned or sent out of a world by a report. That is yours to decide.
+
+### Reading them
+
+The management page shows **Reports from players** on its first tab while any wait or anyone is
+muted. Reading and answering them is through the server's API for now, with the admin key, from
+the server's computer or its Wi-Fi (a page for it is the plan's 6B-7):
+
+1. `GET /api/v1/server/reports` lists every report, newest first, and who is muted.
+2. Read the lines. A report is one player's word; the lines are what was said.
+3. `POST /api/v1/server/reports/<report id>/review` marks it looked at. Send `{ "lift": true }`
+   to lift the mute on the player it is about. Without it the mute stays, and you can lift it
+   later the same way.
+4. If more is needed, send them out or ban them from the world's Players table.
+
+### What is kept, and how long
+
+- **The chat log** (`chat/` in the data folder): what's said in public worlds, with who said it
+  and who it went to. Each day's file is deleted when it is 30 days old. It is left out of the
+  server's archives.
+- **Reports** (`reports.json`): kept 12 months. A mute stays until it's lifted.
+- Anything in a line that looks like a key, a token or a whole address is taken out before it's
+  written.
