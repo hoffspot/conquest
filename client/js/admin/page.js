@@ -1071,7 +1071,7 @@ function choice(key, setting, value, disabled = false) {
 function listed(key, setting, value) {
     const lines = (Array.isArray(value) ? value : []).map((entry) => h("li", {}, Object.values(entry).join(" · ")));
 
-    return h("div", { class: "field", "data-setting": key }, h("p", {}, setting.about), lines.length ? h("ul", { class: "muted small" }, lines) : h("p", { class: "muted small" }, "None listed."), key === "nannyCountries" ? countryFile(state.server.overview.countries) : null);
+    return h("div", { class: "field", "data-setting": key }, h("p", {}, setting.about), lines.length ? h("ul", { class: "muted small" }, lines) : h("p", { class: "muted small" }, "None listed."), key === "nannyCountries" ? countryFile(state.server.overview.countries) : null, key === "nannyCountries" ? nannyLacks(state.server.overview.nanny, state.server.settings.nanny !== "off") : null);
 }
 
 /**
@@ -1093,6 +1093,19 @@ function countryFile(countries) {
     }
 
     return h("p", { class: "muted small", "data-countries": "" }, countryFileWords(countries), " ", h("a", { href: countries.credit.href, target: "_blank", rel: "noopener" }, countries.credit.text), ".");
+}
+
+// What Nanny Mode lacks to be fit for public worlds (server/access/nanny.js nannyReady), under its
+// countries: each thing a line, the list's review prompted when it's due; nothing while it's off
+// and nothing's amiss but that (a server with no public worlds needn't be told)
+function nannyLacks(nanny, on) {
+    const lacks = (nanny?.missing ?? []).filter((line) => on || !line.startsWith("Nanny Mode is off"));
+
+    if (!on || !lacks.length) {
+        return null;
+    }
+
+    return h("ul", { class: "warning small", "data-nanny-lacks": "" }, lacks.map((line) => h("li", {}, line)));
 }
 
 function valueOf(form, key, setting) {

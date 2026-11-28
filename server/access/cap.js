@@ -26,10 +26,12 @@ export const PUBLIC_NEEDS = Object.freeze([
 
 /**
  * Whether this server's public worlds are ready (gate (b)): { ready, missing }, `missing` what
- * it still needs. Never ready till the plan's 6B-13 says how it's told.
+ * it still needs. Never ready till the plan's 6B-13 says how it's told. Given how the server's
+ * Nanny Mode stands (`nanny`: access/nanny.js nannyReady, the plan's 6B-23), what that lacks is
+ * named too: the country source's and the country list's freshness are part of being ready.
  */
-export function publicReady() {
-    return Object.freeze({ ready: false, missing: PUBLIC_NEEDS });
+export function publicReady({ nanny = null } = {}) {
+    return Object.freeze({ ready: false, missing: Object.freeze([...PUBLIC_NEEDS, ...(nanny && !nanny.ready ? nanny.missing : [])]) });
 }
 
 /**

@@ -2,7 +2,10 @@
 // 6B-16): who's kept to the quick chat's phrases coming into a world, and why.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { countriesReason, NANNY, NANNY_COUNTRIES, nannyFor, nannySettings } from "../server/access/nanny.js";
+import { readFileSync } from "node:fs";
+import { publicReady, PUBLIC_NEEDS } from "../server/access/cap.js";
+import { countriesReason, NANNY, NANNY_COUNTRIES, NANNY_FRESH, nannyFor, nannyReady, nannySettings } from "../server/access/nanny.js";
+import { GEOIP } from "../server/net/geoip.js";
 import { settingReason, SETTINGS } from "../server/storage/settings.js";
 
 const DAY = 86400000;
@@ -88,6 +91,85 @@ describe("Nanny Mode's rule (server/access/nanny.js nannyFor)", () => {
         assert.deepEqual(asked({ country: "FR", record: { ...seen(10), ...passed(16) } }), OFF, "(a pass lifts the hold)");
         // (From another listed country since: that one's, as they stand)
         assert.deepEqual(asked({ country: "BR", record: seen(10) }), { on: true, why: "country", code: "BR", threshold: 18 });
+    });
+});
+
+describe("Nanny Mode fit for public worlds (server/access/nanny.js nannyReady; the scaling plan's 6B-23)", () => {
+    const FILE = { month: "2026-11", fetchedAt: NOW - DAY, rows: 732796, stale: false, error: null };
+    const ready = (more = {}, settings = {}) => nannyReady({ now: NOW, source: { front: false, file: FILE }, ...more, settings: { ...defaults, ...settings } });
+
+    it("is: on, with a fresh country source and a list reviewed in the last ninety days; changing nothing by saying so", () => {
+        assert.deepEqual(NANNY_FRESH, { fileDays: 62, reviewDays: 90 });
+        assert.equal(NANNY_FRESH.fileDays, GEOIP.staleDays, "(the day the file stops answering is the day it's too old)");
+        assert.deepEqual(ready(), { ready: true, missing: [], review: { due: [], last: "2026-11-27" } });
+        assert.deepEqual(ready({}, { nanny: "public" }).ready, true);
+    });
+
+    it("lacks it while it's off", () => {
+        assert.deepEqual(ready({}, { nanny: "off" }).missing, ["Nanny Mode is off: turn it on in Settings (in public worlds, or in every world)."]);
+        assert.equal(ready({}, { nanny: "sometimes" }).ready, false);
+    });
+
+    it("lacks a country source with no file, or one more than sixty-two days old, unless what's in front of the server says countries itself", () => {
+        assert.match(ready({ source: { front: false, file: null } }).missing[0], /^There's no country file yet/);
+        assert.match(ready({ source: { front: false, file: { month: null, stale: true } } }).missing[0], /^There's no country file yet/);
+        assert.match(ready({ source: { front: false, file: { ...FILE, month: "2026-08", stale: true } } }).missing[0], /^The country file \(2026-08\) is more than 62 days old/);
+        assert.equal(ready({ source: {} }).ready, false);
+
+        // (Behind a front that says a visitor's country: no file needed)
+        assert.equal(ready({ source: { front: true, file: null } }).ready, true);
+        assert.equal(ready({ source: { front: true, file: { ...FILE, stale: true } } }).ready, true);
+    });
+
+    it("lacks a reviewed list ninety-one days after its oldest entry's review, naming the countries due; and with no list at all", () => {
+        const reviewed = Date.parse("2026-11-27T00:00:00Z");
+
+        assert.equal(ready({ now: reviewed + 90 * DAY }).ready, true, "(the ninetieth day)");
+
+        const due = ready({ now: reviewed + 90 * DAY + 1, source: { front: true } });
+
+        assert.deepEqual([due.ready, due.review], [false, { due: ["GB", "BR", "ID"], last: "2026-11-27" }]);
+        assert.deepEqual(due.missing, ["Nanny Mode's country list is due a review (GB, BR, ID: last reviewed 2026-11-27; every 90 days). See docs/MODERATION.md."]);
+
+        // (One entry reviewed since: the others alone are due)
+        const some = [{ ...NANNY_COUNTRIES[0], reviewed: "2027-02-20" }, ...NANNY_COUNTRIES.slice(1)];
+
+        assert.deepEqual(ready({ now: reviewed + 91 * DAY }, { nannyCountries: some }).review, { due: ["BR", "ID"], last: "2026-11-27" });
+        assert.deepEqual(ready({}, { nannyCountries: [] }).missing, ["Nanny Mode's country list is empty."]);
+        assert.deepEqual(ready({}, { nannyCountries: [{ code: "GB", threshold: 16, reviewed: "not a date" }] }).review.due, ["GB"]);
+    });
+
+    it("is named in what a server's public worlds still need, which nothing makes ready yet", () => {
+        assert.deepEqual(publicReady(), { ready: false, missing: PUBLIC_NEEDS });
+        assert.deepEqual(publicReady({ nanny: ready() }), { ready: false, missing: PUBLIC_NEEDS });
+
+        const lacking = ready({ source: { front: false, file: null } }, { nanny: "off" });
+
+        assert.deepEqual(publicReady({ nanny: lacking }).missing, [...PUBLIC_NEEDS, ...lacking.missing]);
+        assert.equal(publicReady({ nanny: lacking }).ready, false);
+    });
+
+    it("has a runbook that says what to do about each thing it can lack, by the numbers the code goes by", () => {
+        const runbook = readFileSync(new URL("../docs/MODERATION.md", import.meta.url), "utf8");
+
+        for (const heading of ["### Before turning it on", `### Every ${NANNY_FRESH.reviewDays} days: review the country list`, "### When the country file is old", "### When someone may be under age", "### What a player can do themselves"]) {
+            assert.ok(runbook.includes(heading), heading);
+        }
+
+        assert.ok(runbook.includes(`more than ${NANNY_FRESH.fileDays} days old`));
+        assert.ok(runbook.includes("**May be under age**"), "(the report's reason, by its words, for 6B-6 to send)");
+        assert.ok(runbook.includes("/agecheck/again"));
+
+        for (const { code, threshold } of NANNY_COUNTRIES) {
+            const name = new Intl.DisplayNames(["en"], { type: "region" }).of(code);
+
+            assert.ok(runbook.includes(`${name} (${threshold})`), `${name} (${threshold}), as the shipped list has it`);
+        }
+
+        // (The shipped list, as shipped: reviewed, and not from the future)
+        for (const { code, reviewed } of NANNY_COUNTRIES) {
+            assert.ok(Date.parse(reviewed) <= Date.now(), `${code}: reviewed ${reviewed}`);
+        }
     });
 });
 
