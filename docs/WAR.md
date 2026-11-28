@@ -3701,6 +3701,16 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   restricts them too, the world's reason is the one shown, and switching their own off
   doesn't lift it. A host too old to know the choice says nothing back, and the player's own
   game keeps them to the phrases all the same.
+  - **By the word of the server a hosted world is found through** (the plan's 6B-25). A world a
+    player hosts in their browser is listed on a server's broker, and joined through it. That
+    server tells each game on its broker whether its player is in Nanny Mode by where they
+    connect from, and why (the broker's word: `nanny`; app/peer.js). The game keeps to it as it
+    does the player's own choice (`game.saidNanny`): told to the host with `dms`'s `nanny`,
+    and shown with the server's reason. **Its limit**: the server runs no part of such a world,
+    and games linked point to point never pass through it, so it's the player's own game that
+    keeps them to the phrases. A changed game could ignore it; on a world a server runs, the
+    server enforces it and a game can't. A world joined by a room code through the game's own
+    small relay (server/relay.js), which has no settings and no country source, is told nothing.
   - **The lock** (app/nannylock.js). While it's on, a code of 4 to 12 characters can lock it:
     switching it off then asks for the code, and the wrong one leaves it on. Only a salted
     SHA-256 of the code is kept (`nannyLock`), never the code. It keeps a child from switching

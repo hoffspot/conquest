@@ -1616,6 +1616,8 @@ export class Management {
             // (Turned on: its country file fetched at once, if there's none or an old one)
             this.server.countries.look();
             this.server.play?.renanny();
+            // (And whoever's on the broker told how they stand now: broker.js greeting)
+            this.server.broker?.refresh();
         }
 
         this.server.nearby.follow(this.server.settings.get("bonjour"));

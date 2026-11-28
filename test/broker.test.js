@@ -409,6 +409,47 @@ describe("the broker", () => {
         assert.deepEqual(hosted(), { lockstep: 0, replicated: 1 });
     });
 
+    it("tells each link whether its player's in Nanny Mode by where they connect from, and why (the scaling plan's 6B-25): nothing said while it's off; said for a world found here as for a public one; said again as the server's settings change", async () => {
+        const server = await serve();
+        const link = await open(server);
+        const word = (line) => JSON.parse(line.slice(7));
+
+        // Off, as it ships: the word as it ever was
+        assert.deepEqual(word(await link.next("broker ", 0)), { ice: [], relaying: true });
+
+        // On for public worlds: a world found through the broker is found by strangers, so it counts.
+        // No country file here: unknown, so in it, at the oldest age listed
+        await server.manage.changeSettings({ nanny: "public" });
+        assert.deepEqual(word(await link.next("broker ", 1)), { ice: [], relaying: true, nanny: { why: "unknown", code: null, threshold: 18 } });
+
+        // By the server's country file: a listed country's rules; one that isn't listed, nothing said
+        const file = server.countries.country;
+
+        try {
+            server.countries.country = () => "GB";
+            await server.manage.changeSettings({ nanny: "all" });
+            assert.deepEqual(word(await link.next("broker ", 2)).nanny, { why: "country", code: "GB", threshold: 16 });
+
+            // (One connecting afresh is told as they connect)
+            const late = await open(server);
+
+            assert.deepEqual(word(await late.next("broker ", 0)).nanny, { why: "country", code: "GB", threshold: 16 });
+            late.close();
+            server.countries.country = () => "FR";
+            await server.manage.changeSettings({ nannyHoldDays: 29 });
+            assert.deepEqual(word(await link.next("broker ", 3)), { ice: [], relaying: true });
+        } finally {
+            server.countries.country = file;
+        }
+
+        // Unknown countries let be: nothing said. Off again: nothing said
+        await server.manage.changeSettings({ nannyUnknown: false });
+        assert.deepEqual(word(await link.next("broker ", 4)), { ice: [], relaying: true });
+        await server.manage.changeSettings({ nanny: "off", nannyUnknown: true, nannyHoldDays: 30 });
+        assert.deepEqual(word(await link.next("broker ", 5)), { ice: [], relaying: true });
+        link.close();
+    });
+
     it("refuses a bad announcement, more than 3 from one address, a joiner for a world that isn't there, and anything it doesn't know", async () => {
         const server = await serve();
         const host = await open(server);

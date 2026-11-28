@@ -1875,6 +1875,13 @@ export class Game {
          */
         this.nannyChosen = false;
         this.nannyTold = null;
+        /**
+         * Nanny Mode as the server a browser-hosted world's found through says of the player (its
+         * broker's word, app/peer.js `nanny`; the plan's 6B-25): why, or null. That server runs
+         * no part of the world, so it's the player's own game that keeps to it: told to the host
+         * as their own choice is, and shown as the server's reason.
+         */
+        this.nannySaid = null;
 
         /**
          * How the camera's turned and shaken (Game options): whether it follows round behind the
@@ -4194,7 +4201,7 @@ export class Game {
         }
 
         // (Which direct messages the host's own player takes, told to it)
-        hosting?.takeDms(this.me, { ...this.dmsTaken, nanny: this.nannyChosen });
+        hosting?.takeDms(this.me, { ...this.dmsTaken, nanny: this.nannyChosen || Boolean(this.nannySaid) });
     }
 
     /**
@@ -12682,8 +12689,8 @@ export class Game {
     /** Which direct messages the player takes (Game options: from their party, from anyone else in the world), told to the host. */
     takeDms({ party = true, world = true, shout = true } = {}) {
         this.dmsTaken = { party, world, shout };
-        this.hosting?.takeDms(this.me, { ...this.dmsTaken, nanny: this.nannyChosen });
-        this.remote?.takeDms({ ...this.dmsTaken, nanny: this.nannyChosen });
+        this.hosting?.takeDms(this.me, { ...this.dmsTaken, nanny: this.nannyChosen || Boolean(this.nannySaid) });
+        this.remote?.takeDms({ ...this.dmsTaken, nanny: this.nannyChosen || Boolean(this.nannySaid) });
     }
 
     /**
@@ -12914,12 +12921,33 @@ export class Game {
         this.#nannyNow(was);
     }
 
+    /**
+     * What the server a browser-hosted world's found through says of the player's Nanny Mode (its
+     * broker's word: why, or null), as it's heard and whenever it changes: the host told, as the
+     * player's own choice is.
+     */
+    saidNanny(why) {
+        if (JSON.stringify(why ?? null) === JSON.stringify(this.nannySaid)) {
+            return;
+        }
+
+        const was = JSON.stringify(this.nanny);
+
+        this.nannySaid = why ?? null;
+        this.takeDms(this.dmsTaken);
+        this.#nannyNow(was);
+    }
+
     // Why the player's in Nanny Mode now: as the world says, or else by their own choice; told
     // (onNanny) if it's changed from `was`, and the chat shown again
     #nannyNow(was) {
-        this.nanny = this.nannyTold ?? (this.nannyChosen ? { why: "chosen", code: null, threshold: null } : null);
+        // (The world's own reason first; then the server's a hosted world's found through, which
+        // its host knows only as the player's choice; then the player's choice)
+        const worlds = this.nannyTold && this.nannyTold.why !== "chosen" ? this.nannyTold : null;
 
-        if (this.nannyChosen) {
+        this.nanny = worlds ?? this.nannySaid ?? (this.nannyChosen || this.nannyTold ? { why: "chosen", code: null, threshold: null } : null);
+
+        if (this.nannyChosen || this.nannySaid) {
             this.nannied.add(this.me);
         } else if (!this.nannyTold) {
             this.nannied.delete(this.me);

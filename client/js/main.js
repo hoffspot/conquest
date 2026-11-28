@@ -1035,6 +1035,9 @@ function applyChat(game = state.game) {
         game.chooseNanny(settings.nannyMode);
     }
 
+    // (And what the server a hosted world's found through says of them: its broker's word, app/peer.js)
+    game.saidNanny(state.together?.link?.nanny ?? null);
+
     showNanny();
 }
 
@@ -3224,6 +3227,15 @@ function linkHow(link) {
 function setTogether(together) {
     state.together = together;
     fetcher.together = Boolean(together);
+
+    // (Nanny Mode as the server the world's found through says of the player, now and as it
+    // changes: its broker's word, told to the game)
+    if (together?.link && "nanny" in together.link) {
+        together.link.onWord = () => state.game?.saidNanny(together.link.nanny);
+        state.game?.saidNanny(together.link.nanny);
+    } else if (!together) {
+        state.game?.saidNanny(null);
+    }
 
     if (!together) {
         fetcher.probe = () => {};

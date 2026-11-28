@@ -1089,6 +1089,15 @@ age someone says they are.
   yet, so Nanny Mode can't be turned off here for now." The provider the tests use passes
   whoever a test says, and no setting can choose it.
 
+**In worlds players host themselves** (the plan's 6B-25). The broker tells each game on it
+whether its player is in Nanny Mode by where they connect from (the broker's word, `nanny`: `{
+why, code, threshold }`, said only for one who is), and again when a Nanny Mode setting changes.
+A world found through the broker is found by strangers, so it counts as a public one: Nanny Mode
+on for public worlds applies. The country is the front's say or the country file's, as for a
+world here. The server runs no part of such a world, so it can only say: the player's own game
+keeps them to the phrases and tells the world's host (docs/WAR.md *Parties*). No record is read
+for it (no hold, no age check): the broker isn't shown a player's identity.
+
 **Fit for public worlds** (`nannyReady`; the plan's 6B-23). Settings lists, under Nanny Mode's
 countries, what Nanny Mode lacks while it's on: no fresh country source (no country file, or one
 more than 62 days old, and nothing in front of the server that says countries), or a country
