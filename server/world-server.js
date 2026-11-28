@@ -29,6 +29,7 @@ import { NET_VERSION } from "../client/js/core/netplay.js";
 import { isHome } from "./access/addresses.js";
 import { capReason, capWorld, mayPass, mostFor, publicReady, publicReason } from "./access/cap.js";
 import { ADMIN_PAGE, listenAdmin } from "./admin.js";
+import { AgeChecks } from "./access/agecheck.js";
 import { ServerIdentity } from "./access/identity.js";
 import { Access } from "./access/index.js";
 import { API_PATH, apiHandler } from "./api.js";
@@ -120,6 +121,9 @@ export class WorldServer {
         await server.countries.load();
         // (The server's players, across its worlds: written as each comes in by their own identity)
         access.players = await PlayerStore.open(root, options.clock ? { clock: options.clock } : {});
+        // (Age checks, the way out of a country's Nanny Mode: access/agecheck.js. No provider
+        // ships, so none's offered unless one's given, as the tests give theirs)
+        server.ages = new AgeChecks({ players: access.players, provider: options.ageProvider ?? null, ...(options.clock ? { clock: options.clock } : {}), onPassed: () => server.play?.renanny() });
 
         for (const id of await folder.worlds.ids()) {
             await server.#add(await folder.worlds.open(id));
@@ -255,7 +259,9 @@ export class WorldServer {
         this.looking = null;
 
         /** Free certificates got and renewed (certify.js), and the TLS-ALPN-01 checks it's answering meanwhile (by the reverse name asked for). */
-        this.certifier = new Certifier(this, { ...acme, tokens: tokens ?? tokenStore({ file: tokensFileOf(root) }) });
+        /** Where the server keeps tokens for others' services (the system's keychain, or a file: a DNS host's, an age-check provider's key). */
+        this.tokens = tokens ?? tokenStore({ file: tokensFileOf(root) });
+        this.certifier = new Certifier(this, { ...acme, tokens: this.tokens });
 
         /** The home's router, asked to let the internet in while it's answered (router.js; none if `router` is false, as most tests have it). */
         this.router = router === false ? null : new Router(this, router);

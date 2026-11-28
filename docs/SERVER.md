@@ -1044,7 +1044,9 @@ ban that holds to a person, a mute, Nanny Mode's hold, a passed age check).
 - **What it holds**, by their player id: their public key, the name they last went by, when they
   were first and last seen, on how many days (UTC) and for how many minutes they've played, an
   age band (none till they're asked), their standing and flags (empty till something sets them),
-  and Nanny Mode's hold (`nanny`: the listed country they were last seen from, and when; or none).
+  Nanny Mode's hold (`nanny`: the listed country they were last seen from, and when; or none),
+  a passed age check (`agecheck`: four things, below; or none) and how many they've tried lately
+  (`attempts`).
 - **What it doesn't**: no email, no birth date, no address. One who comes in by a key and
   ticket alone, with no identity, has no record.
 - **Written** as someone comes into a world and as they leave it. **Read** for Nanny Mode's hold
@@ -1055,9 +1057,44 @@ ban that holds to a person, a mute, Nanny Mode's hold, a passed age check).
 
 **Leave it off for now.** The file is right about a country most of the time, not all of it;
 behind Cloudflare Tunnel the server goes by Cloudflare's own word for the country instead (above,
-*What's in front of the tunnel's port*). Nothing lifts it yet either: that takes a passed age check at or over the
-country's age (6B-22), never an age someone says they are; `nannyFor` reads that pass from the
-record once there is one.
+*What's in front of the tunnel's port*). And no age-check provider ships, so on a real server
+nothing lifts a country's Nanny Mode yet (below).
+
+**Age checks** (`server/access/agecheck.js`; the plan's 6B-22). A country's Nanny Mode, or an
+unknown country's, lifts only on a passed age check at or over that country's age, never on an
+age someone says they are.
+
+- **How it goes.** The player asks to begin (`POST /api/v1/agecheck/begin`, by the session they
+  came into a world with). The server starts a session with the provider, for the age the rules
+  that hold them name, and hands back the provider's own page (https) to go to. The game asks how
+  it went (`POST /api/v1/agecheck/status`), and the server asks the provider. A home server has
+  no way for a provider to call it, so it asks.
+- **Nothing the game says is a result.** The server asks the provider itself, by the session it
+  started, and takes a pass only if the answer carries the reference the server gave that
+  session and is for the age asked or over. A session is good for 30 minutes and for one answer.
+- **A pass** lifts Nanny Mode at once in whatever worlds the player is in, with no restart,
+  lets go of their hold, and lasts.
+- **Anything else** (a fail, an age under the one asked, a session run out) leaves Nanny Mode
+  on and everything else as it was. Three tries in 30 days, so that an adult a face estimate
+  misread can try another way; a fourth is refused without the provider being asked.
+- **Check again.** The server's admin can take a pass back
+  (`POST /api/v1/server/players/<player id>/agecheck/again`), since a player's key can be
+  carried to another device and so to another person. They're back in Nanny Mode where they
+  stand, their tries afresh.
+- **A provider** is an adapter: a name, `begin({ threshold, reference })` and `status(id)`. Its
+  key is kept in the server's token store (the system's keychain, or `tokens.json`: under
+  `agecheck:<name>`), never in the settings. **None ships**: a real one is the plan's 6B-24,
+  which the owner has deferred. With none, `GET /api/v1/agecheck` says none is offered, `begin`
+  is refused (`no-provider`), and the chat panel says "Age checks aren't set up on this server
+  yet, so Nanny Mode can't be turned off here for now." The provider the tests use passes
+  whoever a test says, and no setting can choose it.
+
+**What's kept of an age check** (for the privacy page, when there is one: 6B-11). Of a pass,
+four things on the server's record of the player: that they passed, the age it was for, the date,
+and the checker's name. Of anything else, a count of how many times they've tried in the last 30
+days, and when the first of those was. Pellagos is told only yes or no. It never sees or keeps a
+photo, a document, a birth date or an exact age, and it doesn't keep the provider's session, its
+reference or the page it sent the player to.
 
 The server works it out as a player comes in and tells the world's thread with their entry
 (`{ type: "enter", ..., nanny, why }`), and again for whoever's in a world when a Nanny Mode
