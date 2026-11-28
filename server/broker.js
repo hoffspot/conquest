@@ -6,6 +6,8 @@
 //
 //   broker -> any    "broker {ice, relaying}"      on connecting: the STUN servers to try, and
 //                                                  whether the server relays when direct fails
+//                                                  (and `nanny`: { why, code, threshold }, for one
+//                                                  the server's rules put in Nanny Mode: 6B-25)
 //   host -> broker   "announce {name, people, players, most, net, visibility, direct, local, temporary, netcode}"
 //                                                  -> "announced ID TOKEN" (ID: the world's code,
 //                                                     CODE_LENGTH letters; or "error busy",
@@ -51,6 +53,7 @@ import { createHash } from "node:crypto";
 import { connectionOf, guard, Refusal, urlOf } from "./guards.js";
 import { Counts, LIMITS, Rate } from "./access/limits.js";
 import { hashOf, newToken, sameHash } from "./access/tokens.js";
+import { nannyFor, nannySettings } from "./access/nanny.js";
 import { DEFLATE_ACCEPTED, deflateOffered, roomCode, Socket } from "./relay.js";
 
 /** Where on the server the broker is, and the subprotocol it speaks. */
@@ -161,6 +164,31 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
     let next = 1;
 
     const relaying = () => server.settings.get("relaying") !== false;
+
+    // Whether whoever's on a link is in Nanny Mode by where they connect from, and why
+    // (generated/multiplayer_scaling_plan.md 6B-25; access/nanny.js): { why, code, threshold }, or
+    // null. A world listed here is found by strangers, so it's taken for a public one: Nanny Mode
+    // on for public worlds, or for all, counts. The server runs no part of such a world (its host
+    // is a player's browser), so it can only say: the player's own game keeps them to the phrases
+    const nannyOf = (socket) => {
+        // (A server with no such settings, as the tests' own can be: nobody)
+        if (server.settings.get("nanny") === undefined) {
+            return null;
+        }
+
+        const country = socket.country !== undefined ? socket.country : (server.countries?.country(socket.address) ?? null);
+        const { on, why, code, threshold } = nannyFor({ country, record: null, world: { public: true }, settings: nannySettings(server.settings) });
+
+        return on ? { why, code, threshold } : null;
+    };
+
+    // What the broker says as a link opens, and again when it changes: its word, { ice, relaying },
+    // and `nanny` for one in Nanny Mode (said only then: an older game reads the rest as ever)
+    const greeting = (socket) => {
+        const nanny = nannyOf(socket);
+
+        return `broker ${JSON.stringify({ ice, relaying: relaying(), ...(nanny ? { nanny } : {}) })}`;
+    };
 
     // Whether one at `a` is probably on the same network as one at `b` (both at home, or the same public address)
     const near = (a, b) => (a.from === "home" && b.from === "home") || (a.from === "internet" && b.from === "internet" && a.address === b.address);
@@ -574,7 +602,7 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
         socket.late.unref?.();
         socket.onMessage = (text) => hear(socket, text);
         socket.onClose = () => closed(socket);
-        socket.send(`broker ${JSON.stringify({ ice, relaying: relaying() })}`);
+        socket.send(greeting(socket));
     };
 
     const upgrade = (request, raw, head) => {
@@ -591,6 +619,7 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
         let address;
         let from;
         let tunnel;
+        let country;
 
         if (server.settings.get("broker") === false) {
             refuse(403, "broker-off");
@@ -599,7 +628,7 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
         }
 
         try {
-            ({ address, from, tunnel } = guard(connectionOf(request), server));
+            ({ address, from, tunnel, country } = guard(connectionOf(request), server));
         } catch (error) {
             if (error instanceof Refusal) {
                 policy.on("refused", { why: error.error, address: request.socket.remoteAddress });
@@ -635,7 +664,8 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
 
         const socket = new Socket(raw, head, { limit: limits.message, backlog: limits.backlog, deflate });
 
-        Object.assign(socket, { address, from, tunnel });
+        // (Their country as the front says it, where it's one that does: guards.js guard)
+        Object.assign(socket, { address, from, tunnel, ...(country !== undefined ? { country } : {}) });
         sockets.add(socket);
         welcome(socket);
     };
@@ -683,7 +713,7 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
         /** Everyone watching sent the list again (after the relaying setting changes), and told whether it relays. */
         refresh() {
             for (const socket of sockets) {
-                socket.send(`broker ${JSON.stringify({ ice, relaying: relaying() })}`);
+                socket.send(greeting(socket));
             }
 
             for (const watcher of watchers) {

@@ -374,6 +374,23 @@ describe("a player's own world through the broker", () => {
         assert.match(host.code, /^[A-Z]{4}$/);
         assert.deepEqual(host.host.word, { ice: [], relaying: true });
 
+        // (Nanny Mode as the server says of this player, in the broker's word, the plan's 6B-25:
+        // nothing while it's off; told as it's turned on, and taken for no more than it is)
+        let words = 0;
+
+        assert.equal(host.host.nanny, null);
+        host.host.onWord = () => words++;
+        await server.manage.changeSettings({ nanny: "all" });
+        await until(() => words === 1, "the broker's word again");
+        assert.deepEqual(host.host.nanny, { why: "unknown", code: null, threshold: 18 });
+        host.host.word = { ...host.host.word, nanny: { why: "chosen", code: "gb", threshold: 160, address: "203.0.113.9" } };
+        assert.deepEqual(host.host.nanny, { why: null, code: null, threshold: null });
+        host.host.word = { ...host.host.word, nanny: "yes" };
+        assert.equal(host.host.nanny, null);
+        await server.manage.changeSettings({ nanny: "off" });
+        await until(() => words === 2, "the broker's word, off again");
+        assert.equal(host.host.nanny, null);
+
         const joined = await joining(server, host.code.toLowerCase());
 
         assert.equal(joined.joiner.how, "direct");

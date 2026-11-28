@@ -162,6 +162,30 @@ test("a player's own world through the server's broker: listed on it, joined fro
     expect(sent.wire).toBeLessThan(sent.text / 2);
     expect(sent.wire - (sent.text - sent.welcome)).toBeLessThan(sent.welcome / 3);
 
+    // Nanny Mode as the server the world's found through says of each of them (the scaling plan's
+    // 6B-25): the server runs no part of this world, so each one's own game keeps to it and tells
+    // the host, as it does a player's own choice. Turned on there (no country file here, so
+    // everyone's country is unknown): both kept to the quick phrases, told the server's reason
+    const UNKNOWN = { why: "unknown", code: null, threshold: 18 };
+
+    await server.manage.changeSettings({ nanny: "all" });
+    await expect.poll(() => guest.evaluate(() => window.pellagos.game.nanny), { timeout: 30000 }).toEqual(UNKNOWN);
+    await expect.poll(() => host.evaluate(() => [window.pellagos.game.nanny, window.pellagos.game.hosting.kept("player"), window.pellagos.game.hosting.kept("guest-1")]), { timeout: 30000 }).toEqual([UNKNOWN, true, true]);
+
+    const theirs = guest.getByRole("dialog", { name: "Party" });
+
+    await guest.locator("#partybutton").click();
+    await theirs.getByRole("tab", { name: "Chat" }).click();
+    await expect(theirs.locator(".chat-nanny")).toContainText("Nanny Mode is on.");
+    await expect(theirs.locator(".chat-nanny-why")).toHaveText("We couldn't tell where you're connecting from.");
+    await expect(theirs.locator(".chat-input")).toBeHidden();
+    await theirs.getByRole("button", { name: "Close" }).click();
+
+    // (Turned off there: both let be, told at once)
+    await server.manage.changeSettings({ nanny: "off" });
+    await expect.poll(() => guest.evaluate(() => window.pellagos.game.nanny), { timeout: 30000 }).toBe(null);
+    await expect.poll(() => host.evaluate(() => [window.pellagos.game.nanny, window.pellagos.game.hosting.kept("player"), window.pellagos.game.hosting.kept("guest-1")]), { timeout: 30000 }).toEqual([null, false, false]);
+
     // (Closed to others: taken down on the server)
     await host.locator("#menubutton").click();
     await host.locator("#invitebutton").click();

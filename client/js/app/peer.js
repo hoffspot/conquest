@@ -578,6 +578,23 @@ class BrokerSocket {
         return this.word?.ice ?? [];
     }
 
+    /**
+     * Whether the broker's server says this player's in Nanny Mode, by where they connect from
+     * (server/broker.js greeting; the scaling plan's 6B-25): why ({ why, code, threshold }), or null.
+     */
+    get nanny() {
+        const said = this.word?.nanny;
+
+        // (Taken for no more than it is, as core/netplay.js nannyWhy takes a world's)
+        return said && typeof said === "object"
+            ? {
+                  why: ["country", "held", "unknown"].includes(said.why) ? said.why : null,
+                  code: typeof said.code === "string" && /^[A-Z]{2}$/.test(said.code) ? said.code : null,
+                  threshold: Number.isInteger(said.threshold) && said.threshold > 0 && said.threshold < 100 ? said.threshold : null,
+              }
+            : null;
+    }
+
     attach(socket) {
         this.socket = socket;
         socket.addEventListener("message", ({ data }) => {
@@ -612,6 +629,7 @@ class BrokerSocket {
         if (what === "broker") {
             try {
                 this.word = JSON.parse(line.slice(7));
+                this.onWord?.();
             } catch {
                 // (Kept as it was)
             }
