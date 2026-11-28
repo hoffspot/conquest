@@ -1741,6 +1741,7 @@ test("Nanny Mode in the chat panel (the scaling plan's 6B-17): nothing of it dra
 
     // (And its row under Game options, Chat and players, says the world has it on for them)
     expect(await guest.locator("#nannysummary").textContent()).toContain("This world has it on for you by its own rules");
+    expect(await guest.locator("#nannystate").textContent()).toBe("Off: on in this world by its rules");
     expect(await host.locator("#nannysummary").textContent()).not.toContain("This world has it on");
 
     // The host: Bryn's name with the icon, which carries its label, and the chip; where Bryn is
@@ -1848,13 +1849,15 @@ test("Nanny Mode by a player's own choice (the scaling plan's 6B-18): Bryn switc
     const menu = host.getByRole("dialog", { name: "Party" });
     const theirs = guest.getByRole("dialog", { name: "Party" });
     const row = menu.locator('.party-everyone-list .party-player[data-id="guest-1"]');
-    // (Game options, Chat and players, opened; and shut again, back to the game)
+    // (Game options, Chat and players, Nanny Mode, opened; and shut again, back to the game)
     const toOptions = async () => {
         await guest.locator("#menubutton").click();
         await guest.locator("#optionsbutton").click();
         await guest.locator("#chatbutton").click();
+        await guest.locator("#nannybutton").click();
     };
     const fromOptions = async () => {
+        await guest.locator("#nannyback").click();
         await guest.locator("#chatback").click();
         await guest.locator("#optionsback").click();
         await guest.locator("#resumebutton").click();
@@ -1873,6 +1876,7 @@ test("Nanny Mode by a player's own choice (the scaling plan's 6B-18): Bryn switc
     await expect(nanny).toBeChecked();
     await expect(guest.locator("#nannysummary")).toHaveText("On: quick phrases only, in every world.");
     await expect(lock).toBeVisible();
+    expect(await guest.locator("#nannystate").textContent()).toBe("On");
     await expect.poll(() => host.evaluate(() => [window.pellagos.game.hosting.kept("guest-1"), window.pellagos.game.hosting.restricted("guest-1")]), { timeout: 30000 }).toEqual([true, false]);
     await fromOptions();
 
@@ -1909,6 +1913,7 @@ test("Nanny Mode by a player's own choice (the scaling plan's 6B-18): Bryn switc
     await guest.locator("#nannylockbutton").click();
     await expect(guest.locator("#nannysummary")).toHaveText("On, and locked: quick phrases only, in every world. Its code's needed to switch it off.");
     await expect(lock).toBeHidden();
+    expect(await guest.locator("#nannystate").textContent()).toBe("On, and locked");
 
     const kept = await guest.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")));
 

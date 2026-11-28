@@ -1038,7 +1038,7 @@ function applyChat(game = state.game) {
     showNanny();
 }
 
-// Nanny Mode's switch (Game options, Chat and players; the scaling plan's 6B-18) and its lock
+// Nanny Mode's switch (Game options, Chat and players, a page of its own; the scaling plan's 6B-18) and its lock
 // (app/nannylock.js): the switch as it's set; under it, while it's on, a code to lock it with, or,
 // asked to switch it off while it's locked (`state.nannyAsk`), the code that unlocks it
 function showNanny() {
@@ -1046,6 +1046,8 @@ function showNanny() {
     const worlds = state.game?.nanny && state.game.nanny.why !== "chosen";
 
     $("#nannyswitch").checked = settings.nannyMode;
+    // (Under its link, on Chat and players: how it stands, in a word or two)
+    $("#nannystate").textContent = `${settings.nannyMode ? (locked ? "On, and locked" : "On") : "Off"}${worlds ? ": on in this world by its rules" : ""}`;
     $("#nannysummary").textContent = `${
         settings.nannyMode ? (locked ? "On, and locked: quick phrases only, in every world. Its code's needed to switch it off." : "On: quick phrases only, in every world.") : "Quick phrases only: nothing typed is sent to you or by you, in any world."
     }${worlds ? " This world has it on for you by its own rules, whatever this says: the Chat tab says why." : ""}`;
@@ -1618,6 +1620,7 @@ const MENU_PAGES = {
     snag: { page: "#menusnag", title: "snagtitle", focus: "#snaggrades input", up: "gameplay", from: "#snagbutton" },
     chat: { page: "#menuchat", title: "chattitle", focus: "#chatfeedswitch", up: "options", from: "#chatbutton" },
     blocked: { page: "#menublocked", title: "blockedtitle", focus: "#blockedback", up: "chat", from: "#blockedbutton" },
+    nanny: { page: "#menunanny", title: "nannytitle", focus: "#nannyswitch", up: "chat", from: "#nannybutton" },
     wheels: { page: "#menuwheels", title: "wheelstitle", focus: "#wheelsback", up: "actions", from: "#wheelsbutton" },
     quick: { page: "#menuquick", title: "quicktitle", focus: "#quickback", up: "actions", from: "#quickbutton" },
     log: { page: "#menulog", title: "logtitle", focus: "#logback", up: "options", from: "#logbutton" },
@@ -1646,8 +1649,12 @@ function menuPage(page, focus = MENU_PAGES[page].focus) {
     if (page === "gameplay") {
         showSnag(settings.autoSnag);
         showMortal();
-    } else if (page === "chat" || page === "blocked") {
+    } else if (page === "chat" || page === "blocked" || page === "nanny") {
+        // (Nanny Mode's page come to afresh: no code being asked for)
+        state.nannyAsk = false;
+        $("#nannylocknote").textContent = "";
         showBlocked();
+        showNanny();
     } else if (page === "graphics") {
         // (What it's drawing, and how the device is asking for it, as they are now)
         showQuality();
@@ -5878,6 +5885,7 @@ $("#partydmswitch").addEventListener("change", (event) => applySetting("refusePa
 $("#worlddmswitch").addEventListener("change", (event) => applySetting("refuseWorldDms", event.target.checked));
 $("#chatfeedswitch").addEventListener("change", (event) => applySetting("chatOnScreen", event.target.checked));
 $("#blockedbutton").addEventListener("click", () => menuPage("blocked"));
+$("#nannybutton").addEventListener("click", () => menuPage("nanny"));
 $("#snagswitch").addEventListener("change", (event) => applySetting("autoSnag", event.target.checked));
 $("#lockswitch").addEventListener("change", (event) => applySetting("autoLock", event.target.checked));
 $("#snagbutton").addEventListener("click", openSnag);

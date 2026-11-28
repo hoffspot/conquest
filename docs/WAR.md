@@ -3690,7 +3690,8 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   - None of it is drawn while nobody in the world is in Nanny Mode.
   The credit for the country file comes with it (the plan's 6B-19).
 - **Nanny Mode by a player's own choice** (Game options, Chat and players; the scaling plan's
-  6B-18). A switch, off to start with, kept with this device's settings (`nannyMode`). On, the
+  6B-18). A switch on a page of its own under Chat and players (which says how it stands: Off,
+  On, or On and locked), off to start with, kept with this device's settings (`nannyMode`). On, the
   player's game tells the host with which messages they take (`dms`'s `nanny`), and the host
   keeps them to the quick phrases as it would one the world restricts (`Session.kept(id)`:
   `restricted`, or their choice). It works in every world, a browser's or a server's, with

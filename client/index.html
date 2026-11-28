@@ -32,7 +32,7 @@
                     "three/addons/utils/BufferGeometryUtils.js": "./vendor/three-r186/addons/utils/BufferGeometryUtils.js?h=aba9507c8d",
                     "three/addons/utils/SkeletonUtils.js": "./vendor/three-r186/addons/utils/SkeletonUtils.js?h=6c660e1682",
                     "three/addons/utils/WorkerPool.js": "./vendor/three-r186/addons/utils/WorkerPool.js?h=d46dc565a8",
-                    "./js/app/assets.js": "./js/app/assets.js?h=76bde6a740",
+                    "./js/app/assets.js": "./js/app/assets.js?h=604d4dc2ae",
                     "./js/app/backdrop.js": "./js/app/backdrop.js?h=c9aa55b56c",
                     "./js/app/battlemap.js": "./js/app/battlemap.js?h=7d6695a2ef",
                     "./js/app/bestiary.js": "./js/app/bestiary.js?h=3f8049c082",
@@ -362,7 +362,7 @@
                     "./js/core/worldplan/terrain.js": "./js/core/worldplan/terrain.js?h=d0b35d7867",
                     "./js/core/worldview.js": "./js/core/worldview.js?h=464d88a860",
                     "./js/core/writings.js": "./js/core/writings.js?h=aea4ce4f29",
-                    "./js/main.js": "./js/main.js?h=403da9026f",
+                    "./js/main.js": "./js/main.js?h=f47210f90b",
                     "./js/world/ailments3d.js": "./js/world/ailments3d.js?h=1d60de08f8",
                     "./js/world/art/engine/atlas.js": "./js/world/art/engine/atlas.js?h=5086c15ffa",
                     "./js/world/art/engine/corners.js": "./js/world/art/engine/corners.js?h=cdfc8fe165",
@@ -542,7 +542,7 @@
                 }
             }
         </script>
-        <link rel="modulepreload" href="js/app/assets.js?h=76bde6a740">
+        <link rel="modulepreload" href="js/app/assets.js?h=604d4dc2ae">
         <link rel="modulepreload" href="js/app/shadowing.js?h=3b441bc05e">
         <link rel="modulepreload" href="js/core/blinkers.js?h=a0fe987cd1">
         <link rel="modulepreload" href="js/app/backdrop.js?h=c9aa55b56c">
@@ -656,7 +656,7 @@
                 }
             }
         </script>
-        <script type="module" src="js/main.js?h=403da9026f"></script>
+        <script type="module" src="js/main.js?h=f47210f90b"></script>
     </head>
     <body>
         <!-- The world, and the character being made, are drawn here, behind every screen -->
@@ -2151,6 +2151,25 @@
                         <input type="checkbox" id="messengerswitch" role="switch">
                         <span class="track" aria-hidden="true"></span>
                     </label>
+                    <button type="button" class="option-link" id="nannybutton">
+                        <span class="text">Nanny Mode<small id="nannystate">Off</small></span>
+                        <span class="chevron" aria-hidden="true">›</span>
+                    </button>
+                    <button type="button" class="option-link" id="blockedbutton">
+                        <span class="text">Blocked players<small id="blockedsummary">No one</small></span>
+                        <span class="chevron" aria-hidden="true">›</span>
+                    </button>
+                </div>
+                <div class="menu">
+                    <button type="button" class="button" id="chatback" data-back>Back</button>
+                </div>
+            </div>
+            <div class="menupage" id="menunanny" hidden>
+                <div class="menu-head">
+                    <button type="button" class="menu-back" data-back aria-label="Back to Chat and players">‹</button>
+                    <h2 id="nannytitle">Nanny Mode</h2>
+                </div>
+                <div class="options">
                     <label class="switch option" id="nannyrow">
                         <span class="text">Nanny Mode<small id="nannysummary">Quick phrases only: nothing typed is sent to you or by you, in any world</small></span>
                         <input type="checkbox" id="nannyswitch" role="switch">
@@ -2164,13 +2183,9 @@
                         </div>
                         <p class="option-lock-note" id="nannylocknote" role="status"></p>
                     </form>
-                    <button type="button" class="option-link" id="blockedbutton">
-                        <span class="text">Blocked players<small id="blockedsummary">No one</small></span>
-                        <span class="chevron" aria-hidden="true">›</span>
-                    </button>
                 </div>
                 <div class="menu">
-                    <button type="button" class="button" id="chatback" data-back>Back</button>
+                    <button type="button" class="button" id="nannyback" data-back>Back</button>
                 </div>
             </div>
             <div class="menupage" id="menublocked" hidden>
