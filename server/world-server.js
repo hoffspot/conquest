@@ -31,6 +31,7 @@ import { capReason, capWorld, mayPass, mostFor, publicReady, publicReason } from
 import { ADMIN_PAGE, listenAdmin } from "./admin.js";
 import { AgeChecks } from "./access/agecheck.js";
 import { nannyReady, nannySettings } from "./access/nanny.js";
+import { Reports } from "./access/reports.js";
 import { ServerIdentity } from "./access/identity.js";
 import { Access } from "./access/index.js";
 import { API_PATH, apiHandler } from "./api.js";
@@ -53,6 +54,7 @@ import { Registry } from "./registry.js";
 import { Router } from "./router.js";
 import { createStaticHandler } from "./static.js";
 import { CertificateStore } from "./storage/certificates.js";
+import { ChatLog } from "./storage/chatlog.js";
 import { DataFolder } from "./storage/folder.js";
 import { PlayerStore } from "./storage/players.js";
 import { CHARACTER_RULES, RULE_MODES, WORLD_SETTINGS } from "./storage/worlds.js";
@@ -125,6 +127,10 @@ export class WorldServer {
         // (Age checks, the way out of a country's Nanny Mode: access/agecheck.js. No provider
         // ships, so none's offered unless one's given, as the tests give theirs)
         server.ages = new AgeChecks({ players: access.players, provider: options.ageProvider ?? null, ...(options.clock ? { clock: options.clock } : {}), onPassed: () => server.play?.renanny() });
+
+        // (Reports of players, and what's said in public worlds, for them: access/reports.js)
+        server.chat = await ChatLog.open(root, options.clock ? { clock: options.clock } : {});
+        server.playerReports = await Reports.open(root, options.clock ? { clock: options.clock } : {});
 
         for (const id of await folder.worlds.ids()) {
             await server.#add(await folder.worlds.open(id));
@@ -226,6 +232,9 @@ export class WorldServer {
             // (What a world's own thread puts in its journal, saves and backups among it, in the log
             // too, scrubbed as every sentence is: log.js)
             onJournal: (world, text) => this.log.event("world.journal", { world, text }),
+            // (What's said in a public world, for the chat log, and a report made in one: play.js)
+            onSaid: (world, peer, line, to) => this.play?.said(world, peer, line, to),
+            onReport: (world, peer, report) => this.play?.report(world, peer, report),
         });
 
         this.static = createStaticHandler(clientDirectory);
@@ -935,6 +944,8 @@ export class WorldServer {
         this.updater.close();
         this.countries.close();
         await this.access.players?.flush();
+        await this.chat?.flush();
+        await this.playerReports?.flush();
         this.nearby.stop();
         await this.certifier.close();
         await this.router?.close();

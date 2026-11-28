@@ -22,6 +22,8 @@
 // character over (core/netplay.js Hosting #takeOver): the place kept for the old link let go.
 
 import { listedCountry, nannyFor, nannySettings } from "./access/nanny.js";
+import { keyOf, REPORTS } from "./access/reports.js";
+import { channelOf } from "./storage/chatlog.js";
 import { createHash } from "node:crypto";
 import { connectionOf, guard, Refusal, urlOf } from "./guards.js";
 import { Counts, LIMITS, Rate } from "./access/limits.js";
@@ -183,6 +185,8 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
     };
 
     // Into a world, by a session: let in (waiting its turn if it must), given a place
+    const isPublic = (world) => server.metaOf(world)?.settings?.public === true;
+
     // Whether one coming into a world from a country's kept to the quick chat's phrases (access/nanny.js)
     // (and why, as they're told in the chat panel: { why, code, threshold })
     // The server's own record of them (`identity`: their player id, storage/players.js) is read
@@ -266,8 +270,10 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
         const kept = nannyOf(world, country, principal.player.identity ?? null);
         const place = { world, peer, country, nanny: kept.on, nannyWhy: kept.why, player: principal.player.id, role: principal.role, via: principal.via, socket, token: hashOf(token), address, from: socket.from, tunnel: socket.tunnel, away: null, identity: principal.player.identity ?? null, entered: clock() };
 
+        // (Muted by reports of them, till the owner's looked: access/reports.js)
+        place.muted = server.playerReports?.isMuted(keyOf(place)) === true;
         places.set(placeKey(world, peer), place);
-        thread.enter(peer, { player: place.player, role: place.role, nanny: place.nanny, why: place.nannyWhy });
+        thread.enter(peer, { player: place.player, role: place.role, nanny: place.nanny, why: place.nannyWhy, muted: place.muted });
         playing(place);
         socket.send(`entered ${peer} ${token}`);
     };
@@ -452,6 +458,74 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
                     place.nannyWhy = why;
                     registry.entries.get(place.world)?.thread?.nanny(place.peer, on, why);
                 }
+            }
+        },
+        /** Who's muted by reports of them worked out again (one's just been muted, or a mute lifted): each world told of whoever's changed. */
+        remute() {
+            for (const place of places.values()) {
+                const on = server.playerReports?.isMuted(keyOf(place)) === true;
+
+                if (on !== place.muted) {
+                    place.muted = on;
+                    registry.entries.get(place.world)?.thread?.muted(place.peer, on);
+                }
+            }
+        },
+
+        /**
+         * A line said in a public world (its sayer's peer, the line as core/netplay.js Session
+         * tells it, the peers it went to), kept in the chat log: storage/chatlog.js. Nothing's
+         * kept of any other world.
+         */
+        said(world, peer, line, to = []) {
+            const from = places.get(placeKey(world, peer));
+
+            if (!from || !isPublic(world) || typeof line?.text !== "string") {
+                return;
+            }
+
+            server.chat?.add(world, { from: from.player, identity: from.identity, name: line.name, channel: channelOf(line), text: line.text, quick: line.quick ?? null, to: to.map((one) => places.get(placeKey(world, one))?.player).filter(Boolean) });
+        },
+
+        /**
+         * A report made in a public world (the reporter's peer; `about`, the peer of whom; why,
+         * their heroes' names and where each stood): kept with the lines between them (access/
+         * reports.js), the reporter's game answered, and whoever it muted muted where they are.
+         */
+        report(world, peer, { about, why, names = {}, places: where = {} } = {}) {
+            const thread = registry.entries.get(world)?.thread;
+            const [by, subject] = [places.get(placeKey(world, peer)), places.get(placeKey(world, about))];
+
+            if (!by || !server.playerReports || !isPublic(world)) {
+                thread?.reported(peer, false, "reportsOff");
+
+                return;
+            }
+
+            if (!subject) {
+                thread?.reported(peer, false, "reportWho");
+
+                return;
+            }
+
+            const made = server.playerReports.make({
+                world,
+                why,
+                by: { player: by.player, identity: by.identity, name: names.by },
+                about: { player: subject.player, identity: subject.identity, name: names.about },
+                lines: server.chat?.between(world, by.player, subject.player, REPORTS.lines) ?? [],
+                places: where,
+            });
+
+            thread?.reported(peer, made.ok, made.reason ?? null);
+
+            if (made.ok) {
+                server.log?.event("report", { world, player: subject.player, reason: why, by: by.player });
+            }
+
+            if (made.muted) {
+                this.remute();
+                server.log?.event("report.muted", { world, player: subject.player });
             }
         },
         sockets,

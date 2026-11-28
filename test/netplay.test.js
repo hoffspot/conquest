@@ -17,7 +17,7 @@ import { newGuid } from "../client/js/core/guid.js";
 import { HOST_PLAYER, Host, OWN, REFUSALS } from "../client/js/core/host.js";
 import { Navigation } from "../client/js/core/navigation.js";
 import { MOTION } from "../client/js/core/motion.js";
-import { AGAIN, AREA_CHAT, CHAT, CHAT_REFUSED, chatLine, DMS_TAKEN, NANNIED_MOST, NANNY_WHYS, nannyWhy, SHOUT, characterFrom, CHECK_EVERY, HEARD, Hosting, Joining, LATELY, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, QUIET, SELF, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
+import { AGAIN, AREA_CHAT, CHAT, CHAT_REFUSED, REPORT_REFUSED, REPORT_WHYS, chatLine, DMS_TAKEN, NANNIED_MOST, NANNY_WHYS, nannyWhy, SHOUT, characterFrom, CHECK_EVERY, HEARD, Hosting, Joining, LATELY, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, QUIET, SELF, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { selfOf } from "../client/js/core/selfstate.js";
 import { QUICK_CHAT, QUICK_MOST, QUICK_SHOWN, quickShown, quickText } from "../client/js/core/quickchat.js";
@@ -1721,6 +1721,118 @@ describe("playing together (netplay.js)", () => {
         assert.deepEqual(hosting.chat("", { quick: 6, to: "guest-1" }), { ok: true });
         deliver();
         assert.deepEqual(heard.bryn.slice(-2), [{ from: HOST_PLAYER, name: "Ada", text: "Over here!", shout: true, quick: 9 }, { from: HOST_PLAYER, name: "Ada", text: "Thanks!", to: "guest-1", toName: "Bryn", dm: "party", quick: 6 }]);
+    });
+
+    it("takes reports of players and tells whoever runs the world what's said (the scaling plan's 6B-6): nothing till the world says it takes them, each game told as it does and as it stops; a report of someone else for a reason there is handed on and answered; one muted has nothing shouted or said to the area; a game that knows none of it plays as before", () => {
+        const { host, hosting, join, deliver } = opened();
+        const [bryn, cass] = ["Bryn", "Cass"].map((name) => join(guest(name)));
+        const told = { bryn: [], cass: [] };
+        const answered = { bryn: [], cass: [] };
+        const unsaid = [];
+        const heard = [];
+
+        for (const [who, { joining }] of [["bryn", bryn], ["cass", cass]]) {
+            joining.onReports = (on) => told[who].push(on);
+            joining.onReported = (how) => answered[who].push(how);
+            joining.onChat = (line) => heard.push([who, line.text]);
+        }
+
+        bryn.joining.onUnsaid = (reason) => unsaid.push(reason);
+        deliver();
+
+        assert.deepEqual(REPORT_WHYS, ["abuse", "spam", "cheating", "underage", "other"]);
+        assert.ok(REPORT_REFUSED.every((reason) => REFUSALS[reason]) && CHAT_REFUSED.includes("muted") && REFUSALS.muted);
+
+        // A world that takes none (every world, till whoever runs it says): nobody's told
+        // anything, a game sends nothing, and one sent all the same is refused
+        assert.deepEqual([hosting.reports, hosting.onReport, hosting.onSaid, hosting.muted("guest-1")], [false, null, null, false]);
+        assert.deepEqual(told, { bryn: [], cass: [] });
+        assert.deepEqual(bryn.joining.report("guest-2", "spam"), { ok: false, reason: "reportsOff" });
+        bryn.joining.reports = true;
+        assert.deepEqual(bryn.joining.report("guest-2", "spam"), { ok: true, pending: true });
+        deliver();
+        assert.deepEqual(answered.bryn, [{ ok: false, reason: "reportsOff" }]);
+        bryn.joining.reports = false;
+        hosting.tellReports();
+        deliver();
+        assert.deepEqual(told, { bryn: [], cass: [] }, "(nothing said of none to one never told)");
+
+        // It takes them: each game told once, and whoever comes in later as they do
+        const made = [];
+
+        hosting.reports = true;
+        hosting.onReport = (peer, report) => {
+            made.push(report);
+            hosting.reported(peer, made.length < 2, made.length < 3 ? "reportMany" : "nonsense");
+        };
+        hosting.tellReports();
+        hosting.tellReports();
+        deliver();
+        assert.deepEqual(told, { bryn: [true], cass: [true] });
+
+        const dee = join(guest("Dee"));
+
+        deliver();
+        assert.equal(dee.joining.reports, true);
+        assert.deepEqual(told, { bryn: [true], cass: [true] });
+
+        // A report: handed to whoever runs the world, and their answer the reporter's
+        answered.bryn.length = 0;
+        assert.deepEqual(bryn.joining.report("guest-2", "underage"), { ok: true, pending: true });
+        deliver();
+        assert.deepEqual(made, [{ by: "guest-1", about: "guest-2", why: "underage" }]);
+        assert.deepEqual(answered.bryn, [{ ok: true }]);
+        bryn.joining.report("guest-2", "abuse");
+        bryn.joining.report("guest-3", "other");
+        deliver();
+        assert.deepEqual(answered.bryn.slice(1), [{ ok: false, reason: "reportMany" }, { ok: false, reason: "reportsOff" }], "(a reason that isn't one answered as the world taking none)");
+
+        // Of themselves, of nobody there, for no reason there is: never handed on
+        assert.deepEqual(bryn.joining.report("guest-2", "because"), { ok: false, reason: "reportWhy" });
+        assert.deepEqual(bryn.joining.report(7, "spam"), { ok: false, reason: "reportWho" });
+        answered.bryn.length = 0;
+        bryn.joining.report("guest-1", "spam");
+        bryn.joining.report("guest-9", "spam");
+        bryn.joining.send(JSON.stringify({ kind: "report", about: "guest-2", why: "because" }));
+        deliver();
+        assert.deepEqual(answered.bryn.map((how) => how.reason), ["reportWho", "reportWho", "reportWhy"]);
+        assert.equal(made.length, 3);
+        assert.deepEqual(answered.cass, []);
+
+        // What's said, told to whoever runs the world: the line and who it went to
+        const said = [];
+
+        host.command(HOST_PLAYER, { type: "party", do: "invite", who: "guest-1" });
+        bryn.joining.command({ type: "party", do: "accept" });
+        deliver();
+        hosting.onSaid = (line, to) => said.push([line.from, line.text, line.shout === true, [...to].sort()]);
+        bryn.joining.chat("To my party");
+        bryn.joining.chat("To everyone near", { shout: true });
+        deliver();
+        assert.deepEqual(said, [
+            ["guest-1", "To my party", false, ["guest-1", HOST_PLAYER].sort()],
+            ["guest-1", "To everyone near", true, ["guest-1", "guest-2", "guest-3", HOST_PLAYER].sort()],
+        ]);
+
+        // Muted: nothing shouted, nothing to the area, a phrase neither; their party hears them still
+        hosting.muted = (id) => id === "guest-1";
+        heard.length = 0;
+        said.length = 0;
+        bryn.joining.chat("Shouted", { shout: true });
+        bryn.joining.chat("To the area", { area: true });
+        bryn.joining.chat("", { shout: true, quick: 13 });
+        bryn.joining.chat("To my party still");
+        cass.joining.chat("Cass shouts", { shout: true });
+        deliver();
+        assert.deepEqual(unsaid, ["muted", "muted", "muted"]);
+        assert.deepEqual(said.map(([from, text]) => [from, text]), [["guest-1", "To my party still"], ["guest-2", "Cass shouts"]]);
+        assert.ok(heard.some(([who, text]) => who === "bryn" && text === "Cass shouts"), "(one muted hears as ever)");
+
+        // No longer taking them: each told so
+        hosting.reports = false;
+        hosting.tellReports();
+        deliver();
+        assert.deepEqual([told.bryn, told.cass, dee.joining.reports], [[true, false], [true, false], false]);
     });
 
     it("keeps one who's restricted to the quick chat's phrases (the scaling plan's 2-37): nothing typed said by them, nothing typed sent them, on every channel, the sayer told how many missed it; a phrase chosen both ways as ever; and no one restricted unless whoever runs the world says", () => {

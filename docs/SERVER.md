@@ -637,6 +637,9 @@ secrets.json             the admin key's and creator keys' hashes (never a key a
 identity.key             the server's identity (the key it proves its id with)
 certificates/            its certificates, and the DNS host's token where there's no Keychain
 journal.log              what's happened to the server
+players.json             the players it knows, across its worlds
+reports.json             reports of players from its public worlds (kept 12 months)
+chat/<world>/            what's said in its public worlds, a file a day (kept 30 days)
 history.json.gz          how it's been running, for Health's charts (the last day and week)
 worlds/<id>/             each world: world.json, state/ (its save and autosaves), heroes/,
                          access.json (its keys' hashes, players, bans), journal.log,
@@ -1105,6 +1108,24 @@ list due its review (90 days after its oldest entry's `reviewed` date). The same
 the server's public worlds still need (`publicReady`), which nothing makes ready yet. It's a
 read-only check: it refuses nothing. What to do about each is in
 [MODERATION.md](MODERATION.md), the owner's runbook.
+
+**Reports of players, and the chat log** (the plan's 6B-6; `server/access/reports.js`,
+`server/storage/chatlog.js`). In a public world alone, the world's thread tells the server each
+line said (`{ type: "said", peer, line, to }`, from core/netplay.js Session `onSaid`), and the
+server keeps it in `chat/<world>/<day>.jsonl`: who said it (their player id there, and their own
+identity if they have one), the channel, the words, and the player ids it went to. Anything shaped
+like a key, a token or a whole address is scrubbed first, as the structured log's lines are. A
+day's file is deleted at 30 days, and `chat/` is left out of archives. The world's games are told
+it takes reports (`{ kind: "reports", on }`), and a game's `{ kind: "report", about, why }` is
+checked by the world (someone else in it, a reason there is), made into a report by the server
+(`reports.json`: the two players, the reason, the last 20 lines between them, where each stood)
+and answered (`{ kind: "reported", ok, reason }`). One player makes five an hour. Three different
+players reporting the same one within ten minutes mutes them (`{ type: "muted", peer, on }` to
+each world they're in; Session `muted`): their shouts and area lines are refused (`muted`) until
+the admin reviews a report of them and lifts it (`GET /api/v1/server/reports`,
+`POST /api/v1/server/reports/<id>/review`). The overview carries `reports: { waiting, muted }`.
+No world can be public yet, so none of this runs outside the tests. What to do with a report is
+in [MODERATION.md](MODERATION.md).
 
 **What's kept of an age check** (for the privacy page, when there is one: 6B-11). Of a pass,
 four things on the server's record of the player: that they passed, the age it was for, the date,

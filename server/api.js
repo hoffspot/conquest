@@ -69,6 +69,8 @@
 //   POST   /server/session                  the admin key traded for a session (the page, from the Wi-Fi)
 //   GET    /server                          its overview, settings (and what each is), the worlds' rules and peoples
 //   PATCH  /server {settings}               settings changed
+//   GET    /server/reports                  reports of players from its public worlds, newest first, and who they've muted
+//   POST   /server/reports/:id/review {lift} one looked at; `lift`: the mute on whoever it's about lifted
 //   GET    /server/worlds                   every world, as GET /worlds/:id
 //   GET, DELETE /server/worlds/:id/crashes   the crash reports a world keeps (its last CRASHES.kept), and cleared
 //   GET, DELETE /server/worlds/:id/measures  the measured runs a world keeps (its last MEASURES.kept), and cleared
@@ -465,6 +467,30 @@ export function apiHandler(server, { mac = false } = {}) {
             admin(request);
 
             return { again: server.ages.again(identity) };
+        }],
+        // Reports of players from the public worlds (access/reports.js; the plan's 6B-6): read by
+        // the server's admin, and one marked looked at, the mute on whoever it's about lifted
+        // with `lift`
+        ["GET", /^\/server\/reports$/, { server: true }, async (request) => {
+            admin(request);
+
+            return server.playerReports.list();
+        }],
+        ["POST", /^\/server\/reports\/(r\d{1,12})\/review$/, { server: true }, async (request, body, [, id]) => {
+            const principal = admin(request);
+            const reviewed = await server.playerReports.review(id, { by: byOf(principal), lift: body?.lift === true });
+
+            if (!reviewed) {
+                throw new Refusal(404, "no-report", "There's no report by that id.");
+            }
+
+            if (reviewed.lifted) {
+                server.play?.remute();
+            }
+
+            await manage.journal(`Report ${id} of ${reviewed.report.about.name || reviewed.report.about.player} looked at by ${byOf(principal)}${reviewed.lifted ? ": their mute lifted" : ""}.`);
+
+            return reviewed;
         }],
         ["GET", /^\/health$/, { game: true }, async () => {
             const slow = registry.going.some((entry) => (entry.thread?.state?.steps?.p99 ?? 0) > 50);

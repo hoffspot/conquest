@@ -1619,6 +1619,35 @@ test("a direct message from the Players tab: To Bryn in the host's chat, From th
     await expect(hostRow.locator(".player-chip.blocked")).toHaveText("Blocked");
     await expect(hostRow.locator(".party-unblock")).toHaveText("Unblock");
     await expect(hostRow.locator(".party-message")).toHaveCount(0);
+
+    // Reports of players (the scaling plan's 6B-6): no Report in a world that takes none, as
+    // this one. Where a world's said it takes them (a server's public world: said here in its
+    // place), Report asks why, and the world's answer is shown: this host's, that it takes none
+    await expect(hostRow.locator(".party-report")).toHaveCount(0);
+    await guest.evaluate(() => {
+        const { remote } = window.pellagos.game;
+
+        remote.reports = true;
+        remote.onReports(true);
+    });
+    await expect(hostRow.locator(".party-report")).toHaveText("Report");
+    await expect(theirs.locator(".party-report-form")).toBeHidden();
+    await hostRow.locator(".party-report").click();
+    await expect(theirs.locator(".party-report-ask")).toContainText("Report ");
+    await expect(theirs.locator(".party-report-why")).toHaveText(["Abuse or harassment", "Spam or adverts", "Cheating", "May be under age", "Something else"]);
+    await theirs.locator(".party-report-cancel").click();
+    await expect(theirs.locator(".party-report-form")).toBeHidden();
+    await hostRow.locator(".party-report").click();
+    await theirs.locator('.party-report-why[data-why="underage"]').click();
+    await expect(theirs.locator(".party-report-form")).toBeHidden();
+    await expect(guest.locator("#banner")).toContainText("Reports aren't taken in this world.", { timeout: 30000 });
+    await guest.evaluate(() => {
+        const { remote } = window.pellagos.game;
+
+        remote.reports = false;
+        remote.onReports(false);
+    });
+    await expect(hostRow.locator(".party-report")).toHaveCount(0);
     await theirs.getByRole("button", { name: "Close" }).click();
 
     // The host's message looks sent, but never reaches Bryn; nor does their invite

@@ -6971,6 +6971,22 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     margin-top: 10px;
 }
 
+/* A player being reported (app/partypanel.js REPORT_WORDS): why, a button each */
+.party-report-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+    padding: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 6px;
+}
+
+.party-report-form > p {
+    flex: 1 0 100%;
+    margin: 0;
+}
+
 /* The Players tab's players found by name (app/partypanel.js playersPage) */
 .party-search {
     width: 100%;

@@ -80,6 +80,10 @@
 //                                                    them)
 //                    { kind: "dms", party, world, shout, nanny }      (which lines they take: shouts, and direct messages from
 //                                                    their party, from anyone else in the world)
+//                    { kind: "report", about, why }            (a player told of to whoever runs the
+//                                                    world: `about` their id, `why` one of
+//                                                    REPORT_WHYS. Only where the world's said it
+//                                                    takes them: "reports")
 //                    { kind: "own", own }                      (what its game keeps of its hero that
 //                                                    isn't the world's, as it's changed: any of
 //                                                    core/host.js OWN, kept with them)
@@ -118,6 +122,10 @@
 //                                                    they are: Session tellNannied, nannyWhy)
 //                    { kind: "unsaid", reason, name }          (one of theirs not said: CHAT_REFUSED;
 //                                                    `name`, whose direct messages are closed)
+//                    { kind: "reports", on }                   (whether the world takes reports of
+//                                                    players: Session tellReports)
+//                    { kind: "reported", ok, reason }          (a report of theirs taken, or why not:
+//                                                    REPORT_REFUSED)
 //                    { kind: "kicked", reason }                (sent out of the world: "afk", away too long;
 //                                                    "elsewhere", their character taken over on
 //                                                    another link: Hosting #takeOver)
@@ -387,7 +395,16 @@ export const CHAT = Object.freeze({ most: 200, burst: 5, burstMs: 10000, kept: 5
  * Why a line wasn't said (as host.js REFUSALS names them): nothing to say, in no party, too many too
  * quickly; a direct message to no one in the world, or to one not taking that kind ("closed").
  */
-export const CHAT_REFUSED = Object.freeze(["empty", "unpartied", "chatty", "nobody", "closed", "shoutsOff", "repeated", "areaOff", "squadless", "noPhrase", "nanny"]);
+export const CHAT_REFUSED = Object.freeze(["empty", "unpartied", "chatty", "nobody", "closed", "shoutsOff", "repeated", "areaOff", "squadless", "noPhrase", "nanny", "muted"]);
+
+/**
+ * Reports of players (the scaling plan's 6B-6): why one can be told of to whoever runs the world,
+ * by name (the chat panel's words for each: app/partypanel.js REPORT_WORDS; "underage", **May be
+ * under age**, is Nanny Mode's, docs/MODERATION.md), and why a report isn't taken: the world takes
+ * none; of nobody in the world, or of themselves; for no reason there is; too many lately.
+ */
+export const REPORT_WHYS = Object.freeze(["abuse", "spam", "cheating", "underage", "other"]);
+export const REPORT_REFUSED = Object.freeze(["reportsOff", "reportWho", "reportWhy", "reportMany"]);
 
 /**
  * Which lines a player takes till they say otherwise: direct messages from their party and from
@@ -772,6 +789,70 @@ export class Session {
         this.restrictedWhy = () => null;
         this.onNannied = () => {};
         this.nanniedTold = false;
+
+        /**
+         * For whoever runs the world to keep a record of what's said (the plan's 6B-6; a world
+         * server's, on its public worlds: server/world-worker.js). `onSaid(line, heard)`: each
+         * line as it's told, and the ids it went to. Null, nothing's told and nothing's kept.
+         */
+        this.onSaid = null;
+
+        /**
+         * Whether a player (their id) is muted: nothing of theirs is shouted or said to the area
+         * channel, typed or a phrase ("muted"). Their party and their direct messages are let be.
+         * Nobody, unless whoever runs the world says otherwise.
+         */
+        this.muted = () => false;
+
+        /**
+         * Reports of players (REPORT_WHYS): whether the world takes them (`reports`), each game
+         * told so (tellReports; `reportsTold`, what each peer was last told). One that's sound is
+         * handed to `onReport(peer, { by, about, why })`, whose owner answers it with `reported`.
+         */
+        this.reports = false;
+        this.onReport = null;
+        this.reportsTold = new Map();
+    }
+
+    /** Every game told whether the world takes reports of players, where that's not what it was last told (nothing said of none to one never told). */
+    tellReports() {
+        const on = this.reports === true && typeof this.onReport === "function";
+
+        for (const peer of this.players.keys()) {
+            if ((this.reportsTold.get(peer) ?? false) !== on) {
+                this.reportsTold.set(peer, on);
+                this.hosting.post(peer, "reports", encode({ kind: "reports", on }));
+            }
+        }
+
+        for (const peer of [...this.reportsTold.keys()].filter((one) => !this.players.has(one))) {
+            this.reportsTold.delete(peer);
+        }
+    }
+
+    /** A report answered to whoever made it (their peer): taken, or why not (REPORT_REFUSED). */
+    reported(peer, ok, reason = null) {
+        this.hosting.post(peer, "reported", encode(ok === true ? { kind: "reported", ok: true } : { kind: "reported", ok: false, reason: REPORT_REFUSED.includes(reason) ? reason : "reportsOff" }));
+    }
+
+    // A report heard from a player: of someone else in the world, for a reason there is, where
+    // the world takes them; then it's its owner's to answer
+    #report(peer, message) {
+        const by = this.players.get(peer);
+
+        if (!by) {
+            return;
+        }
+
+        if (this.reports !== true || typeof this.onReport !== "function") {
+            this.reported(peer, false, "reportsOff");
+        } else if (typeof message.about !== "string" || message.about === by || !this.host.players.has(message.about)) {
+            this.reported(peer, false, "reportWho");
+        } else if (!REPORT_WHYS.includes(message.why)) {
+            this.reported(peer, false, "reportWhy");
+        } else {
+            this.onReport(peer, { by, about: message.about, why: message.why });
+        }
     }
 
     /**
@@ -946,6 +1027,10 @@ export class Session {
                 }
 
                 break;
+            case "report":
+                this.#report(peer, message);
+
+                break;
             case SHADOW_KIND:
                 // (Their frames beside lockstep, to hold to their own copy: core/shadow.js. Only
                 // a player's, and only where the feed's run: elsewhere it's as any kind unknown)
@@ -1027,6 +1112,11 @@ export class Session {
             return { ok: false, reason: "nanny" };
         }
 
+        // (One muted: nothing to everyone near or to the area, a phrase neither)
+        if (this.muted(id) === true) {
+            return { ok: false, reason: "muted" };
+        }
+
         if (!(this.dms.get(id) ?? DMS_TAKEN).shout) {
             return { ok: false, reason: "shoutsOff" };
         }
@@ -1067,6 +1157,7 @@ export class Session {
     // the host's own, a "missed" message to anyone else
     #told(id, members, line, sent) {
         let missed = 0;
+        const heard = [];
 
         for (const member of members) {
             if (member !== id && line.quick === undefined && this.kept(member)) {
@@ -1074,6 +1165,8 @@ export class Session {
 
                 continue;
             }
+
+            heard.push(member);
 
             if (member === HOST_PLAYER) {
                 this.onChat(line);
@@ -1093,6 +1186,9 @@ export class Session {
                 this.hosting.post(peer, "missed", encode({ kind: "missed", count: missed }));
             }
         }
+
+        // (Whoever runs the world keeping what's said: the line, and who it went to)
+        this.onSaid?.(line, heard);
 
         return { ok: true, ...(missed ? { missed } : {}) };
     }
@@ -1306,9 +1402,11 @@ export class Session {
             this.onJoin(id, peer);
         }
 
-        // (And who's kept to the quick chat's phrases, if anyone is: tellNannied)
+        // (And who's kept to the quick chat's phrases, if anyone is: tellNannied; and whether
+        // the world takes reports of players, if it does: tellReports)
         if (entering.length) {
             this.tellNannied();
+            this.tellReports();
         }
     }
 
@@ -1755,6 +1853,7 @@ export class Session {
         this.hosting.flush();
         this.onLeave(id, peer, character && { ...character, place, vitals });
         this.tellNannied();
+        this.reportsTold.delete(peer);
     }
 
     /** Everyone who'd joined, or was waiting to, out of the world. */
@@ -2247,7 +2346,7 @@ export class Hosting {
 
 // Each of a hosting's parts' own, as the hosting's own: read and set there as they always were
 for (const [part, keys] of [
-    ["session", ["clock", "players", "rtts", "done", "toldSelf", "heardAt", "quieted", "seq", "nextGuest", "allowance", "dropped", "hidden", "paused", "onJoin", "onLeave", "onKick", "most", "welcomes", "waiting", "ground", "loading", "placed", "idOf", "byCharacter", "characterOf", "onReady", "onAway", "onHold", "roleOf", "netcode", "onChat", "said", "dms", "restricted", "restrictedWhy", "onNannied", "nanniedTold"]],
+    ["session", ["clock", "players", "rtts", "done", "toldSelf", "heardAt", "quieted", "seq", "nextGuest", "allowance", "dropped", "hidden", "paused", "onJoin", "onLeave", "onKick", "most", "welcomes", "waiting", "ground", "loading", "placed", "idOf", "byCharacter", "characterOf", "onReady", "onAway", "onHold", "roleOf", "netcode", "onChat", "said", "dms", "restricted", "restrictedWhy", "onNannied", "nanniedTold", "onSaid", "muted", "reports", "onReport", "reportsTold"]],
     ["feed", ["ops", "steps", "checkDue", "motionDue", "sendsPlaces", "asked", "worlds", "sparing", "taken"]],
 ]) {
     for (const key of keys) {
@@ -2265,7 +2364,7 @@ for (const [part, keys] of [
 
 // And what each does that whoever runs the world asks of it
 for (const [part, names] of [
-    ["session", ["hear", "chat", "takeDms", "admit", "coming", "pause", "still", "kick", "gone", "slowest", "present", "tellNannied", "kept"]],
+    ["session", ["hear", "chat", "takeDms", "admit", "coming", "pause", "still", "kick", "gone", "slowest", "present", "tellNannied", "kept", "tellReports", "reported"]],
     ["feed", ["turned", "resync"]],
 ]) {
     for (const name of names) {
@@ -2448,6 +2547,15 @@ export class Joining {
         this.nannied = new Set();
         this.nanny = null;
         this.onNannied = () => {};
+
+        /**
+         * Reports of players (the plan's 6B-6): whether the world's said it takes them
+         * (`reports`; `onReports(on)` as it says), and how one of this player's went
+         * (`onReported({ ok, reason })`: REPORT_REFUSED).
+         */
+        this.reports = false;
+        this.onReports = () => {};
+        this.onReported = () => {};
     }
 
     /**
@@ -2605,6 +2713,17 @@ export class Joining {
                 }
 
                 break;
+            case "reports":
+                this.reports = message.on === true;
+                this.onReports(this.reports);
+
+                break;
+            case "reported":
+                if (message.ok === true || REPORT_REFUSED.includes(message.reason)) {
+                    this.onReported(message.ok === true ? { ok: true } : { ok: false, reason: message.reason });
+                }
+
+                break;
             case "unsaid":
                 if (CHAT_REFUSED.includes(message.reason)) {
                     this.onUnsaid(message.reason, { name: typeof message.name === "string" ? message.name : "" });
@@ -2635,6 +2754,25 @@ export class Joining {
         }
 
         this.send(encode({ kind: "chat", text: line, ...(quick !== null ? { quick } : {}), ...(shout ? { shout: true } : area ? { area: true } : squad ? { squad: true } : typeof to === "string" ? { to } : {}) }));
+
+        return { ok: true, pending: true };
+    }
+
+    /**
+     * Tell whoever runs the world of a player (`about`, their id; `why`, one of REPORT_WHYS):
+     * only where the world's said it takes reports. Answered with `onReported`. Returns { ok:
+     * true, pending: true }, or { ok: false, reason } (REPORT_REFUSED) where it wasn't sent.
+     */
+    report(about, why) {
+        if (!this.reports) {
+            return { ok: false, reason: "reportsOff" };
+        }
+
+        if (typeof about !== "string" || !REPORT_WHYS.includes(why)) {
+            return { ok: false, reason: typeof about !== "string" ? "reportWho" : "reportWhy" };
+        }
+
+        this.send(encode({ kind: "report", about, why }));
 
         return { ok: true, pending: true };
     }

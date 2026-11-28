@@ -715,6 +715,120 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         await until(() => server.registry.lifeOf(made.json.world).life === "stored", "set aside");
     });
 
+    it("keeps what's said in a public world and takes reports of its players (6B-6): nothing kept or taken in any other; a report kept with the lines between the two and where they stood; the third player to report someone mutes them, till the admin's looked and lifted it", async () => {
+        const made = await server.call("POST", "/worlds", { auth: `Key ${server.adminKey}`, body: { name: "Reportwick", race: "human", seed: 8 } });
+        const id = made.json.world;
+        const come = async (name) => {
+            const entered = await server.call("POST", "/enter", { body: { world: id, key: made.json.playerKey, net: NET_VERSION } });
+
+            return play(server, id, entered.json.session, { character: { hero: { ...HERO, name } } });
+        };
+        const kinds = (game, kind) => game.messages.filter((message) => message.kind === kind);
+        const ada = await come("Ada");
+        const bryn = await come("Bryn");
+        const here = () => [...server.play.places.values()].filter((place) => place.world === id);
+
+        await until(async () => (await server.manage.players(id)).filter((one) => one.here).length === 2, "both in the world", ENTERING);
+
+        const [adaPlace, brynPlace] = here();
+        // (Who someone is in the world, as their game knows them: the world's own word, world-worker.js report)
+        const idOf = async (place) => {
+            const one = () => server.registry.entries.get(id).thread.state?.players.find((player) => player.player === place.player)?.id;
+
+            await until(one, "their id in the world", ENTERING);
+
+            return one();
+        };
+
+        assert.notEqual(adaPlace.player, brynPlace.player);
+
+        // Not a public world: nothing's said of reports, a line's kept nowhere, a report's refused
+        ada.say({ kind: "chat", text: "Before it's public", shout: true });
+        await until(() => kinds(bryn, "chat").length === 1, "the shout heard", ENTERING);
+        bryn.say({ kind: "report", about: await idOf(adaPlace), why: "spam" });
+        await until(() => kinds(bryn, "reported").length === 1, "the refusal", ENTERING);
+        assert.deepEqual(kinds(bryn, "reported")[0], { kind: "reported", ok: false, reason: "reportsOff" });
+        assert.deepEqual([kinds(ada, "reports"), kinds(bryn, "reports"), server.chat.recent.size, server.playerReports.counts()], [[], [], 0, { waiting: 0, muted: 0 }]);
+
+        // Made public. (No world can be yet: access/cap.js. Its setting's written here as the
+        // management will write it, and its thread told the same way)
+        const stored = server.worlds.get(id);
+
+        await stored.writeMeta({ settings: { ...stored.meta.settings, public: true } });
+        server.registry.entries.get(id).thread.meta({ settings: { public: true } });
+        await until(() => kinds(ada, "reports").length === 1 && kinds(bryn, "reports").length === 1, "each game told it takes reports", ENTERING);
+        assert.deepEqual(kinds(bryn, "reports"), [{ kind: "reports", on: true }]);
+
+        // What's said is kept: who said it, on which channel, and to whom
+        ada.say({ kind: "chat", text: "Now it is", shout: true });
+        await until(() => server.chat.recent.get(id)?.length === 1, "the line kept", ENTERING);
+
+        const [line] = server.chat.recent.get(id);
+
+        assert.deepEqual({ ...line, at: null }, { at: null, from: adaPlace.player, identity: null, name: "Ada", channel: "shout", text: "Now it is", to: [brynPlace.player] });
+        await server.chat.flush();
+
+        // Two others have reported Ada lately (theirs made as the server makes them); Bryn's is
+        // the third: kept with the line between them and where each stood, and Ada's muted
+        for (const player of ["someone", "another"]) {
+            assert.equal(server.playerReports.make({ world: id, why: "abuse", by: { player, identity: null, name: player }, about: { player: adaPlace.player, identity: null, name: "Ada" } }).muted, false);
+        }
+
+        bryn.say({ kind: "report", about: await idOf(adaPlace), why: "underage" });
+        await until(() => kinds(bryn, "reported").length === 2, "the report answered", ENTERING);
+        assert.deepEqual(kinds(bryn, "reported")[1], { kind: "reported", ok: true });
+
+        const [report] = server.playerReports.list().reports;
+
+        assert.deepEqual([report.why, report.by, report.about], ["underage", { player: brynPlace.player, identity: null, name: "Bryn" }, { player: adaPlace.player, identity: null, name: "Ada" }]);
+        assert.deepEqual(report.lines.map((one) => [one.from, one.text]), [[adaPlace.player, "Now it is"]]);
+        assert.ok(Number.isInteger(report.places.by.x) && Number.isInteger(report.places.about.y) && typeof report.places.about.map === "string");
+        assert.deepEqual(server.manage.overview().reports, { waiting: 3, muted: 1 });
+        assert.equal(adaPlace.muted, true);
+
+        // Muted: her shout's refused; Bryn's is heard as ever
+        const before = kinds(bryn, "chat").length;
+
+        await until(() => {
+            ada.say({ kind: "chat", text: `Muted? ${Math.random()}`, shout: true });
+
+            return kinds(ada, "unsaid").some((message) => message.reason === "muted");
+        }, "her shout refused", ENTERING);
+        bryn.say({ kind: "chat", text: "Still here", shout: true });
+        await until(() => kinds(ada, "chat").some((message) => message.text === "Still here"), "his heard", ENTERING);
+        assert.equal(kinds(bryn, "chat").filter((message) => message.text.startsWith("Muted?")).length <= 1, true, "(at most the one said before the world heard she was muted)");
+        assert.ok(before >= 2);
+
+        // The admin reads the reports, and lifts the mute: only they can
+        // (As the management page calls: the admin's key and the management header)
+        const admin = async (method, route, body = null) => {
+            const response = await fetch(`http://127.0.0.1:${server.port}/api/v1${route}`, { method, headers: { Authorization: `Key ${server.adminKey}`, "X-Pellagos": "manage", ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined });
+
+            return { status: response.status, json: await response.json() };
+        };
+
+        assert.ok((await server.call("GET", "/server/reports")).status >= 400);
+
+        const read = await admin("GET", "/server/reports");
+
+        assert.deepEqual([read.json.reports.length, read.json.muted.map((mute) => mute.key)], [3, [`${id}/${adaPlace.player}`]]);
+        assert.equal((await admin("POST", "/server/reports/r999/review", {})).json.error, "no-report");
+
+        const reviewed = await admin("POST", `/server/reports/${report.id}/review`, { lift: true });
+
+        assert.deepEqual([reviewed.status, reviewed.json.lifted, reviewed.json.report.reviewed.lift], [200, true, true]);
+        assert.deepEqual(server.manage.overview().reports, { waiting: 2, muted: 0 });
+        await until(() => {
+            ada.say({ kind: "chat", text: `Unmuted ${Math.random()}`, shout: true });
+
+            return kinds(bryn, "chat").some((message) => message.text.startsWith("Unmuted"));
+        }, "her shout heard again", ENTERING);
+
+        ada.close();
+        bryn.close();
+        await until(() => server.registry.lifeOf(id).life === "stored", "set aside");
+    });
+
     it("keeps a player to the quick chat's phrases where the server's Nanny Mode says (6B-16): told to the world as they come in, said in its players lists, their typed line refused and a phrase said; and lifted at once when the setting's turned off, with no restart", async () => {
         const made = await server.call("POST", "/worlds", { auth: `Key ${server.adminKey}`, body: { name: "Nannywick", race: "human", seed: 6 } });
         const entered = await server.call("POST", "/enter", { body: { world: made.json.world, key: made.json.playerKey, net: NET_VERSION } });

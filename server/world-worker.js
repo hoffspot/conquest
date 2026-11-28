@@ -238,6 +238,38 @@ hosting.restricted = (id) => {
 
     return false;
 };
+// (Who's muted by reports of them, as the supervisor says: access/reports.js, Session `muted`)
+hosting.muted = (id) => [...peers.values()].some((one) => one.muted && hosting.players.get(one.peer) === id);
+
+// Reports of players and the chat log (the scaling plan's 6B-6): in a public world alone. What's
+// said is told to the supervisor, which keeps it thirty days (storage/chatlog.js), and a report
+// is the supervisor's to make and answer (server/play.js `report`); in any other world nothing
+// said leaves this thread, and a report is refused
+const peerOf = (id) => [...hosting.players].find(([, player]) => player === id)?.[0];
+const whereOf = (id) => {
+    const place = host.placeOf(id);
+
+    return place ? { x: Math.round(place.x), y: Math.round(place.y), map: host.battle.actor(id)?.map ?? null } : null;
+};
+const takesReports = () => settings.public === true;
+
+hosting.reports = takesReports();
+hosting.onSaid = (line, heard) => {
+    const peer = takesReports() ? peerOf(line.from) : undefined;
+
+    if (peer !== undefined) {
+        post({ type: "said", peer, line: { name: line.name, text: line.text, ...(line.quick !== undefined ? { quick: line.quick } : {}), shout: line.shout === true, area: line.area === true, squad: line.squad === true, dm: line.dm ?? null }, to: heard.map(peerOf).filter((one) => one !== undefined && one !== peer) });
+    }
+};
+hosting.onReport = (peer, { by, about, why }) => {
+    const subject = peerOf(about);
+
+    if (subject === undefined) {
+        hosting.reported(peer, false, "reportWho");
+    } else {
+        post({ type: "report", peer, about: subject, why, names: { by: host.players.get(by)?.hero?.name ?? "", about: host.players.get(about)?.hero?.name ?? "" }, places: { by: whereOf(by), about: whereOf(about) } });
+    }
+};
 // (And why, as each is told alone: the chat panel's notice, core/netplay.js Session tellNannied)
 hosting.restrictedWhy = (id) => [...peers.values()].find((one) => one.nanny && hosting.players.get(one.peer) === id)?.why ?? null;
 hosting.idOf = (peer) => {
@@ -587,8 +619,18 @@ setTimeout(tick, WORKER.tick);
 parentPort.on("message", async (message) => {
     switch (message.type) {
         case "enter":
-            peers.set(message.peer, { peer: message.peer, player: message.player, role: message.role, nanny: message.nanny === true, why: message.nanny === true ? (message.why ?? null) : null, slot: null, linked: true, ready: false, hidden: false, held: false, since: clock(), character: null, asked: false });
+            peers.set(message.peer, { peer: message.peer, player: message.player, role: message.role, nanny: message.nanny === true, why: message.nanny === true ? (message.why ?? null) : null, muted: message.muted === true, slot: null, linked: true, ready: false, hidden: false, held: false, since: clock(), character: null, asked: false });
             look();
+            break;
+        case "muted":
+            if (peers.has(message.peer)) {
+                peers.get(message.peer).muted = message.on === true;
+            }
+
+            break;
+        case "reported":
+            hosting.reported(message.peer, message.ok === true, message.reason ?? null);
+
             break;
         case "nanny":
             if (peers.has(message.peer)) {
@@ -625,6 +667,9 @@ parentPort.on("message", async (message) => {
             settings = { ...settings, ...changed };
             hosting.most = mostPlayers();
             hosting.welcomes = welcomes();
+            // (Made public, or no longer: reports taken or not from now, every game told)
+            hosting.reports = takesReports();
+            hosting.tellReports();
             look();
             break;
         }

@@ -802,6 +802,19 @@ async function renderOverview() {
             ]),
             h("p", { class: "small" }, overview.recommended.words),
         ),
+        // (Reports of players from its public worlds: how many wait, and who they've muted.
+        // Read and answered through the server's API for now: docs/MODERATION.md, Reports)
+        overview.reports?.waiting || overview.reports?.muted
+            ? panel(
+                  "Reports from players",
+                  h("p", { class: "muted" }, "Players in a public world can report one another. Three different players reporting the same one within ten minutes mutes them till you've looked."),
+                  facts([
+                      ["Waiting to be looked at", String(overview.reports.waiting)],
+                      ["Players muted by reports", String(overview.reports.muted)],
+                  ]),
+                  h("p", { class: "small", "data-reports": "" }, "How to read them and lift a mute: docs/MODERATION.md, Reports."),
+              )
+            : null,
         overview.blocked.length
             ? panel(
                   "Addresses blocked a while",
