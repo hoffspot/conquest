@@ -751,6 +751,18 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         await until(async () => (await listed())?.nanny === true, "the players list to say so again", ENTERING);
         await server.manage.changeSettings({ nanny: "all", nannyUnknown: false });
         await until(async () => (await listed())?.nanny === false, "unknown countries let be", ENTERING);
+
+        // Their country by the server's country file (6B-19): a listed one, in it and told which;
+        // one that isn't listed, out of it. (No file's fetched here: the lookup's stood in for)
+        assert.deepEqual(server.manage.overview().countries, { month: null, fetchedAt: null, rows: null, stale: true, error: null, credit: { text: "IP Geolocation by DB-IP", href: "https://db-ip.com" } });
+        server.countries.country = () => "GB";
+        await server.manage.changeSettings({ nannyHoldDays: 29 });
+        await until(async () => (await listed())?.nanny === true, "one from a listed country in it", ENTERING);
+        await until(() => nannied().at(-1).mine?.why === "country", "told which country", ENTERING);
+        assert.deepEqual(nannied().at(-1).mine, { why: "country", code: "GB", threshold: 16 });
+        server.countries.country = () => "FR";
+        await server.manage.changeSettings({ nannyHoldDays: 30 });
+        await until(async () => (await listed())?.nanny === false, "one from a country that isn't listed out of it", ENTERING);
         await server.manage.changeSettings({ nanny: "off", nannyUnknown: true });
         assert.equal(game.closed, null);
         game.close();

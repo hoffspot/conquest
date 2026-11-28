@@ -3688,7 +3688,8 @@ party*). Players play together as a party of up to four (`PARTY.most`):
     "What's this?" explains the icon. The Players tab doesn't say where such a player is to
     anyone outside their party, and lists them under Everyone else, never Nearby.
   - None of it is drawn while nobody in the world is in Nanny Mode.
-  The credit for the country file comes with it (the plan's 6B-19).
+  "What's this?" ends with the credit for the country file a server reads ("IP Geolocation by
+  DB-IP", linked: docs/SERVER.md *Nanny Mode*, the country file).
 - **Nanny Mode by a player's own choice** (Game options, Chat and players; the scaling plan's
   6B-18). A switch on a page of its own under Chat and players (which says how it stands: Off,
   On, or On and locked), off to start with, kept with this device's settings (`nannyMode`). On, the

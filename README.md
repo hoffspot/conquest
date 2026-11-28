@@ -1105,6 +1105,10 @@ asset out of this public repository. A licensed model the game serves is scrambl
 `LICENSE` (Apache 2.0) covers this repository's own code and assets; [NOTICE.md](NOTICE.md) says
 what it doesn't cover.
 
+- A world server tells which country a connection is from, for Nanny Mode, by DB-IP's "IP to
+  Country Lite" database: [IP Geolocation by DB-IP](https://db-ip.com), under CC BY 4.0. The
+  server downloads it itself into its data folder (`server/net/geoip.js`); it isn't in this
+  repository.
 - The paintings behind the loading screen and the title (`client/images/backdrops/`, their
   masters in `scripts/backdrops/`) and the crest over them (`client/images/crest/`, its master in
   `scripts/crest/`) were made for the game by its owner with Google's Gemini. They're the

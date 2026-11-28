@@ -1256,6 +1256,8 @@ export class Management {
             worlds: { kept: server.worlds.size, going: server.registry.going.length, waiting: server.registry.queue.length, atOnce: server.settings.get("worldsAtOnce") },
             recommended: { ...advice, words: `Recommended: up to ${advice.most} at once (memory allows ${advice.memory}, the processor ${advice.cpu}).`, worldMemory: Math.max(this.largest, WORLD_MEMORY) },
             machine: { memory: os.totalmem(), cores: os.availableParallelism?.() ?? os.cpus().length },
+            // (The country file Nanny Mode reads: its month, when it was fetched, and whose it is, net/geoip.js)
+            countries: server.countries.info(),
             blocked: server.access.blocks.blocked().map(({ address, until, times }) => ({ address, until: new Date(until).toISOString(), times })),
         };
     }
@@ -1604,6 +1606,8 @@ export class Management {
 
         // (Nanny Mode changed: whoever's in a world now is told at once, access/nanny.js)
         if (Object.keys(changes).some((key) => key.startsWith("nanny"))) {
+            // (Turned on: its country file fetched at once, if there's none or an old one)
+            this.server.countries.look();
             this.server.play?.renanny();
         }
 

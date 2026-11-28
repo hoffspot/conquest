@@ -1071,7 +1071,28 @@ function choice(key, setting, value, disabled = false) {
 function listed(key, setting, value) {
     const lines = (Array.isArray(value) ? value : []).map((entry) => h("li", {}, Object.values(entry).join(" · ")));
 
-    return h("div", { class: "field", "data-setting": key }, h("p", {}, setting.about), lines.length ? h("ul", { class: "muted small" }, lines) : h("p", { class: "muted small" }, "None listed."));
+    return h("div", { class: "field", "data-setting": key }, h("p", {}, setting.about), lines.length ? h("ul", { class: "muted small" }, lines) : h("p", { class: "muted small" }, "None listed."), key === "nannyCountries" ? countryFile(state.server.overview.countries) : null);
+}
+
+/**
+ * The country file Nanny Mode reads (server/net/geoip.js), in words: its month, how many ranges
+ * it holds and when it was fetched; or that there's none, or it's too old, and every connection's
+ * country is unknown; and why the last fetch failed, if it did.
+ */
+function countryFileWords({ month = null, fetchedAt = null, rows = null, stale = true, error = null } = {}) {
+    const fetched = fetchedAt === null ? "" : new Date(fetchedAt).toISOString().slice(0, 10);
+    const file = month === null ? "No country file yet: every connection's country is unknown. It's downloaded once Nanny Mode is on." : `Country file: ${month}, ${Number(rows).toLocaleString("en")} ranges, downloaded ${fetched}.${stale ? " It's too old to go by: every connection's country is unknown till a newer one's downloaded." : ""}`;
+
+    return `${file}${error ? ` The last download failed (${error}).` : ""}`;
+}
+
+// The country file as the Settings show it, under Nanny Mode's countries, with the credit its licence asks for
+function countryFile(countries) {
+    if (!countries) {
+        return null;
+    }
+
+    return h("p", { class: "muted small", "data-countries": "" }, countryFileWords(countries), " ", h("a", { href: countries.credit.href, target: "_blank", rel: "noopener" }, countries.credit.text), ".");
 }
 
 function valueOf(form, key, setting) {

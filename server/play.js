@@ -186,6 +186,10 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
         return { on, why: on ? { why, code, threshold } : null };
     };
 
+    // Which country a connection's from: null where it can't be told (no file, a stale one, an
+    // address in no country's range, the server's own network)
+    const countryOf = (socket, address) => socket?.country ?? server.countries?.country(address) ?? null;
+
     const enter = async (socket, address, world, session) => {
         const { principal } = policy.identify({ world, session, address, from: socket.from });
         const allowed = policy.allows(principal, "world.enter", { world, meta: server.metaOf(world) });
@@ -230,9 +234,10 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
 
         const peer = `p${next++}`;
         const token = newToken();
-        // (Kept to the quick chat's phrases, by where they connect from: access/nanny.js. No
-        // country's looked up yet, 6B-19 and 6B-20, and no record kept of them, 6B-1)
-        const country = socket.country ?? null;
+        // (Kept to the quick chat's phrases, by where they connect from: access/nanny.js. Their
+        // country by the server's country file, net/geoip.js; a front's own word for it is
+        // 6B-20, and no record's kept of them yet, 6B-1)
+        const country = countryOf(socket, address);
         const kept = nannyOf(world, country);
         const place = { world, peer, country, nanny: kept.on, nannyWhy: kept.why, player: principal.player.id, role: principal.role, via: principal.via, socket, token: hashOf(token), address, from: socket.from, tunnel: socket.tunnel, away: null };
 
@@ -404,6 +409,9 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
         /** Who's kept to the quick chat's phrases worked out again (the server's settings changed, or a world's): each world told of whoever's changed. */
         renanny() {
             for (const place of places.values()) {
+                // (Their country looked up again: the country file may have been read since)
+                place.country = countryOf(place.socket, place.address);
+
                 const { on, why } = nannyOf(place.world, place.country);
 
                 if (on !== place.nanny || JSON.stringify(why) !== JSON.stringify(place.nannyWhy)) {

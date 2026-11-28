@@ -1738,6 +1738,8 @@ test("Nanny Mode in the chat panel (the scaling plan's 6B-17): nothing of it dra
     await expect(theirs.locator(".chat-phrases .chat-phrase")).toHaveCount(18);
     await expect(theirs.locator(".chat-phrases")).toBeVisible();
     await expect(theirs.locator(".chat-nanny-what")).toBeVisible();
+    await expect(theirs.locator(".chat-nanny-what a")).toHaveAttribute("href", "https://db-ip.com");
+    expect(await theirs.locator(".chat-nanny-what a").textContent()).toBe("IP Geolocation by DB-IP");
 
     // (And its row under Game options, Chat and players, says the world has it on for them)
     expect(await guest.locator("#nannysummary").textContent()).toContain("This world has it on for you by its own rules");
