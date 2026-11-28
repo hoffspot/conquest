@@ -52,6 +52,7 @@ import { Router } from "./router.js";
 import { createStaticHandler } from "./static.js";
 import { CertificateStore } from "./storage/certificates.js";
 import { DataFolder } from "./storage/folder.js";
+import { PlayerStore } from "./storage/players.js";
 import { CHARACTER_RULES, RULE_MODES, WORLD_SETTINGS } from "./storage/worlds.js";
 import { SERVER_VERSION } from "./storage/versions.js";
 import { ServerMetrics } from "./server-metrics.js";
@@ -117,6 +118,8 @@ export class WorldServer {
 
         server.history = await History.open(path.join(root, HISTORY_FILE));
         await server.countries.load();
+        // (The server's players, across its worlds: written as each comes in by their own identity)
+        access.players = await PlayerStore.open(root, options.clock ? { clock: options.clock } : {});
 
         for (const id of await folder.worlds.ids()) {
             await server.#add(await folder.worlds.open(id));
@@ -881,6 +884,7 @@ export class WorldServer {
         await this.history.save();
         this.updater.close();
         this.countries.close();
+        await this.access.players?.flush();
         this.nearby.stop();
         await this.certifier.close();
         await this.router?.close();

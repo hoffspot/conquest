@@ -37,6 +37,8 @@ export class Access {
         this.blocks = new AddressBlocks({ clock });
         this.guard = new CodeGuard({ clock });
         this.policy = new KeyPolicy(this);
+        /** The server's players, across its worlds (storage/players.js PlayerStore), once the server's given it; null till then. */
+        this.players = null;
 
         /** Whether a world's open to anyone, without a key (its owner's said so: the server tells it, world-server.js). */
         this.isOpen = () => false;
@@ -118,6 +120,8 @@ export class Access {
         // (Known by their own identity from now on, if they showed one: world.js knownAs)
         if (principal.identity) {
             await access.knownAs(id, principal.identity);
+            // (And the server's own record of them, across its worlds: storage/players.js)
+            await this.players?.seen(principal.identity, when);
         }
 
         const session = this.sessions.start({ world: principal.world, player: id, role, via });
