@@ -1739,9 +1739,9 @@ test("Nanny Mode in the chat panel (the scaling plan's 6B-17): nothing of it dra
     await expect(theirs.locator(".chat-phrases")).toBeVisible();
     await expect(theirs.locator(".chat-nanny-what")).toBeVisible();
 
-    // (And its row under Game options, Chat and players)
-    expect(await guest.locator("#nannyrow").evaluate((one) => one.hidden)).toBe(false);
-    expect(await host.locator("#nannyrow").evaluate((one) => one.hidden)).toBe(true);
+    // (And its row under Game options, Chat and players, says the world has it on for them)
+    expect(await guest.locator("#nannysummary").textContent()).toContain("This world has it on for you by its own rules");
+    expect(await host.locator("#nannysummary").textContent()).not.toContain("This world has it on");
 
     // The host: Bryn's name with the icon, which carries its label, and the chip; where Bryn is
     // isn't told, and they're under Everyone else
@@ -1804,6 +1804,142 @@ test("Nanny Mode in the chat panel (the scaling plan's 6B-17): nothing of it dra
     await menu.getByRole("tab", { name: "Players" }).click();
     await expect(row.locator(".nanny-icon")).toHaveCount(0);
     await expect(row.locator(".party-where")).not.toHaveText("");
+
+    await hostContext.close();
+    await guestContext.close();
+});
+
+test("Nanny Mode by a player's own choice (the scaling plan's 6B-18): Bryn switches it on in Game options, Chat and players, in a world a browser hosts; told they chose it, phrases in place of the input, the host's typed shout kept from them and their name with the icon; locked with a code, it isn't switched off without it, the wrong code refused, the code itself never kept; unlocked, they type as ever", async ({ ownBrowser: browser }) => {
+    const hostContext = await browser.newContext();
+    const guestContext = await browser.newContext();
+    const host = await hostContext.newPage();
+    const guest = await guestContext.newPage();
+
+    await cheaply(host, guest);
+
+    for (const page of [host, guest]) {
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    await guest.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), BRYN);
+    await host.goto("/?play&seed=2");
+    await playing(host, null, LONGER);
+    await undrawn(host);
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+    await guest.goto(`/?join=${code}`);
+    await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
+    await playing(guest, null, LONGER);
+    await undrawn(guest);
+    await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
+
+    const LABEL = "Nanny Mode: quick phrases only";
+    const menu = host.getByRole("dialog", { name: "Party" });
+    const theirs = guest.getByRole("dialog", { name: "Party" });
+    const row = menu.locator('.party-everyone-list .party-player[data-id="guest-1"]');
+    // (Game options, Chat and players, opened; and shut again, back to the game)
+    const toOptions = async () => {
+        await guest.locator("#menubutton").click();
+        await guest.locator("#optionsbutton").click();
+        await guest.locator("#chatbutton").click();
+    };
+    const fromOptions = async () => {
+        await guest.locator("#chatback").click();
+        await guest.locator("#optionsback").click();
+        await guest.locator("#resumebutton").click();
+    };
+    const nanny = guest.getByRole("switch", { name: /^Nanny Mode/ });
+    const lock = guest.locator("#nannylock");
+
+    // Off to start with, and no lock offered
+    await toOptions();
+    await expect(nanny).not.toBeChecked();
+    await expect(lock).toBeHidden();
+    await expect(guest.locator("#nannysummary")).toHaveText("Quick phrases only: nothing typed is sent to you or by you, in any world.");
+
+    // Switched on: the host's world keeps Bryn to the phrases, with nothing set by the host
+    await guest.locator("#nannyrow").click();
+    await expect(nanny).toBeChecked();
+    await expect(guest.locator("#nannysummary")).toHaveText("On: quick phrases only, in every world.");
+    await expect(lock).toBeVisible();
+    await expect.poll(() => host.evaluate(() => [window.pellagos.game.hosting.kept("guest-1"), window.pellagos.game.hosting.restricted("guest-1")]), { timeout: 30000 }).toEqual([true, false]);
+    await fromOptions();
+
+    // Bryn's Chat: the notice, that they chose it, and how it's switched off; phrases, no input
+    await guest.locator("#partybutton").click();
+    await theirs.getByRole("tab", { name: "Chat" }).click();
+
+    const notice = theirs.locator(".chat-nanny");
+
+    await expect(notice).toContainText("Nanny Mode is on.", { timeout: 30000 });
+    await expect(notice.locator(".chat-nanny-why")).toHaveText("You switched it on.");
+    await expect(notice.locator(".chat-nanny-off")).toHaveText("You switched Nanny Mode on in Game options, under Chat and players. Switch it off there, with the lock code if one was set.");
+    await expect(theirs.locator(".chat-input")).toBeHidden();
+    await expect(theirs.locator(".chat-phrases")).toBeVisible();
+
+    // The host: the icon and its label by Bryn's name; a typed shout kept from Bryn
+    await host.locator("#partybutton").click();
+    await menu.getByRole("tab", { name: "Players" }).click();
+    await expect(row.locator(".nanny-icon")).toHaveAttribute("aria-label", LABEL, { timeout: 30000 });
+    await menu.getByRole("tab", { name: "Chat" }).click();
+    await menu.getByRole("combobox", { name: "Who to say it to" }).selectOption({ label: "Shout (nearby)" });
+    await menu.getByRole("textbox", { name: "Something to shout to everyone nearby" }).fill("Meet me at the well");
+    await menu.getByRole("textbox", { name: "Something to shout to everyone nearby" }).press("Enter");
+    await expect(host.locator("#hud")).toContainText("One player wasn't sent that: they take the quick phrases only.", { timeout: 30000 });
+    expect(await guest.evaluate(() => window.pellagos.game.chatLines.length)).toBe(0);
+    await theirs.getByRole("button", { name: "Close" }).click();
+
+    // Locked with a code: too short a one isn't taken; one that fits is, and only its digest is kept
+    await toOptions();
+    await guest.locator("#nannycode").fill("12");
+    await guest.locator("#nannylockbutton").click();
+    await expect(guest.locator("#nannylocknote")).toHaveText("A code is 4 to 12 characters, with no spaces.");
+    await guest.locator("#nannycode").fill("2468");
+    await guest.locator("#nannylockbutton").click();
+    await expect(guest.locator("#nannysummary")).toHaveText("On, and locked: quick phrases only, in every world. Its code's needed to switch it off.");
+    await expect(lock).toBeHidden();
+
+    const kept = await guest.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")));
+
+    expect(kept.nannyMode).toBe(true);
+    expect(kept.nannyLock).toMatch(/^[0-9a-f]{16}:[0-9a-f]{64}$/);
+    expect(JSON.stringify(kept)).not.toContain("2468");
+
+    // Switched off without the code: on still, and the code asked for; the wrong one refused
+    await guest.locator("#nannyrow").click();
+    await expect(nanny).toBeChecked();
+    await expect(guest.locator("#nannylocklabel")).toHaveText("Enter the lock code to switch Nanny Mode off");
+    await guest.locator("#nannycode").fill("1357");
+    await guest.locator("#nannylockbutton").click();
+    await expect(guest.locator("#nannylocknote")).toHaveText("That isn't the code.");
+    await expect(nanny).toBeChecked();
+    expect(await host.evaluate(() => window.pellagos.game.hosting.kept("guest-1"))).toBe(true);
+
+    // The code: off, the lock gone, and the host's world lets Bryn be
+    await guest.locator("#nannycode").fill("2468");
+    await guest.locator("#nannylockbutton").click();
+    await expect(nanny).not.toBeChecked();
+    await expect(lock).toBeHidden();
+    expect(await guest.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")).nannyLock)).toBe("");
+    await expect.poll(() => host.evaluate(() => window.pellagos.game.hosting.kept("guest-1")), { timeout: 30000 }).toBe(false);
+    await fromOptions();
+    await guest.locator("#partybutton").click();
+    await theirs.getByRole("tab", { name: "Chat" }).click();
+    await expect(notice).toBeHidden({ timeout: 30000 });
+    await expect(theirs.locator(".chat-input")).toBeVisible();
+    await menu.getByRole("tab", { name: "Players" }).click();
+    await expect(row.locator(".nanny-icon")).toHaveCount(0);
 
     await hostContext.close();
     await guestContext.close();

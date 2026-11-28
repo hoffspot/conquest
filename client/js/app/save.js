@@ -131,6 +131,11 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     // and from anyone else in the world, not taken, the one saying it told so)
     refusePartyDms: false,
     refuseWorldDms: false,
+    // (Nanny Mode by the player's own choice, the scaling plan's 6B-18: quick phrases only, said
+    // and seen, in every world; and its lock, a salted digest of a code it's switched off with,
+    // or "" for none: app/nannylock.js)
+    nannyMode: false,
+    nannyLock: "",
     // (Shouts, core/netplay.js SHOUT: heard from anyone near, and shouted, till it's turned off in
     // the party menu's Chat)
     hearShouts: true,

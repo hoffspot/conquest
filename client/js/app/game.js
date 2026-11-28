@@ -1866,6 +1866,15 @@ export class Game {
         this.nannied = new Set();
         this.nanny = null;
         this.onNanny = () => {};
+        /**
+         * The player's own choice of Nanny Mode (Game options, Chat and players; the plan's
+         * 6B-18): told to the host with which messages they take (takeDms), which keeps them to
+         * the phrases in any world; and what the world's last said of them (`nannyTold`), which
+         * stands before their choice. A host that knows nothing of the choice says nothing back:
+         * their own game keeps them to the phrases all the same.
+         */
+        this.nannyChosen = false;
+        this.nannyTold = null;
 
         /**
          * How the camera's turned and shaken (Game options): whether it follows round behind the
@@ -4185,7 +4194,7 @@ export class Game {
         }
 
         // (Which direct messages the host's own player takes, told to it)
-        hosting?.takeDms(this.me, this.dmsTaken);
+        hosting?.takeDms(this.me, { ...this.dmsTaken, nanny: this.nannyChosen });
     }
 
     /**
@@ -12673,8 +12682,8 @@ export class Game {
     /** Which direct messages the player takes (Game options: from their party, from anyone else in the world), told to the host. */
     takeDms({ party = true, world = true, shout = true } = {}) {
         this.dmsTaken = { party, world, shout };
-        this.hosting?.takeDms(this.me, this.dmsTaken);
-        this.remote?.takeDms(this.dmsTaken);
+        this.hosting?.takeDms(this.me, { ...this.dmsTaken, nanny: this.nannyChosen });
+        this.remote?.takeDms({ ...this.dmsTaken, nanny: this.nannyChosen });
     }
 
     /**
@@ -12892,10 +12901,32 @@ export class Game {
         const was = JSON.stringify(this.nanny);
 
         this.nannied = new Set(ids);
-        this.nanny = mine;
+        this.nannyTold = mine;
+        this.#nannyNow(was);
+    }
 
-        if (JSON.stringify(mine) !== was) {
-            this.onNanny(mine);
+    /** The player's own choice of Nanny Mode, on or off (Game options): the host told, with which messages they take. */
+    chooseNanny(on) {
+        const was = JSON.stringify(this.nanny);
+
+        this.nannyChosen = Boolean(on);
+        this.takeDms(this.dmsTaken);
+        this.#nannyNow(was);
+    }
+
+    // Why the player's in Nanny Mode now: as the world says, or else by their own choice; told
+    // (onNanny) if it's changed from `was`, and the chat shown again
+    #nannyNow(was) {
+        this.nanny = this.nannyTold ?? (this.nannyChosen ? { why: "chosen", code: null, threshold: null } : null);
+
+        if (this.nannyChosen) {
+            this.nannied.add(this.me);
+        } else if (!this.nannyTold) {
+            this.nannied.delete(this.me);
+        }
+
+        if (JSON.stringify(this.nanny) !== was) {
+            this.onNanny(this.nanny);
         }
 
         this.#chatShown();

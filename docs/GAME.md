@@ -2702,7 +2702,9 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   kept with a hero a world server keeps but the first), **War messengers** (on to start with: a
   messenger finds the player with a war mission when the war's near them, docs/WAR.md *War
   missions by messenger*; `messengers`, sent to a server-kept world's host as the player's own
-  settings), and **Blocked players**: everyone blocked,
+  settings), **Nanny Mode** (off to start with: quick phrases only, said and seen, in every
+  world, by the player's own choice, with a code to lock it if they like; docs/WAR.md
+  *Parties*, Nanny Mode by a player's own choice), and **Blocked players**: everyone blocked,
   by name, in this world or another, and who that world knows them as, each to **Unblock**
   (main.js `showBlocked`). In a world on a
   server, playing together or alone, the menu's header has **World** (game.js `onWorldPanel`,

@@ -1886,6 +1886,81 @@ describe("playing together (netplay.js)", () => {
         assert.deepEqual(bryn.joining.nanny, { why: null, code: null, threshold: null });
     });
 
+    it("keeps a player to the quick chat's phrases by their own choice (the scaling plan's 6B-18), told to the host with which messages they take: in any world, with nothing set by whoever runs it; told they chose it; lifted as they say; the host's own player the same; and the world's reason stands before their choice", () => {
+        const { hosting, join, deliver, host } = opened();
+        const [bryn, cass] = ["Bryn", "Cass"].map((name) => join(guest(name)));
+        const told = [];
+        const unsaid = [];
+        const missed = [];
+        const heard = [];
+
+        bryn.joining.onNannied = (one) => told.push(one);
+        bryn.joining.onUnsaid = (reason) => unsaid.push(reason);
+        bryn.joining.onChat = (line) => heard.push(line.text);
+        cass.joining.onMissed = (count) => missed.push(count);
+
+        // Not chosen: nothing said of it, and the message is as it ever was
+        bryn.joining.takeDms({ party: true, world: false });
+        deliver();
+        assert.deepEqual(bryn.joining.dms, { party: true, world: false, shout: true });
+        assert.deepEqual([hosting.kept("guest-1"), told, hosting.nanniedTold], [false, [], false]);
+
+        // Chosen: kept, told why, and everyone told who
+        bryn.joining.takeDms({ nanny: true });
+        deliver();
+        assert.deepEqual(bryn.joining.dms, { party: true, world: true, shout: true, nanny: true });
+        assert.equal(hosting.kept("guest-1"), true);
+        assert.equal(hosting.restricted("guest-1"), false, "(nothing said by whoever runs the world)");
+        assert.deepEqual(told.at(-1), { ids: ["guest-1"], mine: { why: "chosen", code: null, threshold: null } });
+        assert.deepEqual([...cass.joining.nannied], ["guest-1"]);
+        assert.equal(cass.joining.nanny, null);
+
+        // Nothing typed by them, nothing typed to them; a phrase both ways
+        bryn.joining.chat("Hello there", { shout: true });
+        cass.joining.chat("Who's about?", { shout: true });
+        deliver();
+        assert.deepEqual([unsaid, missed, heard], [["nanny"], [1], []]);
+        host.advance(15000);
+        cass.joining.chat("", { shout: true, quick: 13 });
+        deliver();
+        assert.deepEqual(heard, ["Hello!"]);
+
+        // Said again as their link comes back, their choice with it
+        const before = told.length;
+
+        bryn.joining.resync();
+        deliver();
+        assert.equal(hosting.kept("guest-1"), true);
+        assert.equal(told.length, before, "(nothing changed: nothing told)");
+
+        // The world's reason stands before their choice, and their choice still holds when the world lets go
+        hosting.restricted = (id) => id === "guest-1";
+        hosting.restrictedWhy = () => ({ why: "country", code: "GB", threshold: 16 });
+        hosting.tellNannied();
+        deliver();
+        assert.deepEqual(told.at(-1).mine, { why: "country", code: "GB", threshold: 16 });
+        hosting.restricted = () => false;
+        hosting.tellNannied();
+        deliver();
+        assert.deepEqual(told.at(-1), { ids: ["guest-1"], mine: { why: "chosen", code: null, threshold: null } });
+
+        // Lifted as they say
+        bryn.joining.takeDms({});
+        deliver();
+        assert.deepEqual([hosting.kept("guest-1"), told.at(-1)], [false, { ids: [], mine: null }]);
+
+        // The host's own player, the same
+        const mine = [];
+
+        hosting.onNannied = (one) => mine.push(one);
+        hosting.takeDms(HOST_PLAYER, { nanny: true });
+        assert.deepEqual(mine, [{ ids: [HOST_PLAYER], mine: { why: "chosen", code: null, threshold: null } }]);
+        host.advance(15000);
+        assert.deepEqual(hosting.chat("Typed"), { ok: false, reason: "nanny" });
+        hosting.takeDms(HOST_PLAYER, {});
+        assert.deepEqual(mine.at(-1), { ids: [], mine: null });
+    });
+
     it("keeps the quick chat's phrases a closed table: ids from 1 with none skipped, each a few words with no number or name in it, and each place's buttons phrases of it", () => {
         assert.deepEqual(QUICK_CHAT.map(({ id }) => id), QUICK_CHAT.map((_, k) => k + 1));
         assert.equal(new Set(QUICK_CHAT.map(({ text }) => text)).size, QUICK_CHAT.length);

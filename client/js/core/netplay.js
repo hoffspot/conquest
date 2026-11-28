@@ -78,7 +78,7 @@
 //                                                    party and its allies, core/host.js SQUAD;
 //                                                    or, `to` a player's id, a direct message to
 //                                                    them)
-//                    { kind: "dms", party, world, shout }      (which lines they take: shouts, and direct messages from
+//                    { kind: "dms", party, world, shout, nanny }      (which lines they take: shouts, and direct messages from
 //                                                    their party, from anyone else in the world)
 //                    { kind: "own", own }                      (what its game keeps of its hero that
 //                                                    isn't the world's, as it's changed: any of
@@ -781,13 +781,14 @@ export class Session {
      * nothing while nobody's kept and nobody's been told of anyone.
      */
     tellNannied() {
-        const ids = [...this.host.players.keys()].filter((id) => this.restricted(id)).slice(0, NANNIED_MOST);
+        const ids = [...this.host.players.keys()].filter((id) => this.kept(id)).slice(0, NANNIED_MOST);
 
         if (!ids.length && !this.nanniedTold) {
             return;
         }
 
-        const mineOf = (id) => (ids.includes(id) ? nannyWhy(this.restrictedWhy(id)) : null);
+        // (The world's reason before their own choice: that one isn't theirs to lift)
+        const mineOf = (id) => (ids.includes(id) ? nannyWhy(this.restricted(id) === true ? this.restrictedWhy(id) : { why: "chosen" }) : null);
 
         this.nanniedTold = ids.length > 0;
 
@@ -983,9 +984,25 @@ export class Session {
         return shout ? this.#shout(HOST_PLAYER, words, how) : area ? this.#shout(HOST_PLAYER, words, { area: true, ...how }) : squad ? this.#say(HOST_PLAYER, words, null, { squad: true, ...how }) : this.#say(HOST_PLAYER, words, to, how);
     }
 
-    /** Which lines a player takes (`party`, `world`, `shout`: DMS_TAKEN), as they say (the host's own player's, as the game says). */
-    takeDms(id, { party = true, world = true, shout = true } = {}) {
-        this.dms.set(id, { party: party !== false, world: world !== false, shout: shout !== false });
+    /**
+     * Which lines a player takes (`party`, `world`, `shout`: DMS_TAKEN), as they say (the host's
+     * own player's, as the game says). And `nanny`: their own choice to be kept to the quick
+     * chat's phrases (the scaling plan's 6B-18), in any world, whatever it says of them; every
+     * game's told as it changes (tellNannied).
+     */
+    takeDms(id, { party = true, world = true, shout = true, nanny = false } = {}) {
+        const was = this.dms.get(id)?.nanny === true;
+
+        this.dms.set(id, { party: party !== false, world: world !== false, shout: shout !== false, ...(nanny === true ? { nanny: true } : {}) });
+
+        if (was !== (nanny === true)) {
+            this.tellNannied();
+        }
+    }
+
+    /** Whether a player's kept to the quick chat's phrases: by whoever runs the world (`restricted`), or by their own choice (takeDms `nanny`). */
+    kept(id) {
+        return this.restricted(id) === true || this.dms.get(id)?.nanny === true;
     }
 
     // A line shouted by a player (SHOUT): to every player on their map within SHOUT.reach of them
@@ -1006,7 +1023,7 @@ export class Session {
         }
 
         // (One kept to the quick chat's phrases: nothing typed)
-        if (quick === null && this.restricted(id)) {
+        if (quick === null && this.kept(id)) {
             return { ok: false, reason: "nanny" };
         }
 
@@ -1052,7 +1069,7 @@ export class Session {
         let missed = 0;
 
         for (const member of members) {
-            if (member !== id && line.quick === undefined && this.restricted(member)) {
+            if (member !== id && line.quick === undefined && this.kept(member)) {
                 missed++;
 
                 continue;
@@ -1100,7 +1117,7 @@ export class Session {
         }
 
         // (One kept to the quick chat's phrases: nothing typed, to anyone)
-        if (quick === null && this.restricted(id)) {
+        if (quick === null && this.kept(id)) {
             return { ok: false, reason: "nanny" };
         }
 
@@ -2248,7 +2265,7 @@ for (const [part, keys] of [
 
 // And what each does that whoever runs the world asks of it
 for (const [part, names] of [
-    ["session", ["hear", "chat", "takeDms", "admit", "coming", "pause", "still", "kick", "gone", "slowest", "present", "tellNannied"]],
+    ["session", ["hear", "chat", "takeDms", "admit", "coming", "pause", "still", "kick", "gone", "slowest", "present", "tellNannied", "kept"]],
     ["feed", ["turned", "resync"]],
 ]) {
     for (const name of names) {
@@ -2623,8 +2640,9 @@ export class Joining {
     }
 
     /** Tell the host which direct messages its player takes (`party`, `world`: DMS_TAKEN); said again as its link comes back (resync). */
-    takeDms({ party = true, world = true, shout = true } = {}) {
-        this.dms = { party: party !== false, world: world !== false, shout: shout !== false };
+    takeDms({ party = true, world = true, shout = true, nanny = false } = {}) {
+        // (`nanny`, their own choice of Nanny Mode: said only where it's chosen)
+        this.dms = { party: party !== false, world: world !== false, shout: shout !== false, ...(nanny === true ? { nanny: true } : {}) };
         this.send(encode({ kind: "dms", ...this.dms }));
     }
 
