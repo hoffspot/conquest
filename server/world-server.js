@@ -30,6 +30,7 @@ import { isHome } from "./access/addresses.js";
 import { capReason, capWorld, mayPass, mostFor, publicReady, publicReason } from "./access/cap.js";
 import { ADMIN_PAGE, listenAdmin } from "./admin.js";
 import { AgeChecks } from "./access/agecheck.js";
+import { nannyReady, nannySettings } from "./access/nanny.js";
 import { ServerIdentity } from "./access/identity.js";
 import { Access } from "./access/index.js";
 import { API_PATH, apiHandler } from "./api.js";
@@ -346,6 +347,17 @@ export class WorldServer {
         }
 
         return this.settings.get("funnel") ? null : "This server isn't reached through a tunnel.";
+    }
+
+    /**
+     * Whether its Nanny Mode is fit for public worlds, and what it lacks (access/nanny.js
+     * nannyReady: on, a fresh country source, a country list reviewed lately). Read-only.
+     */
+    nannyReady(now = Date.now()) {
+        // (A front that says countries itself, and is what brings the internet in)
+        const front = Boolean(this.settings.get("funnel") && FRONTS[this.front].country && this.frontName);
+
+        return nannyReady({ settings: nannySettings(this.settings), source: { front, file: this.countries.info() }, now });
     }
 
     /** What's in front of the tunnel listener (the `front` setting: guards.js FRONTS), by name. */

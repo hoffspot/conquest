@@ -1089,6 +1089,14 @@ age someone says they are.
   yet, so Nanny Mode can't be turned off here for now." The provider the tests use passes
   whoever a test says, and no setting can choose it.
 
+**Fit for public worlds** (`nannyReady`; the plan's 6B-23). Settings lists, under Nanny Mode's
+countries, what Nanny Mode lacks while it's on: no fresh country source (no country file, or one
+more than 62 days old, and nothing in front of the server that says countries), or a country
+list due its review (90 days after its oldest entry's `reviewed` date). The same is named in what
+the server's public worlds still need (`publicReady`), which nothing makes ready yet. It's a
+read-only check: it refuses nothing. What to do about each is in
+[MODERATION.md](MODERATION.md), the owner's runbook.
+
 **What's kept of an age check** (for the privacy page, when there is one: 6B-11). Of a pass,
 four things on the server's record of the player: that they passed, the age it was for, the date,
 and the checker's name. Of anything else, a count of how many times they've tried in the last 30

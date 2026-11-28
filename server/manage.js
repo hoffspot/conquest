@@ -17,6 +17,7 @@
 // Everything that changes a world it can't change while it runs (its heroes mode, a restore) sets
 // it aside first, or is refused; whatever can't be undone is backed up before it's done.
 
+import { publicReady } from "./access/cap.js";
 import { FRONTS } from "./guards.js";
 import { randomBytes } from "node:crypto";
 import { appendFile, cp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
@@ -1259,6 +1260,9 @@ export class Management {
             machine: { memory: os.totalmem(), cores: os.availableParallelism?.() ?? os.cpus().length },
             // (The country file Nanny Mode reads: its month, when it was fetched, and whose it is, net/geoip.js)
             countries: server.countries.info(),
+            // (Whether Nanny Mode's fit for public worlds, and what it lacks; and what public worlds lack altogether: access/nanny.js, access/cap.js)
+            nanny: server.nannyReady(),
+            public: publicReady({ nanny: server.nannyReady() }),
             blocked: server.access.blocks.blocked().map(({ address, until, times }) => ({ address, until: new Date(until).toISOString(), times })),
         };
     }

@@ -94,6 +94,56 @@ export function listedCountry(settings, code) {
     return typeof code === "string" && !NANNY.unknown.includes(code) ? (countries.find((entry) => entry.code === code) ?? null) : null;
 }
 
+/**
+ * How fresh what Nanny Mode goes by must be for a server's public worlds (gate (b) of
+ * generated/multiplayer_scaling_plan.md; its 6B-23): the country file no older than so many days
+ * (net/geoip.js GEOIP.staleDays is the same number: past it the file answers nothing), and every
+ * entry of the country list reviewed within so many.
+ */
+export const NANNY_FRESH = Object.freeze({ fileDays: 62, reviewDays: 90 });
+
+/**
+ * Whether a server's Nanny Mode is fit for public worlds, and what it lacks if not. Read-only: it
+ * changes nothing and nothing's refused by it yet (access/cap.js publicReady reports it).
+ *
+ * @param {object} asked
+ * @param {object} asked.settings - nannySettings.
+ * @param {object} asked.source - Where a connection's country comes from: `front` (whether what's
+ *     in front of the server says countries itself, guards.js FRONTS) and `file` (the country
+ *     file as it stands: net/geoip.js CountryFile info(), or null).
+ * @param {number} [asked.now] - The time (ms).
+ * @returns {{ ready: boolean, missing: string[], review: { due: string[], last: string|null } }}
+ *     `missing`: a sentence for each thing it lacks. `review`: the countries whose entries are
+ *     due a review, and the oldest review date in the list.
+ */
+export function nannyReady({ settings, source = {}, now = Date.now() }) {
+    const missing = [];
+    const countries = Array.isArray(settings?.nannyCountries) ? settings.nannyCountries : [];
+    const age = (reviewed) => now - Date.parse(`${reviewed}T00:00:00Z`);
+    const due = countries.filter(({ reviewed }) => !(age(reviewed) <= NANNY_FRESH.reviewDays * DAY)).map(({ code }) => code);
+    const last = countries.map(({ reviewed }) => reviewed).sort()[0] ?? null;
+
+    if (!NANNY.scopes.includes(settings?.nanny) || settings.nanny === "off") {
+        missing.push("Nanny Mode is off: turn it on in Settings (in public worlds, or in every world).");
+    }
+
+    if (source.front !== true && (!source.file || source.file.stale !== false)) {
+        missing.push(
+            source.file?.month
+                ? `The country file (${source.file.month}) is more than ${NANNY_FRESH.fileDays} days old, so every connection's country is unknown: it's downloaded again while Nanny Mode is on.`
+                : "There's no country file yet, and nothing in front of the server says a visitor's country: it's downloaded once Nanny Mode is on.",
+        );
+    }
+
+    if (!countries.length) {
+        missing.push("Nanny Mode's country list is empty.");
+    } else if (due.length) {
+        missing.push(`Nanny Mode's country list is due a review (${due.join(", ")}: last reviewed ${last}; every ${NANNY_FRESH.reviewDays} days). See docs/MODERATION.md.`);
+    }
+
+    return { ready: missing.length === 0, missing, review: { due, last } };
+}
+
 /** A server's settings for it, as plain values (`settings`: storage/settings.js Settings, or anything with `get`). */
 export function nannySettings(settings) {
     return { nanny: settings.get("nanny"), nannyCountries: settings.get("nannyCountries"), nannyUnknown: settings.get("nannyUnknown"), nannyHoldDays: settings.get("nannyHoldDays") };

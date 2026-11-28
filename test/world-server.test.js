@@ -766,6 +766,15 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         // Their country by the server's country file (6B-19): a listed one, in it and told which;
         // one that isn't listed, out of it. (No file's fetched here: the lookup's stood in for)
         assert.deepEqual(server.manage.overview().countries, { month: null, fetchedAt: null, rows: null, stale: true, error: null, credit: { text: "IP Geolocation by DB-IP", href: "https://db-ip.com" } });
+
+        // (What its Nanny Mode lacks for public worlds, 6B-23: on here, the list reviewed, but no country source)
+        const lacks = server.manage.overview().nanny;
+
+        assert.equal(lacks.ready, false);
+        assert.equal(lacks.missing.length, 1);
+        assert.match(lacks.missing[0], /^There's no country file yet/);
+        assert.deepEqual(server.manage.overview().public.missing.at(-1), lacks.missing[0]);
+        assert.equal(server.manage.overview().public.ready, false);
         server.countries.country = () => "GB";
         await server.manage.changeSettings({ nannyHoldDays: 29 });
         await until(async () => (await listed())?.nanny === true, "one from a listed country in it", ENTERING);
