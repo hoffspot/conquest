@@ -7,7 +7,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 import { newPlayerSecret, playerIdOf, publicKeyOf } from "../client/js/core/player.js";
-import { PLAYER_FIELDS, PLAYERS_FILE, PLAYERS_VERSION, PlayerStore } from "../server/storage/players.js";
+import { PLAYER_FIELDS, PLAYERS_FILE, PLAYERS_STEPS, PLAYERS_VERSION, PlayerStore } from "../server/storage/players.js";
 import { NewerDataError, SERVER_VERSION } from "../server/storage/versions.js";
 
 const someone = (name) => {
@@ -27,13 +27,13 @@ describe("the server's players (storage/players.js)", () => {
             const ash = someone("Ash");
 
             assert.deepEqual([store.size, store.get(wren.id)], [0, null]);
-            assert.deepEqual(PLAYER_FIELDS, ["key", "name", "firstSeen", "lastSeen", "days", "minutes", "ageBand", "standing", "flags"]);
+            assert.deepEqual(PLAYER_FIELDS, ["key", "name", "firstSeen", "lastSeen", "days", "minutes", "ageBand", "standing", "flags", "nanny"]);
 
             // Seen for the first time
-            assert.deepEqual(await store.seen(wren, at("2026-11-27T22:00:00Z")), { id: wren.id, key: wren.key, name: "Wren", firstSeen: "2026-11-27T22:00:00.000Z", lastSeen: "2026-11-27T22:00:00.000Z", days: 1, minutes: 0, ageBand: null, standing: {}, flags: {} });
+            assert.deepEqual(await store.seen(wren, at("2026-11-27T22:00:00Z")), { id: wren.id, key: wren.key, name: "Wren", firstSeen: "2026-11-27T22:00:00.000Z", lastSeen: "2026-11-27T22:00:00.000Z", days: 1, minutes: 0, ageBand: null, standing: {}, flags: {}, nanny: null });
 
             // Again the same day, under another name: no day more
-            assert.deepEqual(await store.seen({ ...wren, name: "Wren the Bold" }, at("2026-11-27T23:30:00Z")), { id: wren.id, key: wren.key, name: "Wren the Bold", firstSeen: "2026-11-27T22:00:00.000Z", lastSeen: "2026-11-27T23:30:00.000Z", days: 1, minutes: 0, ageBand: null, standing: {}, flags: {} });
+            assert.deepEqual(await store.seen({ ...wren, name: "Wren the Bold" }, at("2026-11-27T23:30:00Z")), { id: wren.id, key: wren.key, name: "Wren the Bold", firstSeen: "2026-11-27T22:00:00.000Z", lastSeen: "2026-11-27T23:30:00.000Z", days: 1, minutes: 0, ageBand: null, standing: {}, flags: {}, nanny: null });
 
             // The next day (UTC), and a week on: a day more each
             assert.equal((await store.seen(wren, at("2026-11-28T00:10:00Z"))).days, 2);
@@ -74,6 +74,60 @@ describe("the server's players (storage/players.js)", () => {
         }
     });
 
+    it("holds a player to Nanny Mode after they're seen from a listed country (6B-21): the country and when, renewed at each sighting, let go of once it's run out, or at once by a pass; kept across a restart", async () => {
+        const root = await mkdtemp(path.join(os.tmpdir(), "pellagos-players-"));
+        const DAY = 86400000;
+        let now = Date.UTC(2026, 10, 28);
+
+        try {
+            const store = await PlayerStore.open(root, { clock: () => now });
+            const wren = someone("Wren");
+
+            // Of no one it doesn't know, and nothing that isn't a country
+            store.sighted(wren.id, "GB");
+            await store.seen(wren);
+            store.sighted(wren.id, "gb");
+            store.sighted(wren.id, "GBR");
+            store.sighted(wren.id, null);
+            assert.equal(store.get(wren.id).nanny, null);
+            assert.deepEqual([store.lapse(wren.id, 30), store.release(wren.id), store.lapse("nobody", 30)], [false, false, false]);
+
+            // Seen from the United Kingdom: held, from now
+            store.sighted(wren.id, "GB");
+            assert.deepEqual(store.get(wren.id).nanny, { seen: "GB", at: now });
+
+            // Twenty-nine days on: held still. Seen there again: renewed from then
+            now += 29 * DAY;
+            assert.equal(store.lapse(wren.id, 30), false);
+            store.sighted(wren.id, "GB");
+            assert.deepEqual(store.get(wren.id).nanny, { seen: "GB", at: now });
+
+            // Kept across a restart
+            await store.flush();
+            assert.deepEqual((await PlayerStore.open(root, { clock: () => now })).get(wren.id).nanny, { seen: "GB", at: now });
+
+            // A moment short of thirty days from the last sighting: held. Thirty days: run out, and not kept
+            now += 30 * DAY - 1;
+            assert.equal(store.lapse(wren.id, 30), false);
+            now += 1;
+            assert.equal(store.lapse(wren.id, 30), true);
+            assert.equal(store.get(wren.id).nanny, null);
+            await store.flush();
+            assert.equal(JSON.parse(await readFile(path.join(root, PLAYERS_FILE), "utf8")).players[wren.id].nanny, null);
+
+            // Seen from Brazil, then a pass: let go at once, whenever it was set
+            store.sighted(wren.id, "BR");
+            assert.deepEqual(store.get(wren.id).nanny, { seen: "BR", at: now });
+            assert.deepEqual([store.release(wren.id), store.get(wren.id).nanny, store.release(wren.id)], [true, null, false]);
+
+            // No days of hold at all (the server's setting at 0): never held past the moment
+            store.sighted(wren.id, "GB");
+            assert.equal(store.lapse(wren.id, 0), true);
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+
     it("brings an older server's file forward a step at a time and writes it again; refuses a newer server's, and one with a step missing or no version", async () => {
         const root = await mkdtemp(path.join(os.tmpdir(), "pellagos-players-"));
         const file = path.join(root, PLAYERS_FILE);
@@ -83,19 +137,28 @@ describe("the server's players (storage/players.js)", () => {
         try {
             await writeFile(file, JSON.stringify({ playersVersion: 1, writtenBy: "0.0.1", players: { [wren.id]: old } }));
 
-            // A step to a version 2 that names each record's hours: taken, and the file written at 2
-            const steps = { 1: (players) => Object.fromEntries(Object.entries(players).map(([id, one]) => [id, { ...one, hours: one.minutes / 60 }])) };
-            const stepped = await PlayerStore.open(root, { steps, version: 2 });
+            // Version 1 (before Nanny Mode's hold) to this server's: no hold of anyone known then, and the file written at 2
+            const opened = await PlayerStore.open(root);
 
-            assert.equal(stepped.get(wren.id).hours, 5 / 60);
-            assert.deepEqual([JSON.parse(await readFile(file, "utf8")).playersVersion, JSON.parse(await readFile(file, "utf8")).players[wren.id].hours], [2, 5 / 60]);
+            assert.equal(PLAYERS_VERSION, 2);
+            assert.deepEqual(opened.get(wren.id), { id: wren.id, ...old, nanny: null });
+            assert.deepEqual([JSON.parse(await readFile(file, "utf8")).playersVersion, Object.keys(JSON.parse(await readFile(file, "utf8")).players[wren.id])], [2, PLAYER_FIELDS]);
+
+            // A step on to a version 3 that names each record's hours: taken after this server's own, and written at 3
+            await writeFile(file, JSON.stringify({ playersVersion: 1, writtenBy: "0.0.1", players: { [wren.id]: old } }));
+
+            const steps = { ...PLAYERS_STEPS, 2: (players) => Object.fromEntries(Object.entries(players).map(([id, one]) => [id, { ...one, hours: one.minutes / 60 }])) };
+            const stepped = await PlayerStore.open(root, { steps, version: 3 });
+
+            assert.deepEqual([stepped.get(wren.id).hours, stepped.get(wren.id).nanny], [5 / 60, null]);
+            assert.deepEqual([JSON.parse(await readFile(file, "utf8")).playersVersion, JSON.parse(await readFile(file, "utf8")).players[wren.id].hours], [3, 5 / 60]);
 
             // That file, to this server: a newer server's, refused, untouched
             await assert.rejects(() => PlayerStore.open(root), NewerDataError);
-            assert.equal(JSON.parse(await readFile(file, "utf8")).playersVersion, 2);
+            assert.equal(JSON.parse(await readFile(file, "utf8")).playersVersion, 3);
 
             // A step missing; and no version at all
-            await assert.rejects(() => PlayerStore.open(root, { steps: {}, version: 3 }), /step's missing/);
+            await assert.rejects(() => PlayerStore.open(root, { steps: {}, version: 4 }), /step's missing/);
             await writeFile(file, JSON.stringify({ players: {} }));
             await assert.rejects(() => PlayerStore.open(root), /no version/);
         } finally {

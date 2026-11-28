@@ -87,6 +87,13 @@ export function countriesReason(value) {
     return null;
 }
 
+/** The entry of Nanny Mode's countries a country's code is listed under ({ code, threshold, ... }), by plain settings (nannySettings); null for one that isn't listed, or no country. */
+export function listedCountry(settings, code) {
+    const countries = Array.isArray(settings?.nannyCountries) ? settings.nannyCountries : [];
+
+    return typeof code === "string" && !NANNY.unknown.includes(code) ? (countries.find((entry) => entry.code === code) ?? null) : null;
+}
+
 /** A server's settings for it, as plain values (`settings`: storage/settings.js Settings, or anything with `get`). */
 export function nannySettings(settings) {
     return { nanny: settings.get("nanny"), nannyCountries: settings.get("nannyCountries"), nannyUnknown: settings.get("nannyUnknown"), nannyHoldDays: settings.get("nannyHoldDays") };

@@ -1008,6 +1008,16 @@ settings (the scaling plan's 6B-16):
   told is in it too, at the oldest age listed. A missing answer must not be the way out.
 - **Hold days** (`nannyHoldDays`, 30): how long one seen from a listed country stays in it after.
 
+**The hold** (the plan's 6B-21). A player who comes in by their own identity from a listed
+country has that kept on the server's record of them (`players.json`: `nanny: { seen, at }`, the
+country and when), renewed each time they're seen from one. Coming in from anywhere else within
+the hold's days, they're in Nanny Mode still, by that country's rules, and told so: switching a
+VPN on doesn't lift it at once. A hold that's run out is let go of the next time they come in,
+and not kept; setting the days to 0 lets go of everyone's as the setting changes; a passed age
+check lets go of it at once (`PlayerStore.release`: 6B-22 calls it). The record is read for this
+alone, and only while Nanny Mode is on: off, nothing is noted of where anyone comes from. One
+who comes in by a key and ticket alone has no record, and so no hold.
+
 **The country file** (`server/net/geoip.js`; the plan's 6B-19). A connection's country is read
 from DB-IP's free "IP to Country Lite" file ([IP Geolocation by DB-IP](https://db-ip.com), CC BY
 4.0, credited in the game's Credits and under Nanny Mode's countries on the management page).
@@ -1033,10 +1043,12 @@ ban that holds to a person, a mute, Nanny Mode's hold, a passed age check).
 
 - **What it holds**, by their player id: their public key, the name they last went by, when they
   were first and last seen, on how many days (UTC) and for how many minutes they've played, an
-  age band (none till they're asked), their standing and flags (empty till something sets them).
+  age band (none till they're asked), their standing and flags (empty till something sets them),
+  and Nanny Mode's hold (`nanny`: the listed country they were last seen from, and when; or none).
 - **What it doesn't**: no email, no birth date, no address. One who comes in by a key and
   ticket alone, with no identity, has no record.
-- **Written** as someone comes into a world and as they leave it. **Nothing reads it yet.**
+- **Written** as someone comes into a world and as they leave it. **Read** for Nanny Mode's hold
+  alone (above), and only while Nanny Mode is on.
 - **Versioned** as the folder's other files are (`playersVersion`): an older server's is brought
   forward a step at a time, a newer server's refused. It's in the server's archives; the
   country file (`geoip/`) isn't, since any server fetches its own.
@@ -1044,9 +1056,8 @@ ban that holds to a person, a mute, Nanny Mode's hold, a passed age check).
 **Leave it off for now.** The file is right about a country most of the time, not all of it;
 behind Cloudflare Tunnel the server goes by Cloudflare's own word for the country instead (above,
 *What's in front of the tunnel's port*). Nothing lifts it yet either: that takes a passed age check at or over the
-country's age (6B-22), never an age someone says they are. The hold needs a record of the
-player the server doesn't keep yet (6B-1, 6B-21); `nannyFor` reads both records if it's given
-them.
+country's age (6B-22), never an age someone says they are; `nannyFor` reads that pass from the
+record once there is one.
 
 The server works it out as a player comes in and tells the world's thread with their entry
 (`{ type: "enter", ..., nanny, why }`), and again for whoever's in a world when a Nanny Mode

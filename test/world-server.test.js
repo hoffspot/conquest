@@ -495,8 +495,8 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         // One who came in by a key alone, with no identity, has none
         const record = server.access.players.get(id);
 
-        assert.deepEqual(Object.keys(record), ["id", "key", "name", "firstSeen", "lastSeen", "days", "minutes", "ageBand", "standing", "flags"]);
-        assert.deepEqual({ ...record, firstSeen: null, lastSeen: null }, { id, key: publicKeyOf(secret), name: "Wren", firstSeen: null, lastSeen: null, days: 1, minutes: 0, ageBand: null, standing: {}, flags: {} });
+        assert.deepEqual(Object.keys(record), ["id", "key", "name", "firstSeen", "lastSeen", "days", "minutes", "ageBand", "standing", "flags", "nanny"]);
+        assert.deepEqual({ ...record, firstSeen: null, lastSeen: null }, { id, key: publicKeyOf(secret), name: "Wren", firstSeen: null, lastSeen: null, days: 1, minutes: 0, ageBand: null, standing: {}, flags: {}, nanny: null });
         assert.ok(Date.parse(record.firstSeen) <= Date.parse(record.lastSeen));
         assert.equal(server.access.players.size, 1);
         assert.deepEqual(Object.keys(JSON.parse(await readFile(path.join(server.root, "players.json"), "utf8")).players), [id]);
@@ -1037,6 +1037,77 @@ describe("what the port refuses (server/guards.js)", () => {
         assert.deepEqual(through(undefined), { address: "tunnel", from: "internet", tunnel: true });
         assert.throws(() => through("198.51.100.7", { host: "studio-mac.local:8480" }), refused("host"));
         assert.throws(() => through("198.51.100.7", { tunnelClosed: "Closed." }), (error) => refused("internet")(error) && error.message === "Closed.");
+    });
+
+    it("holds a player to Nanny Mode once they've been seen from a listed country (6B-21): from another country the next time, in it still, told the country that holds them; no hold with Nanny Mode off; let go of when its days are set to none, or by a pass", async () => {
+        const made = (await server.call("POST", "/worlds", { auth: `Key ${server.adminKey}`, body: { name: "Holdfast", race: "human", seed: 8 } })).json;
+        const secret = newPlayerSecret();
+        const id = playerIdOf(publicKeyOf(secret));
+        const file = server.countries.country;
+        let shown = 0;
+        // (In by their own identity, and into the world: their game, and how the server has them)
+        const come = async () => {
+            const entered = await server.call("POST", "/enter", { body: { world: made.world, key: made.playerKey, net: NET_VERSION, player: proofOf(secret, { server: server.identity.id, name: `Wren ${(shown += 1)}` }) } });
+
+            assert.equal(entered.status, 200, JSON.stringify(entered.json));
+
+            const game = await play(server, made.world, entered.json.session);
+            const place = [...server.play.places.values()].find((one) => one.world === made.world);
+
+            return { game, place: { country: place.country, nanny: place.nanny, why: place.nannyWhy } };
+        };
+        const gone = async (game) => {
+            game.close();
+            await until(() => ![...server.play.places.values()].some((one) => one.world === made.world), "out of the world", ENTERING);
+        };
+
+        try {
+            // Nanny Mode off: seen from the United Kingdom, and nothing held of it
+            server.countries.country = () => "GB";
+
+            const before = await come();
+
+            assert.deepEqual([before.place, server.access.players.get(id).nanny], [{ country: "GB", nanny: false, why: null }, null]);
+            await gone(before.game);
+
+            // On, for listed countries alone: seen from the United Kingdom, in it, and held from now
+            await server.manage.changeSettings({ nanny: "all", nannyUnknown: false });
+
+            const home = await come();
+
+            assert.deepEqual(home.place, { country: "GB", nanny: true, why: { why: "country", code: "GB", threshold: 16 } });
+            assert.equal(server.access.players.get(id).nanny.seen, "GB");
+            await gone(home.game);
+
+            // From France the next time (a VPN turned on): in it still, held by the United Kingdom's rules
+            server.countries.country = () => "FR";
+
+            const away = await come();
+
+            assert.deepEqual(away.place, { country: "FR", nanny: true, why: { why: "held", code: "GB", threshold: 16 } });
+
+            // The hold's days set to none: let go of at once, as the settings change, and not kept
+            await server.manage.changeSettings({ nannyHoldDays: 0 });
+            await until(() => [...server.play.places.values()].find((one) => one.world === made.world)?.nanny === false, "let go of", ENTERING);
+            assert.equal(server.access.players.get(id).nanny, null);
+            await gone(away.game);
+
+            // Held again, then a pass (6B-22's): let go of, whenever it was set
+            await server.manage.changeSettings({ nannyHoldDays: 30 });
+            server.countries.country = () => "GB";
+            await gone((await come()).game);
+            assert.equal(server.access.players.get(id).nanny.seen, "GB");
+            assert.equal(server.access.players.release(id), true);
+            server.countries.country = () => "FR";
+
+            const passed = await come();
+
+            assert.deepEqual(passed.place, { country: "FR", nanny: false, why: null });
+            await gone(passed.game);
+        } finally {
+            server.countries.country = file;
+            await server.manage.changeSettings({ nanny: "off", nannyUnknown: true, nannyHoldDays: 30 });
+        }
     });
 
     it("closes a socket that hasn't entered a world, or speaks no sense; and stands up to garbage", async () => {
