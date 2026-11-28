@@ -189,7 +189,8 @@ export function apiHandler(server, { mac = false } = {}) {
 
         shownProofs.set(proof.signature, now + 2 * PROOF_MINUTES * 60000);
 
-        return { id: who.id, name: who.name };
+        // (Their public key with it, for the server's own record of them: storage/players.js)
+        return { id: who.id, key: who.key, name: who.name };
     };
 
     // Who's asking (a principal: access/policy.js), from what they showed, or the admin on the computer itself

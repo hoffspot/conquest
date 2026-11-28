@@ -111,6 +111,11 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
         }
 
         places.delete(placeKey(place.world, place.peer));
+
+        // (How long they played, on the server's own record of them: storage/players.js)
+        if (place.identity) {
+            server.access.players?.played(place.identity, (clock() - place.entered) / 60000);
+        }
         perTicket.give(`${place.world} ${place.player}`);
         rate.forget(place);
         registry.entries.get(place.world)?.thread?.leave(place.peer);
@@ -236,10 +241,10 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
         const token = newToken();
         // (Kept to the quick chat's phrases, by where they connect from: access/nanny.js. Their
         // country by the server's country file, net/geoip.js; a front's own word for it is
-        // 6B-20, and no record's kept of them yet, 6B-1)
+        // 6B-20, and the server's record of them isn't read for it yet, 6B-21)
         const country = countryOf(socket, address);
         const kept = nannyOf(world, country);
-        const place = { world, peer, country, nanny: kept.on, nannyWhy: kept.why, player: principal.player.id, role: principal.role, via: principal.via, socket, token: hashOf(token), address, from: socket.from, tunnel: socket.tunnel, away: null };
+        const place = { world, peer, country, nanny: kept.on, nannyWhy: kept.why, player: principal.player.id, role: principal.role, via: principal.via, socket, token: hashOf(token), address, from: socket.from, tunnel: socket.tunnel, away: null, identity: principal.player.identity ?? null, entered: clock() };
 
         places.set(placeKey(world, peer), place);
         thread.enter(peer, { player: place.player, role: place.role, nanny: place.nanny, why: place.nannyWhy });

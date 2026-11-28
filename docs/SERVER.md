@@ -86,7 +86,8 @@ key, their name, the moment, and a signature over the server's own id, the momen
 (`pellagos.player.1`). The server takes it only if the signature holds, for its own id, within 10
 minutes of its clock, and never shown before (each is remembered while it's fresh); else they come
 in by their key and ticket alone, as before identities. Taken, the world's player is known by it
-from then on (`access.json`: `identity`, `playerName`):
+from then on (`access.json`: `identity`, `playerName`), and the server keeps its own record of
+them across all its worlds (`players.json`, below):
 
 - **Coming back with it** (on another device, with their code), they're the same player, with
   their heroes, ticket or none, as long as a key they came by works (as a ticket alone is).
@@ -988,6 +989,21 @@ from DB-IP's free "IP to Country Lite" file ([IP Geolocation by DB-IP](https://d
   country's range, and for the server's own network, which has no country. With unknown
   countries in Nanny Mode (as shipped), that puts players on the server's own Wi-Fi in it.
 - As a newer file is read, whoever is in a world is looked at again.
+
+**The server's players** (`server/storage/players.js`, `players.json` in the data folder; the
+plan's 6B-1). A world's own players say who may come into it; this is one record for each player
+who has come into any world here by their own identity, for what's decided server-wide later (a
+ban that holds to a person, a mute, Nanny Mode's hold, a passed age check).
+
+- **What it holds**, by their player id: their public key, the name they last went by, when they
+  were first and last seen, on how many days (UTC) and for how many minutes they've played, an
+  age band (none till they're asked), their standing and flags (empty till something sets them).
+- **What it doesn't**: no email, no birth date, no address. One who comes in by a key and
+  ticket alone, with no identity, has no record.
+- **Written** as someone comes into a world and as they leave it. **Nothing reads it yet.**
+- **Versioned** as the folder's other files are (`playersVersion`): an older server's is brought
+  forward a step at a time, a newer server's refused. It's in the server's archives; the
+  country file (`geoip/`) isn't, since any server fetches its own.
 
 **Leave it off for now.** The file is right about a country most of the time, not all of it, and
 a front's own word for the country (the plan's 6B-20) isn't read yet. Nothing lifts it yet either: that takes a passed age check at or over the

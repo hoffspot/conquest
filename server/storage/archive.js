@@ -45,8 +45,9 @@ const STAGED = ".staged.json";
 
 // What's left out: the backups, the versions updates installed, an archive being restored, the
 // charts' history (server/history.js HISTORY_FILE: how this machine's been running, not its
-// worlds; a restore leaves it where it is); and a DNS host's token
-const LEFT_OUT = new Set([BACKUPS, VERSIONS, RESTORING, "history.json.gz"]);
+// worlds; a restore leaves it where it is); the country file (server/net/geoip.js: DB-IP's, tens
+// of megabytes, fetched again by whichever server needs it); and a DNS host's token
+const LEFT_OUT = new Set([BACKUPS, VERSIONS, RESTORING, "history.json.gz", "geoip"]);
 const SECRET = new Set(["certificates/tokens.json"]);
 
 // A path in the data folder, as an archive names it: plain names, "/" between them, never "." or ".."

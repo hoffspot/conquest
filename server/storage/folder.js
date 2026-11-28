@@ -9,6 +9,8 @@
 //
 //   VERSION                 the layout's version, and the server that laid it out
 //   server.json             the server's settings
+//   players.json            the server's players, across its worlds (players.js)
+//   geoip/                  the country file, fetched by the server (../net/geoip.js)
 //   backups/server/         copies made before the folder or its settings were brought forward
 //   worlds/                 the worlds it keeps (worlds.js)
 //   (and the rest as generated/world_server_plan.md §5 has them, as they come)
