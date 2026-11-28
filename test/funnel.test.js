@@ -14,7 +14,9 @@ import path from "node:path";
 import { after, describe, it } from "node:test";
 import { NET_VERSION } from "../client/js/core/netplay.js";
 import { Funnel, FUNNEL_REFUSALS, FUNNEL_TIMES, jittered } from "../server/funnel.js";
-import { connectionOf, FRONTS, frontOf, guard } from "../server/guards.js";
+import { createHash, randomBytes } from "node:crypto";
+import net from "node:net";
+import { connectionOf, countrySaid, FRONTS, frontOf, guard, NO_COUNTRY } from "../server/guards.js";
 import { tailscale } from "../server/platform/index.js";
 import { PLAY_PROTOCOL } from "../server/play.js";
 import { WorldServer } from "../server/world-server.js";
@@ -307,7 +309,8 @@ describe("what's in front of the tunnel listener (guards.js FRONTS; the scaling 
     });
 
     it("believes Cloudflare Tunnel's CF-Connecting-IP, one address, and never an X-Forwarded-For a visitor wrote themselves", () => {
-        assert.deepEqual(from({ front: "cloudflared", headers: { "cf-connecting-ip": "198.51.100.7" } }), { address: "198.51.100.7", from: "internet", tunnel: true });
+        // (And its country, none said here: a front that says countries always answers of one, 6B-20)
+        assert.deepEqual(from({ front: "cloudflared", headers: { "cf-connecting-ip": "198.51.100.7" } }), { address: "198.51.100.7", from: "internet", tunnel: true, country: null });
         assert.equal(from({ front: "cloudflared", headers: { "cf-connecting-ip": "2001:db8::7" } }).address, "2001:db8::7");
         assert.equal(from({ front: "cloudflared", headers: { ...claims, "cf-connecting-ip": "198.51.100.7" } }).address, "198.51.100.7");
         // (X-Forwarded-For alone, which Cloudflare passes on with whatever the visitor put in it: not believed)
@@ -315,6 +318,31 @@ describe("what's in front of the tunnel listener (guards.js FRONTS; the scaling 
         // (More than one address in it isn't Cloudflare's doing: nothing usable)
         assert.equal(from({ front: "cloudflared", headers: { "cf-connecting-ip": "192.168.1.5, 198.51.100.7" } }).address, "tunnel");
         assert.equal(from({ front: "cloudflared", headers: { "cf-connecting-ip": "not an address" } }).address, "tunnel");
+    });
+
+    it("takes a visitor's country from the front that says it, Cloudflare's CF-IPCountry, and from nowhere else (6B-20): no country in the answer on a direct connection or behind Funnel or a proxy, whatever the header claims", () => {
+        const cloud = (said) => from({ front: "cloudflared", headers: { "cf-connecting-ip": "198.51.100.7", ...(said === undefined ? {} : { "cf-ipcountry": said }) } });
+
+        assert.deepEqual(cloud("GB"), { address: "198.51.100.7", from: "internet", tunnel: true, country: "GB" });
+        assert.equal(cloud("br").country, "BR");
+
+        // (Where Cloudflare couldn't tell, or it's Tor; nothing said; anything that isn't two letters: no country, said so)
+        for (const none of ["XX", "T1", "xx", undefined, "", "GBR", "G", "1A", "GB, BR"]) {
+            assert.deepEqual(cloud(none), { address: "198.51.100.7", from: "internet", tunnel: true, country: null }, String(none));
+        }
+
+        assert.deepEqual(NO_COUNTRY, ["XX", "T1"]);
+        assert.deepEqual([countrySaid(" id "), countrySaid(null), countrySaid(["GB"])], ["ID", null, null]);
+
+        // (A header claiming a country that isn't listed, to slip Nanny Mode: not so much as read)
+        const claim = { "cf-ipcountry": "FR", "x-country": "FR" };
+
+        assert.deepEqual(from({ address: "203.0.113.50", secure: true, headers: claim }), { address: "203.0.113.50", from: "internet", tunnel: false });
+        assert.deepEqual(from({ address: "192.168.1.20", headers: claim }), { address: "192.168.1.20", from: "home", tunnel: false });
+        assert.deepEqual(from({ front: "funnel", headers: { ...claim, "x-forwarded-for": "198.51.100.7" } }), { address: "198.51.100.7", from: "internet", tunnel: true });
+        assert.deepEqual(from({ front: "proxy", headers: { ...claim, "x-forwarded-for": "198.51.100.7" } }), { address: "198.51.100.7", from: "internet", tunnel: true });
+        assert.equal(asked({ address: "203.0.113.50", headers: claim }).country, undefined);
+        assert.equal(asked({ front: "funnel", headers: claim }).country, undefined);
     });
 
     it("believes a reverse proxy's X-Forwarded-For, its last address, as Funnel's", () => {
@@ -377,6 +405,104 @@ describe("what's in front of the tunnel listener (guards.js FRONTS; the scaling 
         await server.manage.changeSettings({ front: "funnel" });
         await until(() => server.funnel.state().url, "Funnel open");
         assert.deepEqual((await through(server, { headers: { "CF-Connecting-IP": "198.51.100.8" } })).json.you, { address: "198.51.100.7", from: "internet", home: false });
+    });
+});
+
+describe("a player's country from the front (server/play.js; the scaling plan's 6B-20)", () => {
+    // The play socket opened through the tunnel listener as a front's proxy would, with the
+    // headers it adds (Node's own WebSocket can't send any): upgraded, then one line sent
+    function play(server, { headers, line }) {
+        return new Promise((resolve, reject) => {
+            const key = randomBytes(16).toString("base64");
+            const socket = net.connect(server.tunnelPort, "127.0.0.1", () => {
+                socket.write([`GET /play HTTP/1.1`, `Host: play.example.com`, "Upgrade: websocket", "Connection: Upgrade", `Sec-WebSocket-Key: ${key}`, "Sec-WebSocket-Version: 13", `Sec-WebSocket-Protocol: ${PLAY_PROTOCOL}`, ...Object.entries(headers).map(([name, value]) => `${name}: ${value}`), "", ""].join("\r\n"));
+            });
+            let heard = "";
+
+            socket.on("error", reject);
+            socket.on("data", (data) => {
+                heard += data.toString("latin1");
+
+                if (!heard.includes("\r\n\r\n") || socket.sent) {
+                    return;
+                }
+
+                socket.sent = true;
+
+                if (!heard.startsWith("HTTP/1.1 101") || !heard.includes(createHash("sha1").update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest("base64"))) {
+                    reject(new Error(heard.split("\r\n")[0]));
+
+                    return;
+                }
+
+                // (One text frame, masked as a client's must be)
+                const text = Buffer.from(line, "utf8");
+                const mask = randomBytes(4);
+
+                socket.write(Buffer.concat([Buffer.from([0x81, 0x80 | text.length]), mask, text.map((byte, k) => byte ^ mask[k % 4])]));
+                resolve(socket);
+            });
+        });
+    }
+
+    it("is the front's say where the front says one, before the country file and in place of it: Cloudflare's GB in Nanny Mode for the United Kingdom's rules though the file says elsewhere; one it couldn't tell unknown, the file not asked; and by the file behind a front that says none", async () => {
+        const server = await serve(fakeTailscale(), { settings: { front: "cloudflared", frontHost: "play.example.com", nanny: "all" } });
+        const world = await server.createWorld({ name: "Fronted", seed: 7, race: "human" });
+        const asked = [];
+
+        // (The country file stood in for: it would say France of anyone)
+        server.countries.country = (address) => {
+            asked.push(address);
+
+            return "FR";
+        };
+        await until(() => server.tunnelPort > 0, "the tunnel listening");
+
+        const come = async (headers) => {
+            const entered = await through(server, { method: "POST", route: "/api/v1/enter", host: "play.example.com", forwarded: null, headers, body: { world: world.world, key: world.playerKey, net: NET_VERSION } });
+
+            assert.equal(entered.status, 200, JSON.stringify(entered.json));
+
+            const before = new Set(server.play.places.values());
+            const socket = await play(server, { headers, line: `enter ${world.world} ${entered.json.session}` });
+
+            await until(() => [...server.play.places.values()].some((place) => !before.has(place)), "in the world");
+
+            const place = [...server.play.places.values()].find((one) => !before.has(one));
+
+            return { socket, place: { address: place.address, country: place.country, nanny: place.nanny, why: place.nannyWhy } };
+        };
+
+        // Cloudflare says the United Kingdom: in it, by its rules; the file not asked
+        const briton = await come({ "CF-Connecting-IP": "198.51.100.7", "CF-IPCountry": "GB" });
+
+        assert.deepEqual(briton.place, { address: "198.51.100.7", country: "GB", nanny: true, why: { why: "country", code: "GB", threshold: 16 } });
+        assert.deepEqual(asked, []);
+
+        // Cloudflare couldn't tell (Tor): unknown, and so in it; the file still not asked
+        const hidden = await come({ "CF-Connecting-IP": "198.51.100.8", "CF-IPCountry": "T1" });
+
+        assert.deepEqual(hidden.place, { address: "198.51.100.8", country: null, nanny: true, why: { why: "unknown", code: null, threshold: 18 } });
+        assert.deepEqual(asked, []);
+
+        // Cloudflare says a country that isn't listed: out of it
+        const french = await come({ "CF-Connecting-IP": "198.51.100.9", "CF-IPCountry": "FR" });
+
+        assert.deepEqual(french.place, { address: "198.51.100.9", country: "FR", nanny: false, why: null });
+
+        for (const { socket } of [briton, hidden, french]) {
+            socket.destroy();
+        }
+
+        // Behind a front that says no country (a proxy of the owner's): the file's, whatever header claims one
+        await server.manage.changeSettings({ front: "proxy" });
+        await until(() => server.tunnelPort > 0 && server.play.places.size === 0, "the tunnel open again, everyone out");
+
+        const proxied = await come({ "X-Forwarded-For": "198.51.100.10", "CF-IPCountry": "GB" });
+
+        assert.deepEqual(proxied.place, { address: "198.51.100.10", country: "FR", nanny: false, why: null });
+        assert.deepEqual(asked, ["198.51.100.10"]);
+        proxied.socket.destroy();
     });
 });
 
