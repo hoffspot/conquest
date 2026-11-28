@@ -399,7 +399,12 @@ port, on the computer alone, and takes everything that comes there for the inter
 - A proxy of the owner's must append the visitor's address to `X-Forwarded-For` itself (nginx's
   `$proxy_add_x_forwarded_for`, Caddy by default), and nothing but it may reach the tunnel's
   port: it listens on the computer alone for that reason.
-- The country a front says a visitor is in (Cloudflare's `CF-IPCountry`) is the plan's 6B-20.
+- **A visitor's country** (the plan's 6B-20). A front that says one is believed for it, in its
+  one header for that: Cloudflare Tunnel's `CF-IPCountry`. The guard's answer has a `country`
+  only behind such a front (two capitals, or null where Cloudflare couldn't tell: its `XX`, and
+  `T1` for Tor); nowhere else is any header's say of a country read. Nanny Mode goes by it
+  before the country file, and in place of it: where the front couldn't tell, the country is
+  unknown, and the file isn't asked (a Tor exit's address is in some country's range).
 
 **Close to the internet** stops answering it at once.
 
@@ -1036,8 +1041,9 @@ ban that holds to a person, a mute, Nanny Mode's hold, a passed age check).
   forward a step at a time, a newer server's refused. It's in the server's archives; the
   country file (`geoip/`) isn't, since any server fetches its own.
 
-**Leave it off for now.** The file is right about a country most of the time, not all of it, and
-a front's own word for the country (the plan's 6B-20) isn't read yet. Nothing lifts it yet either: that takes a passed age check at or over the
+**Leave it off for now.** The file is right about a country most of the time, not all of it;
+behind Cloudflare Tunnel the server goes by Cloudflare's own word for the country instead (above,
+*What's in front of the tunnel's port*). Nothing lifts it yet either: that takes a passed age check at or over the
 country's age (6B-22), never an age someone says they are. The hold needs a record of the
 player the server doesn't keep yet (6B-1, 6B-21); `nannyFor` reads both records if it's given
 them.

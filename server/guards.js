@@ -98,8 +98,21 @@ export function connectionOf(request, options = {}) {
     const tunnel = Boolean(request.socket.tunnel);
     const front = tunnel ? (request.socket.front ?? "funnel") : null;
 
-    // (`forwarded`: what the front's own header says of where it's from; no header's read of a direct connection)
-    return { address: request.socket.remoteAddress, host: request.headers.host, origin, secure: Boolean(request.socket.encrypted), tunnel, front, forwarded: tunnel ? request.headers[frontOf(front).address] : undefined };
+    // (`forwarded`: what the front's own header says of where it's from, and `country`, what its
+    // country header says, if it has one; no header's read of a direct connection)
+    const { address: from, country } = frontOf(front);
+
+    return { address: request.socket.remoteAddress, host: request.headers.host, origin, secure: Boolean(request.socket.encrypted), tunnel, front, forwarded: tunnel ? request.headers[from] : undefined, country: tunnel && country ? request.headers[country] : undefined };
+}
+
+/** The codes a front gives where it can't tell a country, or won't (Cloudflare's: XX, none known; T1, Tor): no country's. */
+export const NO_COUNTRY = Object.freeze(["XX", "T1"]);
+
+/** A country as a front's header says it: its two capitals, or null for none said, one of NO_COUNTRY, or anything else. */
+export function countrySaid(said) {
+    const code = typeof said === "string" ? said.trim().toUpperCase() : "";
+
+    return /^[A-Z]{2}$/.test(code) && !NO_COUNTRY.includes(code) ? code : null;
 }
 
 // Where a tunnel's request is from, by its front's header: a list's last address (the front's own
@@ -114,12 +127,15 @@ function forwardedFrom(forwarded, { last }) {
  * Whether a request (or a socket's upgrade) may be taken, before anything's read of it: from where
  * (`address`; or through a tunnel, `tunnel`, by a `front`, `forwarded` what its header says), over TLS or not
  * (`secure`), to which Host, from which Origin. Returns { address (as it's counted), from ("home"
- * or "internet"), tunnel }; throws a Refusal if not. The server says how it stands: its `hosts`
+ * or "internet"), tunnel }, and, through a front that says a visitor's country (FRONTS `country`:
+ * generated/multiplayer_scaling_plan.md 6B-20), `country`: its two capitals, or null where the
+ * front couldn't tell (countrySaid). No other answer has a `country`: a header's say of it is
+ * never read on a direct connection or behind a front that gives none. Throws a Refusal if not. The server says how it stands: its `hosts`
  * (and `tunnelHosts`, the tunnel's), `origins`, `blocks`, `isHome` (where's home), and
  * `internetClosed` and `tunnelClosed` (why the internet isn't answered, directly or through the
  * tunnel, or null when it is).
  */
-export function guard({ address, host, origin, secure = false, tunnel = false, front = null, forwarded = null }, { hosts, tunnelHosts = new Set(), origins, blocks, isHome: home = isHome, internetClosed = INTERNET_CLOSED, tunnelClosed = INTERNET_CLOSED }) {
+export function guard({ address, host, origin, secure = false, tunnel = false, front = null, forwarded = null, country = undefined }, { hosts, tunnelHosts = new Set(), origins, blocks, isHome: home = isHome, internetClosed = INTERNET_CLOSED, tunnelClosed = INTERNET_CLOSED }) {
     const plain = tunnel ? forwardedFrom(forwarded, frontOf(front)) : plainAddress(address);
     const from = !tunnel && plain && home(plain) ? "home" : "internet";
     const closed = tunnel ? tunnelClosed : internetClosed;
@@ -149,7 +165,7 @@ export function guard({ address, host, origin, secure = false, tunnel = false, f
         throw new Refusal(403, "secure", `From the internet this server answers over TLS alone: use its secure address, https://${String(host).toLowerCase()}`);
     }
 
-    return { address: plain, from, tunnel };
+    return { address: plain, from, tunnel, ...(tunnel && frontOf(front).country ? { country: countrySaid(country) } : {}) };
 }
 
 /** A request's body, as JSON (an object), refused if it's bigger than LIMITS_HTTP.body or isn't JSON. */

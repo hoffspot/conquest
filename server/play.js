@@ -191,9 +191,11 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
         return { on, why: on ? { why, code, threshold } : null };
     };
 
-    // Which country a connection's from: null where it can't be told (no file, a stale one, an
-    // address in no country's range, the server's own network)
-    const countryOf = (socket, address) => socket?.country ?? server.countries?.country(address) ?? null;
+    // Which country a connection's from. A front's own say of it comes first (6B-20: Cloudflare's
+    // header), and stands where the front couldn't tell, which is unknown, not a question for the
+    // file: Tor's exits have addresses in some country's range. With no front that says, the
+    // server's country file (net/geoip.js). Null where it can't be told
+    const countryOf = (socket, address) => (socket?.country !== undefined ? socket.country : (server.countries?.country(address) ?? null));
 
     const enter = async (socket, address, world, session) => {
         const { principal } = policy.identify({ world, session, address, from: socket.from });
@@ -240,8 +242,8 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
         const peer = `p${next++}`;
         const token = newToken();
         // (Kept to the quick chat's phrases, by where they connect from: access/nanny.js. Their
-        // country by the server's country file, net/geoip.js; a front's own word for it is
-        // 6B-20, and the server's record of them isn't read for it yet, 6B-21)
+        // country by their front's say or the server's country file: countryOf. The server's
+        // record of them isn't read for it yet, 6B-21)
         const country = countryOf(socket, address);
         const kept = nannyOf(world, country);
         const place = { world, peer, country, nanny: kept.on, nannyWhy: kept.why, player: principal.player.id, role: principal.role, via: principal.via, socket, token: hashOf(token), address, from: socket.from, tunnel: socket.tunnel, away: null, identity: principal.player.identity ?? null, entered: clock() };
@@ -342,10 +344,11 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
         const protocols = String(request.headers["sec-websocket-protocol"] ?? "").split(",").map((one) => one.trim());
         let address;
         let from;
+        let country;
         let tunnel;
 
         try {
-            ({ address, from, tunnel } = guard(connectionOf(request), server));
+            ({ address, from, tunnel, country } = guard(connectionOf(request), server));
         } catch (error) {
             if (error instanceof Refusal) {
                 policy.on("refused", { why: error.error, address: request.socket.remoteAddress });
@@ -384,6 +387,13 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
         socket.address = address;
         socket.from = from;
         socket.tunnel = tunnel;
+
+        // (Their country as the front says it, where it's one that does: null where it couldn't
+        // tell. Left unset anywhere else: guards.js guard)
+        if (country !== undefined) {
+            socket.country = country;
+        }
+
         sockets.add(socket);
         welcome(socket, address);
     };
