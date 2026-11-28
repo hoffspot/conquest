@@ -41,6 +41,7 @@ import { telemetry } from "./app/telemetry.js";
 import { crashedIn, crashesFor, forgetCrashes, keepCrash, letGoCrash, REFUSED_FOR_GOOD } from "./app/crash-reports.js";
 import { startsUpdate, Updater } from "./app/updater.js";
 import { builtAt, codeVersion } from "./app/version.js";
+import { isLock, lockOf, NANNY_CODE, unlocks } from "./app/nannylock.js";
 import { blocksOf, enterWorld, exportCharacter, forgetCharacter, forgetWorld, hearRefusal, keepCharacter, keepVisitor, keepWorldClassic, loadCharacters, loadExplored, loadFollowers, loadLegends, loadMarkers, loadRoll, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, worldClassic, writeSave } from "./app/save.js";
 import { ACTIONS as PAD_ACTIONS, asTheyCome, BAR_SLOTS, bindingsOf, bindingWords, rebind, SYMBOL_NAMES, symbolOf, takenFrom } from "./app/gamepad.js";
 import { PadPlay } from "./app/padplay.js";
@@ -985,6 +986,7 @@ function showPlaySettings() {
     $("#partydmswitch").checked = settings.refusePartyDms;
     $("#worlddmswitch").checked = settings.refuseWorldDms;
     $("#chatfeedswitch").checked = settings.chatOnScreen;
+    showNanny();
     $("#snagswitch").checked = settings.autoSnag;
     $("#lockswitch").checked = settings.autoLock;
     $("#snagbutton").hidden = !settings.autoSnag;
@@ -1024,13 +1026,81 @@ function applyChat(game = state.game) {
     game.blocked = settings.blocked;
     game.onBlocked = (blocked) => applySetting("blocked", blocksOf(blocked));
     game.onHearShouts = (on) => applySetting("hearShouts", Boolean(on));
-    // (Nanny Mode, as the world says of the player: its row under Chat and players, there only while it's on)
-    game.onNanny = (nanny) => {
-        $("#nannyrow").hidden = !nanny;
-    };
-    game.onNanny(game.nanny);
+    // (Nanny Mode: the player's own choice told to the game, and its row under Chat and players
+    // saying how it stands, by their choice or the world's)
+    game.onNanny = () => showNanny();
     game.takeDms({ party: !settings.refusePartyDms, world: !settings.refuseWorldDms, shout: settings.hearShouts });
+
+    if (game.nannyChosen !== settings.nannyMode) {
+        game.chooseNanny(settings.nannyMode);
+    }
+
+    showNanny();
 }
+
+// Nanny Mode's switch (Game options, Chat and players, a page of its own; the scaling plan's 6B-18) and its lock
+// (app/nannylock.js): the switch as it's set; under it, while it's on, a code to lock it with, or,
+// asked to switch it off while it's locked (`state.nannyAsk`), the code that unlocks it
+function showNanny() {
+    const locked = isLock(settings.nannyLock);
+    const worlds = state.game?.nanny && state.game.nanny.why !== "chosen";
+
+    $("#nannyswitch").checked = settings.nannyMode;
+    // (Under its link, on Chat and players: how it stands, in a word or two)
+    $("#nannystate").textContent = `${settings.nannyMode ? (locked ? "On, and locked" : "On") : "Off"}${worlds ? ": on in this world by its rules" : ""}`;
+    $("#nannysummary").textContent = `${
+        settings.nannyMode ? (locked ? "On, and locked: quick phrases only, in every world. Its code's needed to switch it off." : "On: quick phrases only, in every world.") : "Quick phrases only: nothing typed is sent to you or by you, in any world."
+    }${worlds ? " This world has it on for you by its own rules, whatever this says: the Chat tab says why." : ""}`;
+    $("#nannylock").hidden = !settings.nannyMode || (locked && !state.nannyAsk);
+    $("#nannylocklabel").textContent = state.nannyAsk ? "Enter the lock code to switch Nanny Mode off" : "Lock it with a code, so it can't be switched off without it (optional)";
+    $("#nannylockbutton").textContent = state.nannyAsk ? "Unlock" : "Set lock";
+}
+
+$("#nannyswitch").addEventListener("change", (event) => {
+    $("#nannylocknote").textContent = "";
+    $("#nannycode").value = "";
+
+    // (Switched off while it's locked: on still, and the code asked for)
+    if (!event.target.checked && isLock(settings.nannyLock)) {
+        state.nannyAsk = true;
+        showNanny();
+        $("#nannycode").focus();
+
+        return;
+    }
+
+    state.nannyAsk = false;
+    applySetting("nannyMode", event.target.checked);
+});
+$("#nannylock").addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const code = $("#nannycode").value;
+
+    $("#nannycode").value = "";
+
+    if (state.nannyAsk) {
+        if (await unlocks(settings.nannyLock, code)) {
+            state.nannyAsk = false;
+            $("#nannylocknote").textContent = "";
+            applySetting("nannyLock", "");
+            applySetting("nannyMode", false);
+        } else {
+            $("#nannylocknote").textContent = "That isn't the code.";
+        }
+
+        return;
+    }
+
+    const lock = await lockOf(code);
+
+    if (lock) {
+        $("#nannylocknote").textContent = "";
+        applySetting("nannyLock", lock);
+    } else {
+        $("#nannylocknote").textContent = `A code is ${NANNY_CODE.least} to ${NANNY_CODE.most} characters, with no spaces.`;
+    }
+});
 
 // The players blocked (Game options: Chat and players, Blocked players): each by name, where (this
 // world, or another), and who that world knows them as; each to unblock. And how many, under its
@@ -1550,6 +1620,7 @@ const MENU_PAGES = {
     snag: { page: "#menusnag", title: "snagtitle", focus: "#snaggrades input", up: "gameplay", from: "#snagbutton" },
     chat: { page: "#menuchat", title: "chattitle", focus: "#chatfeedswitch", up: "options", from: "#chatbutton" },
     blocked: { page: "#menublocked", title: "blockedtitle", focus: "#blockedback", up: "chat", from: "#blockedbutton" },
+    nanny: { page: "#menunanny", title: "nannytitle", focus: "#nannyswitch", up: "chat", from: "#nannybutton" },
     wheels: { page: "#menuwheels", title: "wheelstitle", focus: "#wheelsback", up: "actions", from: "#wheelsbutton" },
     quick: { page: "#menuquick", title: "quicktitle", focus: "#quickback", up: "actions", from: "#quickbutton" },
     log: { page: "#menulog", title: "logtitle", focus: "#logback", up: "options", from: "#logbutton" },
@@ -1578,8 +1649,12 @@ function menuPage(page, focus = MENU_PAGES[page].focus) {
     if (page === "gameplay") {
         showSnag(settings.autoSnag);
         showMortal();
-    } else if (page === "chat" || page === "blocked") {
+    } else if (page === "chat" || page === "blocked" || page === "nanny") {
+        // (Nanny Mode's page come to afresh: no code being asked for)
+        state.nannyAsk = false;
+        $("#nannylocknote").textContent = "";
         showBlocked();
+        showNanny();
     } else if (page === "graphics") {
         // (What it's drawing, and how the device is asking for it, as they are now)
         showQuality();
@@ -5810,6 +5885,7 @@ $("#partydmswitch").addEventListener("change", (event) => applySetting("refusePa
 $("#worlddmswitch").addEventListener("change", (event) => applySetting("refuseWorldDms", event.target.checked));
 $("#chatfeedswitch").addEventListener("change", (event) => applySetting("chatOnScreen", event.target.checked));
 $("#blockedbutton").addEventListener("click", () => menuPage("blocked"));
+$("#nannybutton").addEventListener("click", () => menuPage("nanny"));
 $("#snagswitch").addEventListener("change", (event) => applySetting("autoSnag", event.target.checked));
 $("#lockswitch").addEventListener("change", (event) => applySetting("autoLock", event.target.checked));
 $("#snagbutton").addEventListener("click", openSnag);
@@ -6586,8 +6662,9 @@ function applySetting(key, value) {
     } else if (key === "quickSix") {
         state.game?.showQuick(quickShown());
         state.quickSetup?.showCount(quickShown());
-    } else if (key === "chatOnScreen" || key === "refusePartyDms" || key === "refuseWorldDms" || key === "hearShouts" || key === "blocked") {
+    } else if (key === "chatOnScreen" || key === "refusePartyDms" || key === "refuseWorldDms" || key === "hearShouts" || key === "blocked" || key === "nannyMode" || key === "nannyLock") {
         applyChat();
+        showNanny();
 
         if (key === "blocked") {
             tellPlaySettings();

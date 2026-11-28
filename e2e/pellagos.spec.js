@@ -16268,7 +16268,7 @@ test("Game options: its groups at the top, each a page of its own, short enough 
         controls: ["#stickswitch", "#floatswitch", "#tapmoveswitch", "#zoomswitch", "#minimapswitch"],
         camera: ["#followswitch", "#flyinswitch", "#battlecamswitch", "#dragslider", "#invertswitch"],
         gameplay: ["#snagswitch", "#snagbutton", "#lockswitch", "#resistswitch"],
-        chat: ["#chatfeedswitch", "#partydmswitch", "#worlddmswitch", "#duelswitch", "#refuseswitch", "#messengerswitch", "#blockedbutton"],
+        chat: ["#chatfeedswitch", "#partydmswitch", "#worlddmswitch", "#duelswitch", "#refuseswitch", "#messengerswitch", "#nannybutton", "#blockedbutton"],
     };
     const back = { arrow: (group) => page.locator(`#menu${group} .menu-back`), button: (group) => page.locator(`#${group}back`) };
 

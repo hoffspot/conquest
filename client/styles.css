@@ -7257,6 +7257,53 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     background: rgba(150, 190, 255, 0.12);
 }
 
+/* Nanny Mode's lock code, under its switch in Game options (app/nannylock.js) */
+.option-lock {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 10px 2px 12px 18px;
+    border-bottom: 1px solid var(--field-border);
+    font-size: 14px;
+    color: var(--ink);
+}
+
+.option-lock-row {
+    display: flex;
+    gap: 8px;
+    min-width: 0;
+}
+
+.option-lock-row .button {
+    flex: none;
+    width: auto;
+    margin: 0;
+}
+
+.option-lock-row input {
+    flex: 1;
+    box-sizing: border-box;
+    width: 0;
+    min-width: 0;
+    min-height: 40px;
+    padding: 0 10px;
+    border-radius: 9px;
+    border: 1px solid var(--field-border);
+    background: rgba(0, 0, 0, 0.25);
+    color: var(--ink);
+    font: inherit;
+}
+
+.option-lock-note {
+    margin: 0;
+    min-height: 1.2em;
+    font-size: 12px;
+    color: var(--muted);
+}
+
 /* Hear shouts, under the Chat's line: on, or turned off */
 .chat-shouts {
     display: flex;

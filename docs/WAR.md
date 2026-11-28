@@ -3688,8 +3688,22 @@ party*). Players play together as a party of up to four (`PARTY.most`):
     "What's this?" explains the icon. The Players tab doesn't say where such a player is to
     anyone outside their party, and lists them under Everyone else, never Nearby.
   - None of it is drawn while nobody in the world is in Nanny Mode.
-  The player's own switch, with a lock code, is the plan's 6B-18; the credit for the country
-  file comes with it (6B-19).
+  The credit for the country file comes with it (the plan's 6B-19).
+- **Nanny Mode by a player's own choice** (Game options, Chat and players; the scaling plan's
+  6B-18). A switch on a page of its own under Chat and players (which says how it stands: Off,
+  On, or On and locked), off to start with, kept with this device's settings (`nannyMode`). On, the
+  player's game tells the host with which messages they take (`dms`'s `nanny`), and the host
+  keeps them to the quick phrases as it would one the world restricts (`Session.kept(id)`:
+  `restricted`, or their choice). It works in every world, a browser's or a server's, with
+  nothing set by whoever runs it, and the icon means no more than it did: a parent's choice
+  looks the same as a country's rules. They're told "You switched it on"; where the world
+  restricts them too, the world's reason is the one shown, and switching their own off
+  doesn't lift it. A host too old to know the choice says nothing back, and the player's own
+  game keeps them to the phrases all the same.
+  - **The lock** (app/nannylock.js). While it's on, a code of 4 to 12 characters can lock it:
+    switching it off then asks for the code, and the wrong one leaves it on. Only a salted
+    SHA-256 of the code is kept (`nannyLock`), never the code. It keeps a child from switching
+    it off in the menu; clearing the browser's data forgets the lock with every other setting.
 - **Squads** (core/host.js `SQUAD`, the `squad` command; the scaling plan's 2-28). Parties
   allied: five at the most, led by one of them, whose leader speaks for it. Every squad command
   is a party's leader's, for their party (`unpartied`, `leader` otherwise):
