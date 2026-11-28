@@ -21,7 +21,7 @@
 // world. Their player coming in again meanwhile, on another device or after a crash, takes their
 // character over (core/netplay.js Hosting #takeOver): the place kept for the old link let go.
 
-import { nannyFor, nannySettings } from "./access/nanny.js";
+import { listedCountry, nannyFor, nannySettings } from "./access/nanny.js";
 import { createHash } from "node:crypto";
 import { connectionOf, guard, Refusal, urlOf } from "./guards.js";
 import { Counts, LIMITS, Rate } from "./access/limits.js";
@@ -185,8 +185,26 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
     // Into a world, by a session: let in (waiting its turn if it must), given a place
     // Whether one coming into a world from a country's kept to the quick chat's phrases (access/nanny.js)
     // (and why, as they're told in the chat panel: { why, code, threshold })
-    const nannyOf = (world, country) => {
-        const { on, why, code, threshold } = nannyFor({ country, record: null, world: { public: server.metaOf(world)?.settings?.public === true }, settings: nannySettings(server.settings), now: clock() });
+    // The server's own record of them (`identity`: their player id, storage/players.js) is read
+    // for its hold alone, and only while Nanny Mode's on (6B-21): seen from a listed country, the
+    // hold's renewed; one that's run out is let go of
+    const nannyOf = (world, country, identity = null) => {
+        const settings = nannySettings(server.settings);
+        const players = server.access.players;
+        const now = clock();
+        let record = null;
+
+        if (settings.nanny !== "off" && identity && players) {
+            if (listedCountry(settings, country)) {
+                players.sighted(identity, country, now);
+            } else {
+                players.lapse(identity, settings.nannyHoldDays, now);
+            }
+
+            record = players.get(identity);
+        }
+
+        const { on, why, code, threshold } = nannyFor({ country, record, world: { public: server.metaOf(world)?.settings?.public === true }, settings, now });
 
         return { on, why: on ? { why, code, threshold } : null };
     };
@@ -242,10 +260,10 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
         const peer = `p${next++}`;
         const token = newToken();
         // (Kept to the quick chat's phrases, by where they connect from: access/nanny.js. Their
-        // country by their front's say or the server's country file: countryOf. The server's
-        // record of them isn't read for it yet, 6B-21)
+        // country by their front's say or the server's country file: countryOf; and by the
+        // server's record of them, if they've been seen from a listed country lately: nannyOf)
         const country = countryOf(socket, address);
-        const kept = nannyOf(world, country);
+        const kept = nannyOf(world, country, principal.player.identity ?? null);
         const place = { world, peer, country, nanny: kept.on, nannyWhy: kept.why, player: principal.player.id, role: principal.role, via: principal.via, socket, token: hashOf(token), address, from: socket.from, tunnel: socket.tunnel, away: null, identity: principal.player.identity ?? null, entered: clock() };
 
         places.set(placeKey(world, peer), place);
@@ -427,7 +445,7 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
                 // (Their country looked up again: the country file may have been read since)
                 place.country = countryOf(place.socket, place.address);
 
-                const { on, why } = nannyOf(place.world, place.country);
+                const { on, why } = nannyOf(place.world, place.country, place.identity);
 
                 if (on !== place.nanny || JSON.stringify(why) !== JSON.stringify(place.nannyWhy)) {
                     place.nanny = on;

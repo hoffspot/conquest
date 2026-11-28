@@ -7,11 +7,13 @@
 //
 // A record holds: their public key and the name they last went by, when they were first and last
 // seen, on how many days and for how many minutes they've played, an age band (null till they're
-// asked: 6B-4), their standing and flags (empty till something sets them). It holds no email, no
+// asked: 6B-4), their standing and flags (empty till something sets them), and Nanny Mode's hold
+// (6B-21: the listed country they were last seen from, and when, or null). It holds no email, no
 // birth date and no address.
 //
-// Written as someone comes in and as they leave; read by nothing yet. One file in the data
-// folder, players.json, till the server has a database (6D-2).
+// Written as someone comes in and as they leave; read for Nanny Mode's hold alone, and only while
+// Nanny Mode's on (play.js). One file in the data folder, players.json, till the server has a
+// database (6D-2).
 
 import path from "node:path";
 
@@ -23,13 +25,16 @@ import { forward, SERVER_VERSION } from "./versions.js";
 export const PLAYERS_FILE = "players.json";
 
 /** players.json's version: bump it, with a step in PLAYERS_STEPS, when what it holds changes. */
-export const PLAYERS_VERSION = 1;
+export const PLAYERS_VERSION = 2;
 
 /** The steps that bring an older server's players.json forward: [n] takes it from version n to n + 1. */
-export const PLAYERS_STEPS = Object.freeze({});
+export const PLAYERS_STEPS = Object.freeze({
+    // (2: Nanny Mode's hold, `nanny`, none held of anyone known before it)
+    1: (players) => Object.fromEntries(Object.entries(players).map(([id, one]) => [id, { ...one, nanny: null }])),
+});
 
 /** What a record holds, in the order it's written (its id is its key in the file). */
-export const PLAYER_FIELDS = Object.freeze(["key", "name", "firstSeen", "lastSeen", "days", "minutes", "ageBand", "standing", "flags"]);
+export const PLAYER_FIELDS = Object.freeze(["key", "name", "firstSeen", "lastSeen", "days", "minutes", "ageBand", "standing", "flags", "nanny"]);
 
 const dayOf = (iso) => iso.slice(0, 10);
 
@@ -106,7 +111,7 @@ export class PlayerStore {
         if (known) {
             Object.assign(known, { key, name, days: known.days + (dayOf(known.lastSeen) === dayOf(now) ? 0 : 1), lastSeen: now });
         } else {
-            this.players[id] = { key, name, firstSeen: now, lastSeen: now, days: 1, minutes: 0, ageBand: null, standing: {}, flags: {} };
+            this.players[id] = { key, name, firstSeen: now, lastSeen: now, days: 1, minutes: 0, ageBand: null, standing: {}, flags: {}, nanny: null };
         }
 
         await this.#write();
@@ -122,6 +127,52 @@ export class PlayerStore {
 
         this.players[id].minutes = Math.round((this.players[id].minutes + minutes) * 10) / 10;
         this.#write();
+    }
+
+    /**
+     * Nanny Mode's hold (generated/multiplayer_scaling_plan.md 6B-21): a player it knows seen
+     * coming in from a country whose rules put them in Nanny Mode (`code`, its two capitals), now
+     * (`when`: ms). Kept as `nanny: { seen, at }`, renewed at each such sighting, so that
+     * connecting from somewhere else the next day (a VPN turned on) doesn't lift it at once.
+     * Written in its turn.
+     */
+    sighted(id, code, when = this.clock()) {
+        if (!Object.hasOwn(this.players, id) || typeof code !== "string" || !/^[A-Z]{2}$/.test(code) || !Number.isFinite(when)) {
+            return;
+        }
+
+        this.players[id].nanny = { seen: code, at: when };
+        this.#write();
+    }
+
+    /**
+     * A player's hold let go of once it's run out: more than `days` since they were last seen
+     * from a listed country (the server's nannyHoldDays), as of `now` (ms). What's run out isn't
+     * kept. Returns whether it was let go.
+     */
+    lapse(id, days, now = this.clock()) {
+        const held = Object.hasOwn(this.players, id) ? this.players[id].nanny : null;
+
+        if (!held || (Number.isFinite(held.at) && Number.isFinite(days) && now - held.at < days * 86400000)) {
+            return false;
+        }
+
+        this.players[id].nanny = null;
+        this.#write();
+
+        return true;
+    }
+
+    /** A player's hold let go of, whenever it was set: they've passed an age check (6B-22). Returns whether there was one. */
+    release(id) {
+        if (!Object.hasOwn(this.players, id) || !this.players[id].nanny) {
+            return false;
+        }
+
+        this.players[id].nanny = null;
+        this.#write();
+
+        return true;
     }
 
     /** Everything written that's to be: awaited as the server stops. */
