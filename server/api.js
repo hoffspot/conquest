@@ -99,6 +99,7 @@ import { randomInt } from "node:crypto";
 import { NETCODES, NET_VERSION, speaksOf } from "../client/js/core/netplay.js";
 import { playerOfProof, PROOF_MINUTES } from "../client/js/core/player.js";
 import { RACE } from "../client/js/core/worldplan/plan.js";
+import { AGECHECK, AgeRefusal } from "./access/agecheck.js";
 import { plainAddress } from "./access/addresses.js";
 import { Rate } from "./access/limits.js";
 import { REFUSED } from "./access/policy.js";
@@ -137,6 +138,9 @@ export class Download {
 
 // What each refusal is, as HTTP says it
 const STATUS = Object.freeze({ "no-world": 404, loadtest: 409, key: 401, banned: 403, locked: 403, offline: 409, home: 403, role: 403, full: 409, version: 409, netcode: 409, replication: 409, code: 401, wait: 429, busy: 429, maker: 403, unproved: 401, "made-each": 409, "made-most": 409 });
+
+// The status each age check's refusal answers with (access/agecheck.js AGE_REFUSED)
+const AGE_STATUS = Object.freeze({ "no-provider": 404, "no-identity": 403, "age-passed": 409, "age-tries": 429, "age-session": 409, "age-provider": 502 });
 
 const refuse = (why, extra = {}) => new Refusal(STATUS[why] ?? 403, why, REFUSED[why] ?? extra.message ?? "That can't be done.", extra);
 
@@ -416,6 +420,51 @@ export function apiHandler(server, { mac = false } = {}) {
             }
 
             return doing(() => manage.report(body, { address: request.address, from: request.from, tunnel: request.tunnel }));
+        }],
+        // Age checks (access/agecheck.js; the plan's 6B-22): whether they're offered here; one
+        // begun by a player in a world, for the age their Nanny Mode needs; and how it went, asked
+        // of the provider by the server (nothing the game says is taken for a result)
+        ["GET", /^\/agecheck$/, { game: true }, async () => server.ages.offered()],
+        ["POST", /^\/agecheck\/(begin|status)$/, { game: true }, async (request, body, [, what]) => {
+            const principal = principalOf(request);
+
+            if (principal.kind !== "player") {
+                throw refuse(principal.why ?? "key");
+            }
+
+            const identity = principal.player?.identity ?? null;
+
+            try {
+                if (!identity) {
+                    throw new AgeRefusal(server.ages.offered().offered ? "no-identity" : "no-provider");
+                }
+
+                if (what === "status") {
+                    return await server.ages.status(identity);
+                }
+
+                // (For the age the rules that hold them name, where they are now. Held by none:
+                // the age they've passed for already, if they have, so that another isn't begun
+                // for nothing; else the oldest any listed country's rules protect)
+                const held = [...(server.play?.places.values() ?? [])].find((place) => place.identity === identity && place.nannyWhy?.threshold)?.nannyWhy.threshold;
+                const passed = access.players?.get(identity)?.agecheck?.threshold;
+                const listed = server.settings.get("nannyCountries").map((entry) => entry.threshold);
+
+                return await server.ages.begin(identity, held ?? passed ?? Math.max(...listed, AGECHECK.least));
+            } catch (error) {
+                if (error instanceof AgeRefusal) {
+                    throw new Refusal(AGE_STATUS[error.error] ?? 409, error.error, error.message, error.left === undefined ? {} : { left: error.left });
+                }
+
+                throw error;
+            }
+        }],
+        // (A player's pass taken back by the server's admin, to be checked again: their key can
+        // be carried to another device)
+        ["POST", /^\/server\/players\/([0-9a-f-]{36})\/agecheck\/again$/, { server: true }, async (request, body, [, identity]) => {
+            admin(request);
+
+            return { again: server.ages.again(identity) };
         }],
         ["GET", /^\/health$/, { game: true }, async () => {
             const slow = registry.going.some((entry) => (entry.thread?.state?.steps?.p99 ?? 0) > 50);

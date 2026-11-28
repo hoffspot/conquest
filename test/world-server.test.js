@@ -495,8 +495,8 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         // One who came in by a key alone, with no identity, has none
         const record = server.access.players.get(id);
 
-        assert.deepEqual(Object.keys(record), ["id", "key", "name", "firstSeen", "lastSeen", "days", "minutes", "ageBand", "standing", "flags", "nanny"]);
-        assert.deepEqual({ ...record, firstSeen: null, lastSeen: null }, { id, key: publicKeyOf(secret), name: "Wren", firstSeen: null, lastSeen: null, days: 1, minutes: 0, ageBand: null, standing: {}, flags: {}, nanny: null });
+        assert.deepEqual(Object.keys(record), ["id", "key", "name", "firstSeen", "lastSeen", "days", "minutes", "ageBand", "standing", "flags", "nanny", "agecheck", "attempts"]);
+        assert.deepEqual({ ...record, firstSeen: null, lastSeen: null }, { id, key: publicKeyOf(secret), name: "Wren", firstSeen: null, lastSeen: null, days: 1, minutes: 0, ageBand: null, standing: {}, flags: {}, nanny: null, agecheck: null, attempts: null });
         assert.ok(Date.parse(record.firstSeen) <= Date.parse(record.lastSeen));
         assert.equal(server.access.players.size, 1);
         assert.deepEqual(Object.keys(JSON.parse(await readFile(path.join(server.root, "players.json"), "utf8")).players), [id]);

@@ -8,8 +8,10 @@
 // A record holds: their public key and the name they last went by, when they were first and last
 // seen, on how many days and for how many minutes they've played, an age band (null till they're
 // asked: 6B-4), their standing and flags (empty till something sets them), and Nanny Mode's hold
-// (6B-21: the listed country they were last seen from, and when, or null). It holds no email, no
-// birth date and no address.
+// (6B-21: the listed country they were last seen from, and when, or null), a passed age check
+// (6B-22, `agecheck`: that they passed, the age it was for, the date and the provider's name, and
+// nothing else; or null), and how many times they've tried one lately (`attempts`). It holds no
+// email, no birth date, no address, and nothing of how a check was done.
 //
 // Written as someone comes in and as they leave; read for Nanny Mode's hold alone, and only while
 // Nanny Mode's on (play.js). One file in the data folder, players.json, till the server has a
@@ -25,16 +27,18 @@ import { forward, SERVER_VERSION } from "./versions.js";
 export const PLAYERS_FILE = "players.json";
 
 /** players.json's version: bump it, with a step in PLAYERS_STEPS, when what it holds changes. */
-export const PLAYERS_VERSION = 2;
+export const PLAYERS_VERSION = 3;
 
 /** The steps that bring an older server's players.json forward: [n] takes it from version n to n + 1. */
 export const PLAYERS_STEPS = Object.freeze({
     // (2: Nanny Mode's hold, `nanny`, none held of anyone known before it)
     1: (players) => Object.fromEntries(Object.entries(players).map(([id, one]) => [id, { ...one, nanny: null }])),
+    // (3: a passed age check and the tries at one, `agecheck` and `attempts`, none of anyone known before them)
+    2: (players) => Object.fromEntries(Object.entries(players).map(([id, one]) => [id, { ...one, agecheck: null, attempts: null }])),
 });
 
 /** What a record holds, in the order it's written (its id is its key in the file). */
-export const PLAYER_FIELDS = Object.freeze(["key", "name", "firstSeen", "lastSeen", "days", "minutes", "ageBand", "standing", "flags", "nanny"]);
+export const PLAYER_FIELDS = Object.freeze(["key", "name", "firstSeen", "lastSeen", "days", "minutes", "ageBand", "standing", "flags", "nanny", "agecheck", "attempts"]);
 
 const dayOf = (iso) => iso.slice(0, 10);
 
@@ -111,7 +115,7 @@ export class PlayerStore {
         if (known) {
             Object.assign(known, { key, name, days: known.days + (dayOf(known.lastSeen) === dayOf(now) ? 0 : 1), lastSeen: now });
         } else {
-            this.players[id] = { key, name, firstSeen: now, lastSeen: now, days: 1, minutes: 0, ageBand: null, standing: {}, flags: {}, nanny: null };
+            this.players[id] = { key, name, firstSeen: now, lastSeen: now, days: 1, minutes: 0, ageBand: null, standing: {}, flags: {}, nanny: null, agecheck: null, attempts: null };
         }
 
         await this.#write();
@@ -170,6 +174,50 @@ export class PlayerStore {
         }
 
         this.players[id].nanny = null;
+        this.#write();
+
+        return true;
+    }
+
+    /**
+     * An age check begun by a player it knows (access/agecheck.js; the plan's 6B-22): one try
+     * more, counted from the first of those within `window` ms of `now` (a count and when it
+     * began: nothing of how any went). Returns how many that makes.
+     */
+    tried(id, now = this.clock(), window = Infinity) {
+        if (!Object.hasOwn(this.players, id)) {
+            return 0;
+        }
+
+        const { attempts } = this.players[id];
+
+        this.players[id].attempts = attempts && now - attempts.since < window ? { count: attempts.count + 1, since: attempts.since } : { count: 1, since: now };
+        this.#write();
+
+        return this.players[id].attempts.count;
+    }
+
+    /**
+     * A player it knows has passed an age check: kept as `agecheck`, four things and no more (that
+     * they passed, the age it was for, the date, the provider's name). Their tries are forgotten,
+     * and their hold let go of.
+     */
+    passed(id, { threshold, date, provider }) {
+        if (!Object.hasOwn(this.players, id)) {
+            return;
+        }
+
+        Object.assign(this.players[id], { agecheck: { passed: true, threshold, date, provider }, attempts: null, nanny: null });
+        this.#write();
+    }
+
+    /** A player's pass taken back (a moderator's "check again"), their tries with it. Returns whether there was a pass. */
+    unpassed(id) {
+        if (!Object.hasOwn(this.players, id) || !this.players[id].agecheck) {
+            return false;
+        }
+
+        Object.assign(this.players[id], { agecheck: null, attempts: null });
         this.#write();
 
         return true;
